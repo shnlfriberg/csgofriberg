@@ -41,7 +41,6 @@ export default function GuessInputBar({
   const textRef = useRef('');
   const refocusAfterSubmit = useRef(false);
   const players = useRef<Suggestion[]>([]);
-  const visibleStatusText = submitting ? t('guess.submittingStatus') : statusText;
   const visiblePlaceholder = placeholder ?? t('guess.placeholder');
   const visibleButtonText = buttonText ?? t('guess.submit');
 
@@ -180,9 +179,9 @@ export default function GuessInputBar({
           {submitting ? t('guess.submitting') : visibleButtonText}
         </button>
       </form>
-      {visibleStatusText !== undefined && (
+      {statusText !== undefined && (
         <div className="guess-input-feedback" role="status" aria-live="polite">
-          {visibleStatusText}
+          {statusText}
         </div>
       )}
     </>

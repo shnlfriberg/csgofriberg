@@ -99,18 +99,12 @@
     white-space: normal;
     overflow-wrap: anywhere;
   }
-  .leaderboard-card-easy table th:nth-child(1),
-  .leaderboard-card-normal table th:nth-child(1) { width: 7%; }
-  .leaderboard-card-easy table th:nth-child(2),
-  .leaderboard-card-normal table th:nth-child(2) { width: 31%; }
-  .leaderboard-card-easy table th:nth-child(3),
-  .leaderboard-card-normal table th:nth-child(3) { width: 14%; }
-  .leaderboard-card-easy table th:nth-child(4),
-  .leaderboard-card-normal table th:nth-child(4) { width: 14%; }
-  .leaderboard-card-easy table th:nth-child(5),
-  .leaderboard-card-normal table th:nth-child(5) { width: 16%; }
-  .leaderboard-card-easy table th:nth-child(6),
-  .leaderboard-card-normal table th:nth-child(6) { width: 18%; }
+  .leaderboard-card table th:nth-child(1) { width: 7%; }
+  .leaderboard-card table th:nth-child(2) { width: 31%; }
+  .leaderboard-card table th:nth-child(3) { width: 14%; }
+  .leaderboard-card table th:nth-child(4) { width: 14%; }
+  .leaderboard-card table th:nth-child(5) { width: 16%; }
+  .leaderboard-card table th:nth-child(6) { width: 18%; }
   .leaderboard-card-multi table th:nth-child(1) { width: 8%; }
   .leaderboard-card-multi table th:nth-child(2) { width: 36%; }
   .leaderboard-card-multi table th:nth-child(3) { width: 18%; }

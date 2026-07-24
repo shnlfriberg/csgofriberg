@@ -968,6 +968,7 @@ export default function MultiRoom() {
                   : t('multi.roundLost')
           }
           answer={roundOver.answer}
+          onClose={() => setRoundOver(null)}
           extra={
             <p className="muted">
               <Trans

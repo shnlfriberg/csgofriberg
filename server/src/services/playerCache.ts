@@ -35,25 +35,21 @@ export async function refreshPlayerCache(): Promise<void> {
         db('player_difficulties').select('player_id', 'difficulty_key'),
         redis()?.get(VERSION_KEY) ?? Promise.resolve(null),
       ]);
-      const levels = DIFFICULTY_LEVELS;
-      const enabled = rows.filter((player) => Boolean(player.is_enabled));
-      const membershipsByPlayer = new Map<number, string[]>();
+      const hydrated = rows.map((player) => ({ ...player, difficulties: [] as string[] }));
+      const hydratedById = new Map(hydrated.map((player) => [Number(player.id), player]));
+      playersByDifficulty = new Map(
+        DIFFICULTY_LEVELS
+          .filter((difficulty) => difficulty.isEnabled)
+          .map((difficulty) => [difficulty.key, [] as Player[]])
+      );
       for (const membership of memberships) {
-        const list = membershipsByPlayer.get(Number(membership.player_id)) ?? [];
-        list.push(String(membership.difficulty_key));
-        membershipsByPlayer.set(Number(membership.player_id), list);
+        const player = hydratedById.get(Number(membership.player_id));
+        if (!player) continue;
+        const difficultyKey = String(membership.difficulty_key);
+        player.difficulties.push(difficultyKey);
+        if (Boolean(player.is_enabled)) playersByDifficulty.get(difficultyKey)?.push(player);
       }
-      const hydrated = rows.map((player) => ({
-        ...player,
-        difficulties: membershipsByPlayer.get(Number(player.id)) ?? [],
-      }));
-      const hydratedById = new Map(hydrated.map((player) => [player.id, player]));
-      allPlayers = enabled.map((player) => hydratedById.get(player.id)!).filter(Boolean);
-      playersByDifficulty = new Map();
-      for (const level of levels) {
-        const pool = allPlayers.filter((player) => player.difficulties?.includes(level.key));
-        playersByDifficulty.set(String(level.key), pool);
-      }
+      allPlayers = hydrated.filter((player) => Boolean(player.is_enabled));
       playersById = new Map(hydrated.map((player) => [player.id, player]));
       searchablePlayers = allPlayers.map((player) => ({
         player,
@@ -61,7 +57,7 @@ export async function refreshPlayerCache(): Promise<void> {
       }));
       publicList = {
         version: pendingVersion || storedVersion || String(Date.now()),
-        players: enabled.map((player) => ({ id: player.id, nickname: player.nickname })),
+        players: allPlayers.map((player) => ({ id: player.id, nickname: player.nickname })),
       };
       pendingVersion = null;
       appliedGeneration = requestedGeneration;

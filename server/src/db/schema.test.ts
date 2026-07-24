@@ -1,6 +1,6 @@
 import knex from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ensureSchema } from './schema';
+import { backfillLegacyPlayerDifficulties, ensureSchema } from './schema';
 import { userNameFromUsername } from '../services/identityDisplay';
 
 const instances: ReturnType<typeof knex>[] = [];
@@ -42,6 +42,7 @@ describe('player schema migration', () => {
     });
 
     await ensureSchema(instance);
+    await backfillLegacyPlayerDifficulties(instance);
 
     expect(await instance.schema.hasColumn('players', 'real_name')).toBe(false);
     expect(await instance.schema.hasColumn('players', 'major_championships')).toBe(true);
@@ -64,6 +65,10 @@ describe('player schema migration', () => {
     expect(player.is_easy).toBe(0);
     expect(player.is_enabled).toBe(1);
     expect(await instance('player_difficulties').where({ player_id: player.id }).pluck('difficulty_key')).toEqual(['normal']);
+    await instance('player_difficulties').where({ player_id: player.id }).del();
+    await ensureSchema(instance);
+    await backfillLegacyPlayerDifficulties(instance);
+    expect(await instance('player_difficulties').where({ player_id: player.id })).toEqual([]);
 
     await instance('games').insert({
       session_id: 'legacy-first-guess',

@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
@@ -23,5 +24,12 @@ export default defineConfig({
       if (filePath.endsWith('.css')) return false;
       return content.length < 4096;
     },
+  },
+  test: {
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    css: false,
+    restoreMocks: true,
+    clearMocks: true,
   },
 });

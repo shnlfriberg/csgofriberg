@@ -12,7 +12,7 @@ import { browserFingerprint, POW_COOKIE } from '../services/pow';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { guestNameFromKey, signToken } from '../middleware/auth';
-import { getRoom, withRoomLock } from '../services/roomStore';
+import { cancelQueue, getRoom, queueOrTakeOpponent, withRoomLock } from '../services/roomStore';
 
 let server: http.Server;
 let io: Server;
@@ -76,6 +76,29 @@ describe('multiplayer socket integration', () => {
     stopSocket = setupSocket(io);
     await new Promise<void>((resolve) => server.listen(0, resolve));
     baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+
+  it('cleans expired matchmaking entries and cancels queues without an index key', async () => {
+    const stamp = Date.now();
+    const staleIdentity = `g:stale-queue-${stamp}`;
+    const identity = {
+      key: `g:queue-${stamp}`,
+      userId: null,
+      name: 'queue-test',
+      socketId: `queue-socket-${stamp}`,
+    };
+    const client = redis()!;
+    const queueKey = redisKey('matchmaking:easy');
+    await client.zAdd(queueKey, { score: Date.now() - 301_000, value: staleIdentity });
+
+    expect(await queueOrTakeOpponent('easy', identity)).toBeNull();
+    expect(await client.zScore(queueKey, staleIdentity)).toBeNull();
+    expect(await client.zScore(queueKey, identity.key)).not.toBeNull();
+
+    await client.del(redisKey(`match-queue:${identity.key}`));
+    await cancelQueue(identity.key);
+    expect(await client.zScore(queueKey, identity.key)).toBeNull();
+    expect(await client.get(redisKey(`match-profile:${identity.key}`))).toBeNull();
   });
 
   it('uses only trusted proxy headers for socket IP limits', () => {

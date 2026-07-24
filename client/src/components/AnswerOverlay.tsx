@@ -45,22 +45,33 @@ interface Props {
   answer: AnswerInfo | null;
   extra?: ReactNode;
   actions: ReactNode;
+  onClose?: () => void;
 }
 
 /** 结算/答案遮罩卡片 */
-export default function AnswerOverlay({ title, answer, extra, actions }: Props) {
+export default function AnswerOverlay({ title, answer, extra, actions, onClose }: Props) {
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose?.();
+    };
+    document.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = oldOverflow;
+      document.removeEventListener('keydown', onKeyDown);
     };
-  }, []);
+  }, [onClose]);
 
   return (
     <ModalPortal>
-      <div className="overlay">
-        <div className="overlay-card">
+      <div
+        className="overlay"
+        onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose?.();
+        }}
+      >
+        <div className="overlay-card" role="dialog" aria-modal="true">
           <h2>{title}</h2>
           {extra}
           {answer && (

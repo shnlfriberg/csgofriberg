@@ -3,10 +3,12 @@ import { evalStateScript, redisKey, redisState } from '../redis';
 import { GuessFeedback } from '../types';
 import { config } from '../config';
 import { logTransientError } from './transientLog';
+import { DIFFICULTY_LEVELS } from '../difficulties';
 
 export type BoType = 1 | 3 | 5 | 7;
 export type DbType = string;
 export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'round_over' | 'finished';
+const MATCHMAKING_ENTRY_TTL_MS = 300_000;
 
 export interface StoredIdentity {
   key: string;
@@ -1096,7 +1098,8 @@ export async function queueOrTakeOpponent(
   const profilePrefix = redisKey('match-profile:');
   const result = await evalCachedStateScript(
     'matchmaking-take-or-queue-v1',
-    `local candidates = redis.call('ZRANGE', KEYS[1], 0, 20)
+    `redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[8])
+     local candidates = redis.call('ZRANGE', KEYS[1], 0, 20)
      for _, candidate in ipairs(candidates) do
        if candidate ~= ARGV[1] and redis.call('ZREM', KEYS[1], candidate) == 1 then
          local profile = redis.call('GET', ARGV[2] .. candidate)
@@ -1126,6 +1129,7 @@ export async function queueOrTakeOpponent(
         JSON.stringify(identity),
         redisKey('match-queue:'),
         dbType,
+        String(Date.now() - MATCHMAKING_ENTRY_TTL_MS),
       ],
     }
   );
@@ -1137,7 +1141,8 @@ export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity)
   if (!client) return;
   await evalCachedStateScript(
     'matchmaking-requeue-v1',
-    `if redis.call('EXISTS', KEYS[3]) == 0 then return 0 end
+    `redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[5])
+     if redis.call('EXISTS', KEYS[3]) == 0 then return 0 end
      redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
      redis.call('SET', KEYS[2], ARGV[3], 'EX', 300)
      redis.call('SET', KEYS[4], ARGV[4], 'EX', 300)
@@ -1149,7 +1154,13 @@ export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity)
         redisKey(`connections:socket:${identity.socketId}`),
         redisKey(`match-queue:${identity.key}`),
       ],
-      arguments: [identity.key, String(Date.now()), JSON.stringify(identity), dbType],
+      arguments: [
+        identity.key,
+        String(Date.now()),
+        JSON.stringify(identity),
+        dbType,
+        String(Date.now() - MATCHMAKING_ENTRY_TTL_MS),
+      ],
     }
   );
 }
@@ -1164,10 +1175,31 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
   const client = stateRedis();
   if (!client) return;
   const queueIndex = redisKey(`match-queue:${identity}`);
+  const profileKey = redisKey(`match-profile:${identity}`);
   const dbType = await client.get(queueIndex);
   const queueKey = dbType ? redisKey(`matchmaking:${dbType}`) : null;
+  if (!queueKey) {
+    if (socketId) {
+      const rawProfile = await client.get(profileKey);
+      if (rawProfile) {
+        try {
+          const profile = JSON.parse(rawProfile) as { socketId?: unknown };
+          if (profile.socketId !== socketId) return;
+        } catch {
+          return;
+        }
+      }
+    }
+    await Promise.all([
+      ...DIFFICULTY_LEVELS.map((difficulty) =>
+        client.zRem(redisKey(`matchmaking:${difficulty.key}`), identity)
+      ),
+      client.del(profileKey),
+      client.del(queueIndex),
+    ]);
+    return;
+  }
   if (socketId) {
-    if (!queueKey) return;
     await evalCachedStateScript(
       'matchmaking-cancel-socket-v1',
       `local profile = redis.call('GET', KEYS[2])
@@ -1180,7 +1212,7 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
       {
         keys: [
           queueKey,
-          redisKey(`match-profile:${identity}`),
+          profileKey,
           queueIndex,
         ],
         arguments: [identity, socketId],
@@ -1190,7 +1222,7 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
   }
   await Promise.all([
     queueKey ? client.zRem(queueKey, identity) : Promise.resolve(0),
-    client.del(redisKey(`match-profile:${identity}`)),
+    client.del(profileKey),
     client.del(queueIndex),
   ]);
 }

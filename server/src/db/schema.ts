@@ -5,6 +5,32 @@ import { DIFFICULTY_LEVELS } from '../difficulties';
 
 const FIRST_GUESS_BACKFILL_BATCH_SIZE = 1000;
 const USER_DISPLAY_ID_BACKFILL_BATCH_SIZE = 1000;
+const PLAYER_DIFFICULTIES_BACKFILL_MIGRATION = '20260724-player-difficulties-backfill';
+
+export async function backfillLegacyPlayerDifficulties(instance: Knex = db): Promise<void> {
+  await instance.transaction(async (trx) => {
+    const applied = await trx('app_migrations')
+      .where({ name: PLAYER_DIFFICULTIES_BACKFILL_MIGRATION })
+      .first();
+    if (applied) return;
+
+    const players = await trx('players').select('id', 'is_easy');
+    const memberships = players.flatMap((player) => [
+      { player_id: player.id, difficulty_key: 'normal' },
+      ...(Boolean(player.is_easy) ? [{ player_id: player.id, difficulty_key: 'easy' }] : []),
+    ]);
+    for (let index = 0; index < memberships.length; index += 500) {
+      await trx('player_difficulties')
+        .insert(memberships.slice(index, index + 500))
+        .onConflict(['player_id', 'difficulty_key'])
+        .ignore();
+    }
+    await trx('app_migrations')
+      .insert({ name: PLAYER_DIFFICULTIES_BACKFILL_MIGRATION })
+      .onConflict('name')
+      .ignore();
+  });
+}
 
 async function backfillUserDisplayIds(instance: Knex): Promise<void> {
   let cursor = 0;
@@ -227,15 +253,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.primary(['player_id', 'difficulty_key']);
       t.index(['difficulty_key', 'player_id']);
     });
-  }
-  const playerRows = await instance('players').select('id', 'is_easy');
-  if (playerRows.length) {
-    await instance('player_difficulties').insert(
-      playerRows.flatMap((player) => [
-        { player_id: player.id, difficulty_key: 'normal' },
-        ...(Boolean(player.is_easy) ? [{ player_id: player.id, difficulty_key: 'easy' }] : []),
-      ])
-    ).onConflict(['player_id', 'difficulty_key']).ignore();
   }
   if (!(await instance.schema.hasColumn('games', 'first_guess_player_id'))) {
     await instance.schema.alterTable('games', (t) => t.integer('first_guess_player_id').nullable());

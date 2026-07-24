@@ -589,10 +589,25 @@ router.post(
           .merge();
       }
       const savedPlayers = await trx('players').whereIn('nickname', nicknames).select('id', 'nickname');
+      const replacementIds: number[] = [];
+      const replacementMemberships: Array<{ player_id: number; difficulty_key: string }> = [];
       for (const player of savedPlayers) {
         const difficulties = desiredDifficulties.get(String(player.nickname));
         if (difficulties) {
-          await replacePlayerDifficulties(trx as typeof db, Number(player.id), difficulties);
+          const playerId = Number(player.id);
+          replacementIds.push(playerId);
+          replacementMemberships.push(
+            ...[...new Set(difficulties)].map((difficultyKey) => ({
+              player_id: playerId,
+              difficulty_key: difficultyKey,
+            }))
+          );
+        }
+      }
+      if (replacementIds.length) {
+        await trx('player_difficulties').whereIn('player_id', replacementIds).del();
+        for (let index = 0; index < replacementMemberships.length; index += 500) {
+          await trx('player_difficulties').insert(replacementMemberships.slice(index, index + 500));
         }
       }
     });

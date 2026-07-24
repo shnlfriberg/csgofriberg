@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Trophy } from 'lucide-react';
 import Page from '../components/Page';
 import DataTable, { Column } from '../components/DataTable';
@@ -29,9 +29,11 @@ interface LeaderboardResponse {
 export default function Leaderboard() {
   const { t } = useTranslation();
   const difficulties = AVAILABLE_DIFFICULTIES;
-  const [type, setType] = useState<LeaderboardType>('easy');
+  const [type, setType] = useState<LeaderboardType>(AVAILABLE_DIFFICULTIES[0]?.key ?? 'multi');
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [currentUser, setCurrentUser] = useState<LeaderboardResponse['currentUser']>(null);
+  const [loading, setLoading] = useState(true);
+  const requestId = useRef(0);
   const currentUserId = useAuth((state) => state.user?.id ?? null);
   const leaderboardTypes = [...difficulties.map((item) => item.key), 'multi'];
 
@@ -42,17 +44,28 @@ export default function Leaderboard() {
   }, [difficulties, type]);
 
   useEffect(() => {
-    let active = true;
+    const currentRequest = ++requestId.current;
+    setLoading(true);
     api
       .get<LeaderboardResponse>('/leaderboard', { params: { type } })
       .then((res) => {
-        if (!active) return;
+        if (currentRequest !== requestId.current) return;
         setRows(res.data.items);
         setCurrentUser(res.data.currentUser);
       })
-      .catch((err) => toast.error(errMsg(err)));
-    return () => { active = false; };
+      .catch((err) => {
+        if (currentRequest === requestId.current) toast.error(errMsg(err));
+      })
+      .finally(() => {
+        if (currentRequest === requestId.current) setLoading(false);
+      });
   }, [type]);
+
+  const chooseType = (next: LeaderboardType) => {
+    setType(next);
+    setRows([]);
+    setCurrentUser(null);
+  };
 
   const columns: Column<BoardRow>[] = [
     { key: 'rank', title: '#', render: (r) => rows.indexOf(r) + 1 },
@@ -93,7 +106,7 @@ export default function Leaderboard() {
             aria-selected={type === option}
             className={type === option ? 'active' : ''}
             key={option}
-            onClick={() => setType(option)}
+            onClick={() => chooseType(option)}
           >
             {option === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, option)}
           </button>
@@ -104,7 +117,9 @@ export default function Leaderboard() {
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
-          empty={t('leaderboard.empty', { type: type === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, type) })}
+          empty={loading
+            ? t('common.loading')
+            : t('leaderboard.empty', { type: type === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, type) })}
         />
       </div>
     </Page>

@@ -117,6 +117,7 @@ export default function MultiLobby() {
   const [currentRole, setCurrentRole] = useState<'player' | 'spectator'>('player');
   const [copied, setCopied] = useState(false);
   const [searching, setSearching] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [matchDeadline, setMatchDeadline] = useState<number | null>(null);
   const [matchCountdown, setMatchCountdown] = useState(0);
   const navigate = useNavigate();
@@ -275,11 +276,17 @@ export default function MultiLobby() {
   };
 
   const create = async (replaceExisting = false) => {
+    if (creating) return;
+    setCreating(true);
     if (!replaceExisting && currentRoom) {
-      if (!await leaveCurrentFor(currentRoom, currentRole, t('multi.createNewRoom'))) return;
+      if (!await leaveCurrentFor(currentRoom, currentRole, t('multi.createNewRoom'))) {
+        setCreating(false);
+        return;
+      }
     }
     getSocket().emit('room:create', { dbType, boType, allowSpectators, anonymous }, (res: any) => {
       if (res?.code === 'ALREADY_IN_ROOM' && res.room) {
+        setCreating(false);
         setCurrentRoom(res.room);
         setCurrentRole(res.role ?? 'player');
         void leaveCurrentFor(res.room, res.role ?? 'player', t('multi.createNewRoom')).then((left) => {
@@ -287,6 +294,7 @@ export default function MultiLobby() {
         });
         return;
       }
+      setCreating(false);
       if (res?.code) {
         toast.error(translate(res.code));
         return;
@@ -462,9 +470,9 @@ export default function MultiLobby() {
               <span>{t('multi.allowSpectating')}</span>
             </label>
             <div style={{ textAlign: 'center', marginTop: 14 }}>
-              <button className="btn btn-lg" onClick={() => void create()}>
-                <Zap size={16} />
-                {t('multi.createRoom')}
+              <button className="btn btn-lg" onClick={() => void create()} disabled={creating}>
+                {creating ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <Zap size={16} />}
+                {creating ? t('multi.creating') : t('multi.createRoom')}
               </button>
             </div>
           </div>

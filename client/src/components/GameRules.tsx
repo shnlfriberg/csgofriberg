@@ -150,7 +150,7 @@ export default function GameRules() {
                     </div>
                     <ul className="rule-list">
                       <li><Eye size={17} aria-hidden="true" /><span>{t('rules.multiInfo')}</span></li>
-                      <li><span className="rule-list-number">5s</span><span>{t('rules.multiReveal')}</span></li>
+                      <li><span className="rule-list-number">6s</span><span>{t('rules.multiReveal')}</span></li>
                       <li><Flag size={17} aria-hidden="true" /><span>{t('rules.multiSurrender')}</span></li>
                     </ul>
                   </article>
