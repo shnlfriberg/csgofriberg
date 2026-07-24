@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import path from 'path';
 import crypto from 'crypto';
+import { resolveUmamiConfig } from './services/umami';
 
 const repoEnvPath = path.resolve(__dirname, '../../.env');
 const serverEnvPath = path.resolve(__dirname, '../.env');
@@ -57,6 +58,10 @@ export const config = {
   powChallengeTtlSeconds: Number(process.env.POW_CHALLENGE_TTL_SECONDS || 120),
   powTokenTtlSeconds: Number(process.env.POW_TOKEN_TTL_SECONDS || 600),
   showLeaderboard: process.env.SHOW_LEADERBOARD !== 'false',
+  umami: resolveUmamiConfig({
+    websiteId: process.env.UMAMI_WEBSITE_ID,
+    scriptUrl: process.env.UMAMI_SCRIPT_URL,
+  }),
   corsOrigins: (process.env.CORS_ORIGINS || 'http://localhost:5173')
     .split(',')
     .map((s) => s.trim())

@@ -8,12 +8,18 @@ interface Props {
   label: string;
   description: string;
   color: string;
+  analyticsEvent: string;
 }
 
 /** 首页田字格入口卡片 */
-export default function MenuCard({ to, icon, label, description, color }: Props) {
+export default function MenuCard({ to, icon, label, description, color, analyticsEvent }: Props) {
   return (
-    <Link to={to} className="menu-card" style={{ ['--menu-color' as string]: color }}>
+    <Link
+      to={to}
+      className="menu-card"
+      style={{ ['--menu-color' as string]: color }}
+      data-umami-event={analyticsEvent}
+    >
       <span className="menu-icon">{icon}</span>
       <span className="menu-copy">
         <span className="menu-label">{label}</span>

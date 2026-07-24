@@ -75,6 +75,7 @@ export default function LanguageSelect() {
         aria-controls={open ? menuId : undefined}
         title={t('common.language')}
         onClick={() => setOpen((value) => !value)}
+        data-umami-event="home-language-menu"
         onKeyDown={(event) => {
           if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
             event.preventDefault();
@@ -98,6 +99,8 @@ export default function LanguageSelect() {
                 role="option"
                 aria-selected={value === language}
                 onClick={() => chooseLanguage(value)}
+                data-umami-event="home-language-change"
+                data-umami-event-language={value}
                 onKeyDown={(event) => {
                   if (event.key === 'ArrowDown') {
                     event.preventDefault();

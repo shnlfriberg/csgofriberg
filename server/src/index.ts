@@ -35,6 +35,7 @@ import { getRuntimeSnapshot, startRuntimeMonitor } from './services/runtimeMonit
 import { requireAdmin, requireAuth } from './middleware/auth';
 import { parseJsonOnce, rejectOversizedBody } from './middleware/jsonBody';
 import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './middleware/clientAssets';
+import { injectUmamiScript } from './services/umami';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
@@ -89,11 +90,11 @@ async function main() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'wasm-unsafe-eval'"],
+        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...(config.umami ? [config.umami.origin] : [])],
         workerSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'", ...config.corsOrigins],
+        connectSrc: ["'self'", ...config.corsOrigins, ...(config.umami ? [config.umami.origin] : [])],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         frameAncestors: ["'none'"],
@@ -142,11 +143,15 @@ async function main() {
   // 生产环境托管前端构建产物
   const clientDist = path.resolve(__dirname, '../../client/dist');
   if (fs.existsSync(clientDist)) {
-    app.use(express.static(clientDist, { setHeaders: setClientAssetCacheHeaders }));
+    const indexHtml = injectUmamiScript(
+      fs.readFileSync(path.join(clientDist, 'index.html'), 'utf8'),
+      config.umami
+    );
+    app.use(express.static(clientDist, { index: false, setHeaders: setClientAssetCacheHeaders }));
     app.use(rejectMissingClientAsset);
     app.get(/^(?!\/api|\/socket\.io).*/, (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
-      res.sendFile(path.join(clientDist, 'index.html'));
+      res.type('html').send(indexHtml);
     });
   }
 

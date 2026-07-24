@@ -52,6 +52,7 @@ export default function GameRules() {
         className="game-rules-trigger"
         type="button"
         onClick={() => setOpen(true)}
+        data-umami-event="home-rules-open"
       >
         <BookOpen size={14} aria-hidden="true" />
         {t('rules.trigger')}
@@ -87,6 +88,7 @@ export default function GameRules() {
                   type="button"
                   aria-label={t('rules.close')}
                   onClick={closeRules}
+                  data-umami-event="home-rules-close"
                 >
                   <X size={18} />
                 </button>

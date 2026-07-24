@@ -105,7 +105,7 @@ export default function Home() {
                 {user.role === 'admin' && ` · ${t('home.admin')}`}
               </span>
               {user.role === 'admin' && (
-                <Link className="btn btn-ghost btn-sm" to="/admin" aria-label={t('home.adminPanel')}>
+                <Link className="btn btn-ghost btn-sm" to="/admin" aria-label={t('home.adminPanel')} data-umami-event="home-admin">
                   <Wrench size={15} />
                   <span className="btn-text">{t('home.manage')}</span>
                 </Link>
@@ -115,6 +115,7 @@ export default function Home() {
                 aria-label={t('home.logout')}
                 onClick={() => void logout()}
                 disabled={loggingOut}
+                data-umami-event="home-logout"
               >
                 <LogOut size={15} />
                 <span className="btn-text">{t('home.logout')}</span>
@@ -123,7 +124,7 @@ export default function Home() {
           ) : (
             <>
               <span className="muted">{guestName === '访客' ? t('common.guest') : guestName}</span>
-              <Link className="btn btn-sm" to="/login" aria-label={t('home.loginRegister')}>
+              <Link className="btn btn-sm" to="/login" aria-label={t('home.loginRegister')} data-umami-event="home-login">
                 <LogIn size={15} />
                 <span className="btn-text">{t('home.loginRegister')}</span>
               </Link>
@@ -150,6 +151,7 @@ export default function Home() {
             label={t('home.singleMode')}
             description={t('home.singleModeDescription')}
             color="#74e38f"
+            analyticsEvent="home-mode-single"
           />
           <MenuCard
             to="/search"
@@ -157,6 +159,7 @@ export default function Home() {
             label={t('home.search')}
             description={t('home.searchDescription')}
             color="#65a8ff"
+            analyticsEvent="home-mode-search"
           />
           <MenuCard
             to="/multi"
@@ -164,20 +167,21 @@ export default function Home() {
             label={t('home.multiplayer')}
             description={t('home.multiplayerDescription')}
             color="#ffb64e"
+            analyticsEvent="home-mode-multiplayer"
           />
         </div>
         <div className="bottom-bar">
-          <Link to="/stats" className="btn">
+          <Link to="/stats" className="btn" data-umami-event="home-stats">
             <BarChart3 size={15} />
             {t('home.stats')}
           </Link>
           {showLeaderboard && (
-            <Link to="/leaderboard" className="btn btn-warning">
+            <Link to="/leaderboard" className="btn btn-warning" data-umami-event="home-leaderboard">
               <Trophy size={15} />
               {t('home.leaderboard')}
             </Link>
           )}
-          <Link to="/announcement" className="btn btn-success">
+          <Link to="/announcement" className="btn btn-success" data-umami-event="home-announcements">
             <Megaphone size={15} />
             {t('home.announcements')}
           </Link>
@@ -186,6 +190,7 @@ export default function Home() {
             className="btn btn-bilibili"
             target="_blank"
             rel="noopener noreferrer"
+            data-umami-event="home-bilibili"
           >
             <BilibiliIcon />
             {t('home.bilibili')}

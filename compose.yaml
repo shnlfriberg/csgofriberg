@@ -27,6 +27,8 @@ x-app-environment: &app-environment
   POW_CHALLENGE_TTL_SECONDS: ${POW_CHALLENGE_TTL_SECONDS:-120}
   POW_TOKEN_TTL_SECONDS: ${POW_TOKEN_TTL_SECONDS:-600}
   SHOW_LEADERBOARD: ${SHOW_LEADERBOARD:-true}
+  UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+  UMAMI_SCRIPT_URL: ${UMAMI_SCRIPT_URL:-https://cloud.umami.is/script.js}
 
 x-app-service: &app-service
   image: ${IMAGE:-ghcr.io/xinhai-ai/csgofriberg:latest}
