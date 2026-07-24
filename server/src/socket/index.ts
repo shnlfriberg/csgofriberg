@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { isIP } from 'net';
 import { randomUUID } from 'crypto';
+import { z } from 'zod';
 import {
   authenticateCookie,
   getGuestFromCookie,
@@ -92,6 +93,32 @@ const MAX_CONNECTIONS_PER_IP = 20;
 const ROOM_ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const localQueue = new Map<DbType, QueuedIdentity[]>();
 const timers = new Map<string, NodeJS.Timeout>();
+const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
+const roomPlayerStatsPayloadSchema = z.object({
+  playerKey: z.string().min(1).max(256),
+});
+const roomCreatePayloadSchema = z.object({
+  dbType: difficultyKeySchema,
+  boType: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
+  allowSpectators: z.boolean().default(false),
+  anonymous: z.boolean().default(false),
+});
+const roomJoinPayloadSchema = z.object({
+  roomId: z.string().trim().toUpperCase().regex(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/),
+  spectate: z.boolean().default(false),
+});
+const rematchResponsePayloadSchema = z.object({ accept: z.boolean() });
+const roomReadyPayloadSchema = z.object({ ready: z.boolean().optional() }).default({});
+const gameGuessPayloadSchema = z.object({
+  playerId: z.number().int().positive(),
+  roundId: z.number().int().nonnegative(),
+  eventId: z.string().regex(/^[\w-]{16,80}$/),
+});
+const activeRoundPayloadSchema = z.object({ roundId: z.number().int().positive() });
+const matchStartPayloadSchema = z.object({
+  dbType: difficultyKeySchema,
+  anonymous: z.boolean().default(false),
+});
 
 function validForwardedIp(value: string | undefined): string | null {
   const candidate = value?.trim();
@@ -827,16 +854,20 @@ async function handleScheduledGroup(io: Server, items: string[]): Promise<void> 
   }
 }
 
-function safeOn(
+function safeOn<T = any>(
   socket: Socket,
   event: string,
-  handler: (payload: any, ack?: (value: any) => void) => Promise<void>
+  handler: (payload: T, ack?: (value: any) => void) => Promise<void>,
+  schema?: z.ZodTypeAny
 ) {
   socket.on(event, (payload: any, ack?: (value: any) => void) => {
+    const parsed = schema?.safeParse(payload);
+    if (parsed && !parsed.success) return ack?.({ code: 'VALIDATION_FAILED' });
+    const validatedPayload = (parsed ? parsed.data : payload) as T;
     const pendingEvents = Number(socket.data.pendingEvents ?? 0);
     if (pendingEvents >= 8) return ack?.({ code: 'RATE_LIMITED' });
     socket.data.pendingEvents = pendingEvents + 1;
-    void handler(payload, ack).catch(async (err) => {
+    void handler(validatedPayload, ack).catch(async (err) => {
       if (err instanceof Error && err.message === 'ROOM_IDENTITY_CONFLICT') {
         const identity = socket.data.identity as StoredIdentity | undefined;
         const room = identity ? await getRoomForIdentity(identity.key).catch(() => null) : null;
@@ -1202,7 +1233,7 @@ export function setupSocket(io: Server) {
       });
     });
 
-    safeOn(socket, 'room:player-stats', async (payload, ack) => {
+    safeOn(socket, 'room:player-stats', async (payload: z.infer<typeof roomPlayerStatsPayloadSchema>, ack) => {
       await restorePromise;
       if (!(await socketAllowedWithIp(socket, 'player-stats', me.key, 20, 60, 60))) {
         return ack?.({ code: 'RATE_LIMITED' });
@@ -1212,7 +1243,7 @@ export function setupSocket(io: Server) {
 
       const requesterIsPlayer = room.players.some((player) => player.key === me.key);
       const requesterIsSpectator = room.spectators.some((spectator) => spectator.key === me.key);
-      const target = room.players.find((player) => player.key === payload?.playerKey);
+      const target = room.players.find((player) => player.key === payload.playerKey);
       const allowed = Boolean(
         target && (
           requesterIsSpectator ||
@@ -1226,7 +1257,7 @@ export function setupSocket(io: Server) {
         displayId: identityDisplayName(target),
         stats: await getPlayerPerformance(target),
       });
-    });
+    }, roomPlayerStatsPayloadSchema);
 
     safeOn(socket, 'presence:subscribe', async (_payload, ack) => {
       const user = await authenticateCookie(socket.handshake.headers.cookie);
@@ -1242,7 +1273,7 @@ export function setupSocket(io: Server) {
       ack?.({ ok: true });
     });
 
-    safeOn(socket, 'room:create', async (payload, ack) => {
+    safeOn(socket, 'room:create', async (payload: z.infer<typeof roomCreatePayloadSchema>, ack) => {
       await restorePromise;
       if (!(await socketAllowed('create', me.key, 5, 60))) return ack?.({ code: 'RATE_LIMITED' });
       const existing = await getRoomForIdentity(me.key);
@@ -1251,8 +1282,8 @@ export function setupSocket(io: Server) {
         room: publicRoom(existing, me.key),
         role: existing.players.some((player) => player.key === me.key) ? 'player' : 'spectator',
       });
-      const boType = ([1, 3, 5, 7] as BoType[]).includes(payload?.boType) ? payload.boType : 3;
-      const dbType = typeof payload?.dbType === 'string' ? payload.dbType : '';
+      const boType = payload.boType;
+      const dbType = payload.dbType;
       if (!isDifficultyAvailable(dbType)) return ack?.({ code: 'DIFFICULTY_UNAVAILABLE' });
       const now = Date.now();
       const roomId = await genRoomId();
@@ -1269,8 +1300,8 @@ export function setupSocket(io: Server) {
         boType,
         rematchAllowed: true,
         rematchInviterKey: null,
-        allowSpectators: payload?.allowSpectators === true,
-        anonymous: payload?.anonymous === true,
+        allowSpectators: payload.allowSpectators,
+        anonymous: payload.anonymous,
         round: 0,
         players: [makePlayer(me, socket.id, true)],
         spectators: [],
@@ -1304,12 +1335,12 @@ export function setupSocket(io: Server) {
       joinRoomChannels(socket, room, me.key);
       socket.data.roomId = room.id;
       ack?.({ room: publicRoom(room, me.key) });
-    });
+    }, roomCreatePayloadSchema);
 
-    safeOn(socket, 'room:join', async (payload, ack) => {
+    safeOn(socket, 'room:join', async (payload: z.infer<typeof roomJoinPayloadSchema>, ack) => {
       await restorePromise;
       if (!(await socketAllowed('join', me.key, 20, 60))) return ack?.({ code: 'RATE_LIMITED' });
-      const roomId = String(payload?.roomId ?? '').toUpperCase();
+      const roomId = payload.roomId;
       const current = await getRoomForIdentity(me.key);
       if (current && current.id !== roomId) return ack?.({
         code: 'ALREADY_IN_ROOM',
@@ -1330,7 +1361,7 @@ export function setupSocket(io: Server) {
         }
         const existingSpectator = room.spectators.find((p) => p.key === me.key);
         const asSpectator = Boolean(
-          existingSpectator || payload?.spectate || room.status !== 'waiting' || room.players.length >= 2
+          existingSpectator || payload.spectate || room.status !== 'waiting' || room.players.length >= 2
         );
         if (asSpectator) {
           if (!existingSpectator && !room.allowSpectators) return { code: 'SPECTATING_DISABLED' };
@@ -1371,7 +1402,7 @@ export function setupSocket(io: Server) {
         });
       }
       ack?.({ room: publicRoom(role.room, me.key), role: role.role });
-    });
+    }, roomJoinPayloadSchema);
 
     safeOn(socket, 'match:rematch-invite', async (_payload, ack) => {
       await restorePromise;
@@ -1417,12 +1448,11 @@ export function setupSocket(io: Server) {
       ack?.({ ok: true, stateVersion: result.room.revision });
     });
 
-    safeOn(socket, 'match:rematch-respond', async (payload, ack) => {
+    safeOn(socket, 'match:rematch-respond', async (payload: z.infer<typeof rematchResponsePayloadSchema>, ack) => {
       await restorePromise;
       if (!(await socketAllowedWithIp(socket, 'rematch-respond', me.key, 8, 80, 60))) {
         return ack?.({ code: 'RATE_LIMITED' });
       }
-      if (typeof payload?.accept !== 'boolean') return ack?.({ code: 'VALIDATION_FAILED' });
       const room = await getRoomForIdentity(me.key, true);
       if (!room) return ack?.({ code: 'REMATCH_NOT_AVAILABLE' });
       const result = await withRoomLock(room.id, async (locked) => {
@@ -1449,9 +1479,9 @@ export function setupSocket(io: Server) {
       }
       emitRematchUpdate(io, result.room, result.outcome, me.key);
       ack?.({ ok: true, stateVersion: result.room.revision });
-    });
+    }, rematchResponsePayloadSchema);
 
-    safeOn(socket, 'room:ready', async (payload, ack) => {
+    safeOn(socket, 'room:ready', async (payload: z.infer<typeof roomReadyPayloadSchema>, ack) => {
       await restorePromise;
       if (!(await socketAllowedWithIp(socket, 'ready', me.key, 8, 160, 10))) {
         return ack?.({ code: 'RATE_LIMITED' });
@@ -1464,7 +1494,7 @@ export function setupSocket(io: Server) {
         const player = locked.players.find((p) => p.key === me.key);
         if (!player) return false;
         if (player.socketId !== socket.id) return 'STALE_CONNECTION' as const;
-        player.ready = typeof payload?.ready === 'boolean' ? payload.ready : !player.ready;
+        player.ready = payload.ready ?? !player.ready;
         return { room: locked };
       }, (value) => typeof value === 'object');
       if (changed === 'STALE_CONNECTION') return ack?.({ code: changed });
@@ -1478,7 +1508,7 @@ export function setupSocket(io: Server) {
         },
       });
       ack?.({ ok: true });
-    });
+    }, roomReadyPayloadSchema);
 
     safeOn(socket, 'game:start', async (_payload, ack) => {
       await restorePromise;
@@ -1511,19 +1541,15 @@ export function setupSocket(io: Server) {
       ack?.(started ? { ok: true } : { code: 'EMPTY_PLAYER_POOL' });
     });
 
-    safeOn(socket, 'game:guess', async (payload, ack) => {
+    safeOn(socket, 'game:guess', async (payload: z.infer<typeof gameGuessPayloadSchema>, ack) => {
       await restorePromise;
       if (!allowLocalGuess(me.key)) return ack?.({ code: 'RATE_LIMITED' });
       const roomId = String(socket.data.roomId || await getRoomIdForIdentity(me.key) || '');
       if (!roomId) return ack?.({ code: 'NO_ACTIVE_ROUND', reason: 'identity_room_missing' });
       socket.data.roomId = roomId;
-      const guess = getEnabledPlayer(Number(payload?.playerId));
+      const guess = getEnabledPlayer(payload.playerId);
       if (!guess) return ack?.({ code: 'PLAYER_NOT_FOUND' });
-      const roundId = Number(payload?.roundId);
-      const eventId = typeof payload?.eventId === 'string' ? payload.eventId : '';
-      if (!Number.isInteger(roundId) || !/^[\w-]{16,80}$/.test(eventId)) {
-        return ack?.({ code: 'VALIDATION_FAILED' });
-      }
+      const { roundId, eventId } = payload;
       const targetState = await getRoomGuessTarget(roomId, roundId);
       if (!targetState) return ack?.({ code: 'NO_ACTIVE_ROUND', reason: 'target_missing' });
       if (targetState.round !== roundId) {
@@ -1608,19 +1634,16 @@ export function setupSocket(io: Server) {
           setLocalTimer(`next:${roomId}`, NEXT_ROUND_DELAY_MS, () => startRound(io, roomId));
         }
       }
-    });
+    }, gameGuessPayloadSchema);
 
-    safeOn(socket, 'game:surrender-round', async (payload, ack) => {
+    safeOn(socket, 'game:surrender-round', async (payload: z.infer<typeof activeRoundPayloadSchema>, ack) => {
       await restorePromise;
       if (!(await socketAllowed('surrender', me.key, 5, 60))) {
         return ack?.({ code: 'RATE_LIMITED' });
       }
       const roomId = String(socket.data.roomId || await getRoomIdForIdentity(me.key) || '');
       if (!roomId) return ack?.({ code: 'NO_ACTIVE_ROUND' });
-      const roundId = Number(payload?.roundId);
-      if (!Number.isInteger(roundId) || roundId <= 0) {
-        return ack?.({ code: 'VALIDATION_FAILED' });
-      }
+      const { roundId } = payload;
       const result = await surrenderRound(io, roomId, me.key, socket.id, roundId);
       if (result === 'stale') return ack?.({ code: 'STALE_CONNECTION' });
       if (!result) {
@@ -1631,7 +1654,7 @@ export function setupSocket(io: Server) {
         });
       }
       ack?.({ ok: true });
-    });
+    }, activeRoundPayloadSchema);
 
     safeOn(socket, 'room:leave', async (_payload, ack) => {
       await restorePromise;
@@ -1716,7 +1739,7 @@ export function setupSocket(io: Server) {
       ack?.({ ok: true });
     });
 
-    safeOn(socket, 'match:start', async (payload, ack) => {
+    safeOn(socket, 'match:start', async (payload: z.infer<typeof matchStartPayloadSchema>, ack) => {
       await restorePromise;
       if (!(await socketAllowed('match', me.key, 10, 60))) return ack?.({ code: 'RATE_LIMITED' });
       const currentRoom = await getRoomForIdentity(me.key);
@@ -1726,12 +1749,12 @@ export function setupSocket(io: Server) {
         serverNow: Date.now(),
       });
       await cancelQueue(me.key);
-      const dbType: DbType = typeof payload?.dbType === 'string' ? payload.dbType : '';
+      const dbType: DbType = payload.dbType;
       if (!isDifficultyAvailable(dbType)) return ack?.({ code: 'DIFFICULTY_UNAVAILABLE' });
       const queuedMe: QueuedIdentity = {
         ...me,
         socketId: socket.id,
-        anonymous: payload?.anonymous === true,
+        anonymous: payload.anonymous,
       };
       let opponent = isRedisAvailable() ? await queueOrTakeOpponent(dbType, queuedMe) : null;
       if (isRedisAvailable() && !opponent) return ack?.({ queued: true });
@@ -1836,7 +1859,7 @@ export function setupSocket(io: Server) {
       setLocalTimer(`start:${savedRoom.id}`, Math.max(0, startsAt - Date.now()) + 10, () => {
         return startRound(io, savedRoom.id);
       });
-    });
+    }, matchStartPayloadSchema);
 
     safeOn(socket, 'match:cancel', async (_payload, ack) => {
       await restorePromise;

@@ -122,6 +122,33 @@ describe('multiplayer socket integration', () => {
     )).toBe('198.51.100.11');
   });
 
+  it('rejects malformed event payloads before room state changes', async () => {
+    const key = `validation-${Date.now()}`;
+    const token = jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const socket = await connect(withPowCookie(`csgofriberg_guest=${token}`));
+    try {
+      expect(await emit(socket, 'room:create', { dbType: 'easy', boType: 2 }))
+        .toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(socket, 'room:join', { roomId: '../bad' }))
+        .toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(socket, 'room:player-stats', { playerKey: '' }))
+        .toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(socket, 'match:rematch-respond', { accept: 'yes' }))
+        .toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(socket, 'game:guess', {
+        playerId: '1',
+        roundId: 1,
+        eventId: 'short',
+      })).toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(socket, 'game:surrender-round', { roundId: 0 }))
+        .toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(socket, 'match:start', { dbType: ['easy'] }))
+        .toEqual({ code: 'VALIDATION_FAILED' });
+    } finally {
+      socket.disconnect();
+    }
+  });
+
   it('only exposes room player stats to opponents and room spectators', async () => {
     const stamp = Date.now();
     const keyA = `stats-room-a-${stamp}`;

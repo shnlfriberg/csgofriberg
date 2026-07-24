@@ -11,15 +11,27 @@ export class HttpError extends Error {
   }
 }
 
-export function validateBody(schema: ZodSchema) {
+function validateRequestPart(schema: ZodSchema, part: 'body' | 'query' | 'params') {
   return (req: Request, res: Response, next: NextFunction) => {
-    const result = schema.safeParse(req.body);
+    const result = schema.safeParse(req[part]);
     if (!result.success) {
       return res.status(400).json({ code: 'VALIDATION_FAILED' });
     }
-    req.body = result.data;
+    req[part] = result.data;
     next();
   };
+}
+
+export function validateBody(schema: ZodSchema) {
+  return validateRequestPart(schema, 'body');
+}
+
+export function validateQuery(schema: ZodSchema) {
+  return validateRequestPart(schema, 'query');
+}
+
+export function validateParams(schema: ZodSchema) {
+  return validateRequestPart(schema, 'params');
 }
 
 export function errorHandler(

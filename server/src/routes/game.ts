@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/knex';
 import { optionalAuth } from '../middleware/auth';
-import { validateBody, asyncHandler, HttpError } from '../middleware/common';
+import { validateBody, validateParams, asyncHandler, HttpError } from '../middleware/common';
 import { GuessFeedback, Player } from '../types';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getEnabledPlayer, getPlayer, isDifficultyAvailable, pickCachedTarget } from '../services/playerCache';
@@ -20,6 +20,7 @@ import {
 
 const router = Router();
 router.use(optionalAuth);
+const gameIdParams = z.object({ id: z.string().uuid() });
 
 function identity(req: { user?: { id: number }; guestKey?: string }) {
   if (req.user) {
@@ -131,11 +132,12 @@ router.post(
     key: requestIdentity,
     failClosed: true,
   }),
+  validateParams(gameIdParams),
   validateBody(z.object({ playerId: z.number().int().positive() })),
   asyncHandler(async (req, res) => {
     const owner = identity(req);
     if (!owner) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
-    const gameId = String(req.params.id);
+    const gameId = req.params.id;
     const response = await withKeyLock(`single-game:${gameId}`, async () => {
       const game = await loadOwnedGame(gameId, owner.identityKey);
       const guess = getEnabledPlayer(req.body.playerId);
@@ -174,10 +176,11 @@ router.post(
     key: requestIdentity,
     failClosed: true,
   }),
+  validateParams(gameIdParams),
   asyncHandler(async (req, res) => {
     const owner = identity(req);
     if (!owner) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
-    const gameId = String(req.params.id);
+    const gameId = req.params.id;
     const response = await withKeyLock(`single-game:${gameId}`, async () => {
       const game = await loadOwnedGame(gameId, owner.identityKey);
       const target = getPlayer(game.targetPlayerId);
@@ -191,10 +194,11 @@ router.post(
 
 router.post(
   '/:id/exit',
+  validateParams(gameIdParams),
   asyncHandler(async (req, res) => {
     const owner = identity(req);
     if (!owner) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
-    const gameId = String(req.params.id);
+    const gameId = req.params.id;
     await withKeyLock(`single-game:${gameId}`, async () => {
       const game = await loadSingleGame(gameId, owner.identityKey);
       if (game) await deleteSingleGame(game);

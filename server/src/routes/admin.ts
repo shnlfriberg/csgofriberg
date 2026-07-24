@@ -8,7 +8,13 @@ import {
   requireAdmin,
   userNameFromUsername,
 } from '../middleware/auth';
-import { validateBody, asyncHandler, HttpError } from '../middleware/common';
+import {
+  validateBody,
+  validateParams,
+  validateQuery,
+  asyncHandler,
+  HttpError,
+} from '../middleware/common';
 import { invalidatePlayerCache } from '../services/playerCache';
 import { invalidateCached } from '../services/queryCache';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
@@ -51,23 +57,35 @@ const adminResourceBroadcastLimit = rateLimit({
 });
 const playerRoles = ['Rifler', 'AWPer', 'Coach'] as const;
 const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
+const difficultyListSchema = z.array(difficultyKeySchema)
+  .min(1)
+  .max(20)
+  .refine((keys) => new Set(keys).size === keys.length);
 
 const playerSchema = z.object({
-  nickname: z.string().min(1).max(64),
-  nationality: z.string().min(1).max(64),
-  region: z.string().max(32).default(''),
-  team: z.string().max(64).default(''),
+  nickname: z.string().trim().min(1).max(64),
+  nationality: z.string().trim().min(1).max(64),
+  region: z.string().trim().max(32).default(''),
+  team: z.string().trim().max(64).default(''),
   age: z.number().int().min(10).max(100),
   role: z.enum(playerRoles).default('Rifler'),
   major_championships: z.number().int().min(0).default(0),
   major_appearances: z.number().int().min(0).default(0),
   is_active: z.boolean().default(true),
   is_enabled: z.boolean().default(true),
-  difficulties: z.array(difficultyKeySchema).min(1).max(20).optional(),
+  difficulties: difficultyListSchema.optional(),
 });
 const importedPlayerSchema = playerSchema.extend({
   is_enabled: z.boolean().optional(),
   is_easy: z.boolean().optional(),
+});
+const playerUpdateSchema = playerSchema.partial()
+  .refine((values) => Object.keys(values).length > 0);
+const playerImportSchema = z.object({
+  players: z.array(importedPlayerSchema)
+    .min(1)
+    .max(1000)
+    .refine((players) => new Set(players.map((player) => player.nickname)).size === players.length),
 });
 
 async function assertDifficultyKeys(keys: string[]): Promise<void> {
@@ -105,6 +123,15 @@ const userGameListQuerySchema = z.object({
   type: z.enum(['single', 'multi']).default('single'),
   page: z.coerce.number().int().min(1).max(500).default(1),
   pageSize: z.coerce.number().int().min(5).max(30).default(10),
+});
+const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
+const userGameReplayParamsSchema = z.object({
+  userId: z.coerce.number().int().positive(),
+  gameId: z.coerce.number().int().positive(),
+});
+const userMatchReplayParamsSchema = z.object({
+  userId: z.coerce.number().int().positive(),
+  matchId: z.coerce.number().int().positive(),
 });
 
 function matchPlayerDisplayId(row: { key?: unknown; name?: unknown; username?: unknown }): string {
@@ -152,10 +179,10 @@ function replayGuesses(target: Player, ids: number[]): GuessFeedback[] {
 router.get(
   '/users',
   adminReadLimit,
+  validateQuery(userListQuerySchema),
   asyncHandler(async (req, res) => {
-    const parsed = userListQuerySchema.safeParse(req.query);
-    if (!parsed.success) throw new HttpError(400, 'VALIDATION_FAILED');
-    const { pageSize, search } = parsed.data;
+    const parsed = req.query as unknown as z.infer<typeof userListQuerySchema>;
+    const { pageSize, search } = parsed;
     const query = db('users');
     if (search) {
       query.where((builder) => {
@@ -166,7 +193,7 @@ router.get(
     const countRow = await query.clone().count({ count: 'id' }).first();
     const total = Number(countRow?.count ?? 0);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(parsed.data.page, totalPages);
+    const page = Math.min(parsed.page, totalPages);
     const users = await query.clone()
       .select('id', 'username', 'display_id', 'role', 'created_at')
       .orderBy('created_at', 'desc')
@@ -192,9 +219,9 @@ router.get(
 router.get(
   '/users/:id/stats',
   adminReadLimit,
+  validateParams(idParamsSchema),
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, 'VALIDATION_FAILED');
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const user = await db('users')
       .where({ id })
       .first('id', 'username', 'display_id', 'role', 'created_at');
@@ -219,13 +246,13 @@ router.get(
 router.get(
   '/users/:id/games',
   adminReadLimit,
+  validateParams(idParamsSchema),
+  validateQuery(userGameListQuerySchema),
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, 'VALIDATION_FAILED');
-    const parsed = userGameListQuerySchema.safeParse(req.query);
-    if (!parsed.success) throw new HttpError(400, 'VALIDATION_FAILED');
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const parsed = req.query as unknown as z.infer<typeof userGameListQuerySchema>;
     if (!(await db('users').where({ id }).first('id'))) throw new HttpError(404, 'USER_NOT_FOUND');
-    const { type, page, pageSize } = parsed.data;
+    const { type, page, pageSize } = parsed;
     const offset = (page - 1) * pageSize;
 
     if (type === 'single') {
@@ -314,12 +341,9 @@ router.get(
 router.get(
   '/users/:userId/games/:gameId/replay',
   adminReadLimit,
+  validateParams(userGameReplayParamsSchema),
   asyncHandler(async (req, res) => {
-    const userId = Number(req.params.userId);
-    const gameId = Number(req.params.gameId);
-    if (![userId, gameId].every((id) => Number.isInteger(id) && id > 0)) {
-      throw new HttpError(400, 'VALIDATION_FAILED');
-    }
+    const { userId, gameId } = req.params as unknown as z.infer<typeof userGameReplayParamsSchema>;
     const game = await db('games')
       .where({ id: gameId, user_id: userId })
       .whereNot('status', 'playing')
@@ -360,12 +384,9 @@ router.get(
 router.get(
   '/users/:userId/matches/:matchId/replay',
   adminReadLimit,
+  validateParams(userMatchReplayParamsSchema),
   asyncHandler(async (req, res) => {
-    const userId = Number(req.params.userId);
-    const matchId = Number(req.params.matchId);
-    if (![userId, matchId].every((id) => Number.isInteger(id) && id > 0)) {
-      throw new HttpError(400, 'VALIDATION_FAILED');
-    }
+    const { userId, matchId } = req.params as unknown as z.infer<typeof userMatchReplayParamsSchema>;
     const match = await db('match_records as m')
       .join('match_players as me', 'me.match_id', 'm.id')
       .where('m.id', matchId)
@@ -439,10 +460,10 @@ router.get(
 router.get(
   '/players',
   adminReadLimit,
+  validateQuery(playerListQuerySchema),
   asyncHandler(async (req, res) => {
-    const parsed = playerListQuerySchema.safeParse(req.query);
-    if (!parsed.success) throw new HttpError(400, 'VALIDATION_FAILED');
-    const { pageSize, search } = parsed.data;
+    const parsed = req.query as unknown as z.infer<typeof playerListQuerySchema>;
+    const { pageSize, search } = parsed;
     const query = db('players');
     if (search) {
       query.where((builder) => {
@@ -455,7 +476,7 @@ router.get(
     const countRow = await query.clone().count({ count: 'id' }).first();
     const total = Number(countRow?.count ?? 0);
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
-    const page = Math.min(parsed.data.page, totalPages);
+    const page = Math.min(parsed.page, totalPages);
     const players = await query.clone()
       .orderBy('nickname')
       .limit(pageSize)
@@ -512,9 +533,10 @@ router.post(
 router.put(
   '/players/:id',
   adminWriteLimit,
-  validateBody(playerSchema.partial()),
+  validateParams(idParamsSchema),
+  validateBody(playerUpdateSchema),
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const { difficulties, ...values } = req.body;
     if (difficulties) await assertDifficultyKeys(difficulties);
     await db.transaction(async (trx) => {
@@ -531,9 +553,9 @@ router.put(
 router.delete(
   '/players/:id',
   adminWriteLimit,
+  validateParams(idParamsSchema),
   asyncHandler(async (req, res) => {
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, 'VALIDATION_FAILED');
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const player = await db('players').where({ id }).first();
     if (!player) throw new HttpError(404, 'PLAYER_NOT_FOUND');
     if (Boolean(player.is_enabled)) throw new HttpError(409, 'PLAYER_MUST_BE_DISABLED');
@@ -550,7 +572,7 @@ router.delete(
 router.post(
   '/players/import',
   adminImportLimit,
-  validateBody(z.object({ players: z.array(importedPlayerSchema).min(1).max(1000) })),
+  validateBody(playerImportSchema),
   asyncHandler(async (req, res) => {
     let created = 0;
     let updated = 0;
@@ -617,8 +639,8 @@ router.post(
 );
 
 const announcementSchema = z.object({
-  title: z.string().min(1).max(128),
-  content: z.string().min(1).max(10000),
+  title: z.string().trim().min(1).max(128),
+  content: z.string().trim().min(1).max(10000),
 });
 
 router.post(
@@ -638,8 +660,10 @@ router.post(
 router.delete(
   '/announcements/:id',
   adminWriteLimit,
+  validateParams(idParamsSchema),
   asyncHandler(async (req, res) => {
-    const count = await db('announcements').where({ id: Number(req.params.id) }).del();
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const count = await db('announcements').where({ id }).del();
     if (!count) throw new HttpError(404, 'NOT_FOUND');
     await invalidateCached('announcements');
     res.json({ ok: true });

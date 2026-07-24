@@ -1,9 +1,14 @@
 import { Router } from 'express';
-import { asyncHandler } from '../middleware/common';
+import { z } from 'zod';
+import { asyncHandler, validateQuery } from '../middleware/common';
 import { getPublicPlayerList, searchCachedPlayers } from '../services/playerCache';
 import { rateLimit } from '../middleware/rateLimit';
 
 const router = Router();
+const playerSearchQuery = z.object({
+  search: z.string().trim().max(100).default(''),
+  suggest: z.enum(['0', '1']).default('0').transform((value) => value === '1'),
+});
 
 router.get(
   '/list',
@@ -31,9 +36,9 @@ router.get(
     windowSeconds: 60,
     failClosed: true,
   }),
+  validateQuery(playerSearchQuery),
   asyncHandler(async (req, res) => {
-    const search = String(req.query.search ?? '').trim();
-    const suggest = req.query.suggest === '1';
+    const { search, suggest } = req.query as unknown as z.infer<typeof playerSearchQuery>;
 
     const players = searchCachedPlayers(search, suggest ? 10 : 100);
 

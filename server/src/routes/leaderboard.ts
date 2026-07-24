@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/knex';
-import { asyncHandler, HttpError } from '../middleware/common';
+import { asyncHandler, HttpError, validateQuery } from '../middleware/common';
 import { cached } from '../services/queryCache';
 import { rateLimit } from '../middleware/rateLimit';
 import { config } from '../config';
@@ -18,11 +18,10 @@ const leaderboardQuery = z.object({
 router.get(
   '/',
   rateLimit({ name: 'leaderboard', limit: 20, windowSeconds: 60, failClosed: true }),
+  validateQuery(leaderboardQuery),
   asyncHandler(async (req, res) => {
     if (!config.showLeaderboard) throw new HttpError(404, 'FEATURE_DISABLED');
-    const parsed = leaderboardQuery.safeParse(req.query);
-    if (!parsed.success) throw new HttpError(400, 'VALIDATION_FAILED');
-    const type = parsed.data.type;
+    const { type } = req.query as unknown as z.infer<typeof leaderboardQuery>;
     if (type !== 'multi' && !isDifficultyAvailable(type)) {
       throw new HttpError(400, 'DIFFICULTY_UNAVAILABLE');
     }

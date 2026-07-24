@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/knex';
 import { guestNameFromKey, optionalAuth, userNameFromUsername } from '../middleware/auth';
-import { asyncHandler, HttpError } from '../middleware/common';
+import { asyncHandler, HttpError, validateParams, validateQuery } from '../middleware/common';
 import { cached } from '../services/queryCache';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getPlayer } from '../services/playerCache';
@@ -186,6 +186,7 @@ const replayListQuery = z.object({
   page: z.coerce.number().int().min(1).max(500).default(1),
   pageSize: z.coerce.number().int().min(5).max(30).default(15),
 });
+const replayIdParams = z.object({ id: z.coerce.number().int().positive() });
 
 function safeGuessIds(value: unknown): number[] {
   if (!Array.isArray(value)) return [];
@@ -240,10 +241,9 @@ router.get(
     key: requestIdentity,
     failClosed: true,
   }),
+  validateQuery(replayListQuery),
   asyncHandler(async (req, res) => {
-    const parsed = replayListQuery.safeParse(req.query);
-    if (!parsed.success) throw new HttpError(400, 'VALIDATION_FAILED');
-    const { type, page, pageSize } = parsed.data;
+    const { type, page, pageSize } = req.query as unknown as z.infer<typeof replayListQuery>;
     const offset = (page - 1) * pageSize;
 
     if (type === 'single') {
@@ -347,11 +347,11 @@ router.get(
     key: requestIdentity,
     failClosed: true,
   }),
+  validateParams(replayIdParams),
   asyncHandler(async (req, res) => {
     const owner = ownerFor(req);
     if (!owner) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, 'VALIDATION_FAILED');
+    const { id } = req.params as unknown as z.infer<typeof replayIdParams>;
 
     const game = await db('games')
       .where({ id, ...owner })
@@ -401,11 +401,11 @@ router.get(
     key: requestIdentity,
     failClosed: true,
   }),
+  validateParams(replayIdParams),
   asyncHandler(async (req, res) => {
     const identityKey = identityKeyFor(req);
     if (!identityKey) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
-    const id = Number(req.params.id);
-    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, 'VALIDATION_FAILED');
+    const { id } = req.params as unknown as z.infer<typeof replayIdParams>;
 
     const match = await db('match_records as m')
       .join('match_players as me', 'me.match_id', 'm.id')
