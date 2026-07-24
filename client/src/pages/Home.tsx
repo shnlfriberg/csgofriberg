@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   Search,
   Gamepad2,
-  Flame,
   Globe,
   BarChart3,
   Trophy,
@@ -146,18 +145,11 @@ export default function Home() {
         </div>
         <div className="menu-grid">
           <MenuCard
-            to="/single/easy"
+            to="/single"
             icon={<Gamepad2 size={22} />}
-            label={t('common.easy')}
-            description={t('home.easyDescription')}
+            label={t('home.singleMode')}
+            description={t('home.singleModeDescription')}
             color="#74e38f"
-          />
-          <MenuCard
-            to="/single/normal"
-            icon={<Flame size={22} />}
-            label={t('common.normal')}
-            description={t('home.normalDescription')}
-            color="#ff6578"
           />
           <MenuCard
             to="/search"

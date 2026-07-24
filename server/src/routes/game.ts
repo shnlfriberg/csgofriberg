@@ -5,7 +5,7 @@ import { optionalAuth } from '../middleware/auth';
 import { validateBody, asyncHandler, HttpError } from '../middleware/common';
 import { GuessFeedback, Player } from '../types';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
-import { getEnabledPlayer, getPlayer, pickCachedTarget } from '../services/playerCache';
+import { getEnabledPlayer, getPlayer, isDifficultyAvailable, pickCachedTarget } from '../services/playerCache';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { withKeyLock } from '../services/keyLock';
 import { invalidateCached } from '../services/queryCache';
@@ -80,8 +80,7 @@ async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promis
     ? `stats:personal:u:${game.userId}`
     : `stats:personal:g:${game.guestKey}`;
   await invalidateCached(
-    'leaderboard:easy',
-    'leaderboard:normal',
+    `leaderboard:${game.mode}`,
     'leaderboard:multi',
     personalStatsKey
   );
@@ -96,11 +95,14 @@ router.post(
     key: requestIdentity,
     failClosed: true,
   }),
-  validateBody(z.object({ mode: z.enum(['easy', 'normal']).default('easy') })),
+  validateBody(z.object({
+    mode: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/).default('easy'),
+  })),
   asyncHandler(async (req, res) => {
     const owner = identity(req);
     if (!owner) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
     const mode = req.body.mode as SingleGameMode;
+    if (!isDifficultyAvailable(mode)) throw new HttpError(400, 'DIFFICULTY_UNAVAILABLE');
     const response = await withKeyLock(`single-start:${owner.identityKey}:${mode}`, async () => {
       const target = pickCachedTarget(mode);
       if (!target) throw new HttpError(500, 'EMPTY_PLAYER_POOL');

@@ -47,6 +47,8 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasColumn('players', 'major_championships')).toBe(true);
     expect(await instance.schema.hasColumn('players', 'is_easy')).toBe(true);
     expect(await instance.schema.hasColumn('players', 'is_enabled')).toBe(true);
+    expect(await instance.schema.hasTable('difficulty_levels')).toBe(true);
+    expect(await instance.schema.hasTable('player_difficulties')).toBe(true);
     expect(await instance.schema.hasColumn('players', 'age')).toBe(true);
     expect(await instance.schema.hasColumn('players', 'birth_year')).toBe(false);
     expect(await instance.schema.hasTable('app_migrations')).toBe(true);
@@ -61,6 +63,7 @@ describe('player schema migration', () => {
     expect(player.major_championships).toBe(0);
     expect(player.is_easy).toBe(0);
     expect(player.is_enabled).toBe(1);
+    expect(await instance('player_difficulties').where({ player_id: player.id }).pluck('difficulty_key')).toEqual(['normal']);
 
     await instance('games').insert({
       session_id: 'legacy-first-guess',

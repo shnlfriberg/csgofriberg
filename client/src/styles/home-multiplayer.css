@@ -42,7 +42,7 @@
 .home-hero p { position: relative; margin: 0; color: var(--text-sec); font-size: clamp(1rem, 2vw, 1.15rem); }
 .menu-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   padding: 24px 0;
   max-width: 900px;
@@ -89,6 +89,41 @@
 .bottom-bar .btn { flex: 1 1 168px; }
 .btn-bilibili { background: #00aeec; }
 .btn-bilibili:hover { background: #0096cc; }
+
+.single-difficulty-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  padding: 18px 0;
+}
+.single-difficulty-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 22px;
+  align-items: center;
+  gap: 12px;
+  min-height: 92px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+.single-difficulty-option:hover { border-color: var(--primary); transform: translateY(-1px); box-shadow: var(--shadow); }
+.single-difficulty-option.active { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.single-difficulty-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; background: var(--primary-soft); color: var(--primary); }
+.single-difficulty-copy { display: grid; gap: 4px; min-width: 0; }
+.single-difficulty-copy strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.single-difficulty-copy small { color: var(--text-light); }
+.single-difficulty-check { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 50%; color: #fff; }
+.single-difficulty-option.active .single-difficulty-check { border-color: var(--primary); background: var(--primary); }
+.single-difficulty-badge { position: absolute; top: 9px; right: 12px; color: var(--success); font-size: .68rem; font-weight: 800; }
+.single-lobby-action { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 14px 0 4px; border-top: 1px solid var(--border); }
+.single-lobby-action > div { display: grid; gap: 3px; }
+.single-lobby-action strong { font-size: 1.05rem; }
 
 /* ===== 首页游戏规则 ===== */
 .game-rules-trigger {

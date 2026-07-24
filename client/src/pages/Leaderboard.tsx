@@ -6,6 +6,8 @@ import { api, errMsg } from '../api/client';
 import { toast } from '../components/Toast';
 import { useAuth } from '../store/auth';
 import { useTranslation } from 'react-i18next';
+import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
+import { difficultyLabel } from '../utils/difficulty';
 
 interface BoardRow {
   id: number;
@@ -16,7 +18,7 @@ interface BoardRow {
   avgGuesses: number | null;
 }
 
-type LeaderboardType = 'easy' | 'normal' | 'multi';
+type LeaderboardType = string;
 
 interface LeaderboardResponse {
   type: LeaderboardType;
@@ -24,14 +26,20 @@ interface LeaderboardResponse {
   currentUser: { displayId: string; rank: number | null } | null;
 }
 
-const LEADERBOARD_TYPES: LeaderboardType[] = ['easy', 'normal', 'multi'];
-
 export default function Leaderboard() {
   const { t } = useTranslation();
+  const difficulties = AVAILABLE_DIFFICULTIES;
   const [type, setType] = useState<LeaderboardType>('easy');
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [currentUser, setCurrentUser] = useState<LeaderboardResponse['currentUser']>(null);
   const currentUserId = useAuth((state) => state.user?.id ?? null);
+  const leaderboardTypes = [...difficulties.map((item) => item.key), 'multi'];
+
+  useEffect(() => {
+    if (difficulties.length && type !== 'multi' && !difficulties.some((item) => item.key === type)) {
+      setType(difficulties[0].key);
+    }
+  }, [difficulties, type]);
 
   useEffect(() => {
     let active = true;
@@ -78,7 +86,7 @@ export default function Leaderboard() {
         </div>
       )}
       <div className="leaderboard-mode-tabs" role="tablist" aria-label={t('leaderboard.typeLabel')}>
-        {LEADERBOARD_TYPES.map((option) => (
+        {leaderboardTypes.map((option) => (
           <button
             type="button"
             role="tab"
@@ -87,7 +95,7 @@ export default function Leaderboard() {
             key={option}
             onClick={() => setType(option)}
           >
-            {t(`leaderboard.${option}`)}
+            {option === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, option)}
           </button>
         ))}
       </div>
@@ -96,7 +104,7 @@ export default function Leaderboard() {
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
-          empty={t('leaderboard.empty', { type: t(`leaderboard.${type}`) })}
+          empty={t('leaderboard.empty', { type: type === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, type) })}
         />
       </div>
     </Page>

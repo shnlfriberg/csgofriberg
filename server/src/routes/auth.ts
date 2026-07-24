@@ -17,6 +17,7 @@ import { User } from '../types';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { invalidateCached } from '../services/queryCache';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from '../services/password';
+import { DIFFICULTY_LEVELS } from '../difficulties';
 
 const router = Router();
 
@@ -157,8 +158,7 @@ router.post(
       .update({ user_id: req.user!.id, guest_key: null });
     clearGuestCookie(res);
     await invalidateCached(
-      'leaderboard:easy',
-      'leaderboard:normal',
+      ...DIFFICULTY_LEVELS.map((difficulty) => `leaderboard:${difficulty.key}`),
       'leaderboard:multi',
       `stats:personal:g:${guestKey}`,
       `stats:personal:u:${req.user!.id}`

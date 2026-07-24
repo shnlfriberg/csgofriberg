@@ -8,6 +8,8 @@ import { playerRoleLabel } from '../../utils/playerRoles';
 import { clearPlayerListCache } from '../../api/playerList';
 import { toast } from '../Toast';
 import { useTranslation } from 'react-i18next';
+import { difficultyLabel } from '../../utils/difficulty';
+import { AVAILABLE_DIFFICULTIES } from '../../config/difficulties';
 
 interface AdminPlayer extends PlayerForm {
   id: number;
@@ -46,7 +48,7 @@ export default function AdminPlayers() {
       if (currentRequest !== requestId.current) return;
       setPlayers(res.data.players.map((p) => ({
         ...p,
-        is_easy: Boolean(p.is_easy),
+        difficulties: p.difficulties ?? [],
         is_active: Boolean(p.is_active),
         is_enabled: Boolean(p.is_enabled),
       })));
@@ -62,6 +64,7 @@ export default function AdminPlayers() {
   useEffect(() => {
     void load();
   }, [load]);
+
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -147,7 +150,7 @@ export default function AdminPlayers() {
     { key: 'role', title: t('admin.role'), render: (p) => playerRoleLabel(p.role) },
     { key: 'major_championships', title: t('admin.majorTitles') },
     { key: 'major_appearances', title: t('admin.major') },
-    { key: 'is_easy', title: t('admin.easy'), render: (p) => (p.is_easy ? t('admin.yes') : t('admin.no')) },
+    { key: 'difficulties', title: t('admin.difficulties'), render: (p) => p.difficulties.map((key) => difficultyLabel(t, key)).join(', ') },
     { key: 'is_active', title: t('admin.status'), render: (p) => (p.is_active ? t('common.active') : t('common.retired')) },
     { key: 'is_enabled', title: t('admin.pool'), render: (p) => (p.is_enabled ? t('admin.available') : t('admin.disabled')) },
     {
@@ -273,6 +276,7 @@ export default function AdminPlayers() {
         <PlayerEditForm
           key={editing.id ?? 'new'}
           initial={editing}
+          difficultyKeys={AVAILABLE_DIFFICULTIES.map((item) => item.key)}
           onSubmit={save}
           onCancel={() => setEditing(null)}
         />

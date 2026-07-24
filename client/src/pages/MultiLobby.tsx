@@ -20,8 +20,10 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
 import ModalPortal from '../components/ModalPortal';
 import { useTranslation } from 'react-i18next';
+import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
+import { difficultyLabel } from '../utils/difficulty';
 
-type DbType = 'easy' | 'normal';
+type DbType = string;
 const BO_OPTIONS = [1, 3, 5, 7];
 
 function localMatchDeadline(input: {
@@ -102,6 +104,7 @@ function MatchFoundDialog({ countdown }: { countdown: number }) {
 
 export default function MultiLobby() {
   const { t } = useTranslation();
+  const difficulties = AVAILABLE_DIFFICULTIES;
   const [dbType, setDbType] = useState<DbType>('normal');
   const [boType, setBoType] = useState(3);
   const [allowSpectators, setAllowSpectators] = useState(false);
@@ -122,6 +125,13 @@ export default function MultiLobby() {
   const replacingRoomRef = useRef(false);
   const matchOptionsRef = useRef({ dbType: mmDbType, anonymous: mmAnonymous });
   matchOptionsRef.current = { dbType: mmDbType, anonymous: mmAnonymous };
+
+  useEffect(() => {
+    if (!difficulties.length) return;
+    const defaultKey = difficulties.find((item) => item.key === 'normal')?.key ?? difficulties[0].key;
+    if (!difficulties.some((item) => item.key === dbType)) setDbType(defaultKey);
+    if (!difficulties.some((item) => item.key === mmDbType)) setMmDbType(defaultKey);
+  }, [difficulties, dbType, mmDbType]);
 
   useEffect(() => {
     if (!matchDeadline) {
@@ -414,7 +424,7 @@ export default function MultiLobby() {
             {copied ? t('multi.copied') : t('multi.copyCode')}
           </button>
           <p className="muted multi-lobby-created-meta">
-            {t('multi.database', { type: createdRoom.dbType === 'normal' ? t('common.normal') : t('common.easy') })} · {t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')}
+            {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')}
             {' · '}{createdRoom.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}
           </p>
           <button className="btn btn-lg" onClick={() => navigate('/multi/room')}>
@@ -431,10 +441,10 @@ export default function MultiLobby() {
             </h3>
             <OptionGroup
               label={t('multi.playerDatabase')}
-              options={['normal', 'easy'] as DbType[]}
+              options={difficulties.map((item) => item.key) as DbType[]}
               value={dbType}
               onChange={setDbType}
-              format={(v) => (v === 'normal' ? t('common.normal') : t('common.easy'))}
+              format={(v) => difficultyLabel(t, v)}
             />
             <OptionGroup
               label={t('multi.formatLabel')}
@@ -467,10 +477,10 @@ export default function MultiLobby() {
             <p className="muted">{t('multi.fixedBo3')}</p>
             <OptionGroup
               label={t('multi.playerDatabase')}
-              options={['normal', 'easy'] as DbType[]}
+              options={difficulties.map((item) => item.key) as DbType[]}
               value={mmDbType}
               onChange={setMmDbType}
-              format={(v) => (v === 'normal' ? t('common.normal') : t('common.easy'))}
+              format={(v) => difficultyLabel(t, v)}
             />
             {searching ? (
               <div style={{ textAlign: 'center', marginTop: 14 }}>

@@ -7,6 +7,7 @@ import { api, errMsg } from '../api/client';
 import { toast } from '../components/Toast';
 import ReplayDialog, { type MultiReplay, type Replay, type SingleReplay } from '../components/ReplayDialog';
 import { useTranslation } from 'react-i18next';
+import { difficultyLabel } from '../utils/difficulty';
 import { currentLocale } from '../i18n';
 
 interface SingleStats {
@@ -148,7 +149,7 @@ export default function Stats() {
   );
 
   const singleColumns: Column<SingleReplayItem>[] = [
-    { key: 'mode', title: t('stats.mode'), render: (game) => game.mode === 'easy' ? t('common.easy') : t('common.normal') },
+    { key: 'mode', title: t('stats.mode'), render: (game) => difficultyLabel(t, game.mode) },
     { key: 'status', title: t('stats.result'), render: (game) => game.status === 'won'
       ? <Badge text={t('common.win')} color="green" /> : <Badge text={t('common.loss')} color="gray" /> },
     { key: 'guessCount', title: t('stats.guesses') },
@@ -158,7 +159,7 @@ export default function Stats() {
   ];
 
   const multiColumns: Column<MultiReplayItem>[] = [
-    { key: 'mode', title: t('stats.mode'), render: (game) => `${game.mode === 'easy' ? t('common.easy') : t('common.normal')} · BO${game.boType}` },
+    { key: 'mode', title: t('stats.mode'), render: (game) => `${difficultyLabel(t, game.mode)} · BO${game.boType}` },
     { key: 'result', title: t('stats.result'), render: (game) => game.result === 'won'
       ? <Badge text={t('common.win')} color="green" />
       : game.result === 'draw'
@@ -238,8 +239,8 @@ export default function Stats() {
               <article className="stats-replay-mobile-item" key={`${item.type}:${item.id}`}>
                 <div className="stats-replay-mobile-heading">
                   <strong>{item.type === 'single'
-                    ? (item.mode === 'easy' ? t('common.easy') : t('common.normal'))
-                    : `${item.mode === 'easy' ? t('common.easy') : t('common.normal')} · BO${item.boType}`}</strong>
+                    ? difficultyLabel(t, item.mode)
+                    : `${difficultyLabel(t, item.mode)} · BO${item.boType}`}</strong>
                   <Badge
                     text={result === 'won' ? t('common.win') : result === 'draw' ? t('common.draw') : t('common.loss')}
                     color={result === 'won' ? 'green' : 'gray'}

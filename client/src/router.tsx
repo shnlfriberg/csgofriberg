@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 const Login = lazy(() => import('./pages/Login'));
 const Search = lazy(() => import('./pages/Search'));
 const SingleGame = lazy(() => import('./pages/SingleGame'));
+const SingleLobby = lazy(() => import('./pages/SingleLobby'));
 const MultiLobby = lazy(() => import('./pages/MultiLobby'));
 const MultiRoom = lazy(() => import('./pages/MultiRoom'));
 const Stats = lazy(() => import('./pages/Stats'));
@@ -42,6 +43,7 @@ export const router = createBrowserRouter([
   { path: '/', element: <Home /> },
   { path: '/login', element: route(<Login />) },
   { path: '/search', element: route(<Search />) },
+  { path: '/single', element: route(<SingleLobby />) },
   { path: '/single/:mode', element: route(<SingleGame />) },
   { path: '/multi', element: route(<MultiLobby />) },
   { path: '/multi/room', element: route(<MultiRoom />) },

@@ -1,6 +1,7 @@
 import { db } from '../db/knex';
 import { redis, redisKey, redisPublisher, redisSubscriber } from '../redis';
 import { Player } from '../types';
+import { DIFFICULTY_LEVELS } from '../difficulties';
 
 const INVALIDATE_CHANNEL = redisKey('players:invalidate');
 // v1 stored a SHA string and cannot be incremented safely during rolling upgrades.
@@ -9,10 +10,9 @@ const REFRESH_DEBOUNCE_MS = 100;
 
 type PublicPlayer = { id: number; nickname: string };
 type SearchablePlayer = { player: Player; search: string };
-
 let playersById = new Map<number, Player>();
 let allPlayers: Player[] = [];
-let easyPlayers: Player[] = [];
+let playersByDifficulty = new Map<string, Player[]>();
 let searchablePlayers: SearchablePlayer[] = [];
 let publicList: { version: string; players: PublicPlayer[] } = { version: '1', players: [] };
 let refreshPromise: Promise<void> | null = null;
@@ -30,15 +30,32 @@ export async function refreshPlayerCache(): Promise<void> {
     let appliedGeneration = -1;
     while (appliedGeneration !== refreshGeneration) {
       const requestedGeneration = refreshGeneration;
-      const [rows, storedVersion] = await Promise.all([
+      const [rows, memberships, storedVersion] = await Promise.all([
         db<Player>('players').orderBy('nickname'),
+        db('player_difficulties').select('player_id', 'difficulty_key'),
         redis()?.get(VERSION_KEY) ?? Promise.resolve(null),
       ]);
+      const levels = DIFFICULTY_LEVELS;
       const enabled = rows.filter((player) => Boolean(player.is_enabled));
-      playersById = new Map(rows.map((player) => [player.id, player]));
-      allPlayers = enabled;
-      easyPlayers = enabled.filter((player) => Boolean(player.is_easy));
-      searchablePlayers = enabled.map((player) => ({
+      const membershipsByPlayer = new Map<number, string[]>();
+      for (const membership of memberships) {
+        const list = membershipsByPlayer.get(Number(membership.player_id)) ?? [];
+        list.push(String(membership.difficulty_key));
+        membershipsByPlayer.set(Number(membership.player_id), list);
+      }
+      const hydrated = rows.map((player) => ({
+        ...player,
+        difficulties: membershipsByPlayer.get(Number(player.id)) ?? [],
+      }));
+      const hydratedById = new Map(hydrated.map((player) => [player.id, player]));
+      allPlayers = enabled.map((player) => hydratedById.get(player.id)!).filter(Boolean);
+      playersByDifficulty = new Map();
+      for (const level of levels) {
+        const pool = allPlayers.filter((player) => player.difficulties?.includes(level.key));
+        playersByDifficulty.set(String(level.key), pool);
+      }
+      playersById = new Map(hydrated.map((player) => [player.id, player]));
+      searchablePlayers = allPlayers.map((player) => ({
         player,
         search: normalizeSearch(`${player.nickname}\0${player.team}`),
       }));
@@ -84,9 +101,14 @@ export function getEnabledPlayer(id: number): Player | undefined {
   return player && Boolean(player.is_enabled) ? player : undefined;
 }
 
-export function pickCachedTarget(mode: 'easy' | 'normal'): Player | null {
-  const pool = mode === 'easy' ? easyPlayers : allPlayers;
+export function pickCachedTarget(mode: string): Player | null {
+  const pool = playersByDifficulty.get(mode) ?? [];
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+}
+
+export function isDifficultyAvailable(key: string): boolean {
+  const difficulty = DIFFICULTY_LEVELS.find((item) => item.key === key);
+  return Boolean(difficulty?.isEnabled && (playersByDifficulty.get(key)?.length ?? 0) > 0);
 }
 
 export function searchCachedPlayers(search: string, limit: number): Player[] {

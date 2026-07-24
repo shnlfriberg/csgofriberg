@@ -24,6 +24,15 @@ async function run() {
       is_enabled: p.is_enabled ?? true,
     }));
   if (rows.length) await db.batchInsert('players', rows, 50);
+  const players = await db('players').select('id', 'is_easy');
+  const memberships = players.flatMap((player: any) => [
+    { player_id: player.id, difficulty_key: 'normal' },
+    ...(Boolean(player.is_easy) ? [{ player_id: player.id, difficulty_key: 'easy' }] : []),
+  ]);
+  for (let index = 0; index < memberships.length; index += 500) {
+    await db('player_difficulties').insert(memberships.slice(index, index + 500))
+      .onConflict(['player_id', 'difficulty_key']).ignore();
+  }
   console.log(`[seed] 新增 ${rows.length} 名选手`);
   await db.destroy();
 }

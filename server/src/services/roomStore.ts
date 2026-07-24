@@ -5,7 +5,7 @@ import { config } from '../config';
 import { logTransientError } from './transientLog';
 
 export type BoType = 1 | 3 | 5 | 7;
-export type DbType = 'easy' | 'normal';
+export type DbType = string;
 export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'round_over' | 'finished';
 
 export interface StoredIdentity {
@@ -1104,14 +1104,17 @@ export async function queueOrTakeOpponent(
            local decodedOk, decoded = pcall(cjson.decode, profile)
            if decodedOk and decoded.socketId and redis.call('EXISTS', ARGV[3] .. decoded.socketId) == 1 then
              redis.call('DEL', ARGV[2] .. candidate)
+             redis.call('DEL', ARGV[6] .. candidate)
              return profile
            end
          end
          redis.call('DEL', ARGV[2] .. candidate)
+         redis.call('DEL', ARGV[6] .. candidate)
        end
      end
      redis.call('ZADD', KEYS[1], ARGV[4], ARGV[1])
      redis.call('SET', ARGV[2] .. ARGV[1], ARGV[5], 'EX', 300)
+     redis.call('SET', ARGV[6] .. ARGV[1], ARGV[7], 'EX', 300)
      return false`,
     {
       keys: [queueKey],
@@ -1121,6 +1124,8 @@ export async function queueOrTakeOpponent(
         redisKey('connections:socket:'),
         String(Date.now()),
         JSON.stringify(identity),
+        redisKey('match-queue:'),
+        dbType,
       ],
     }
   );
@@ -1135,14 +1140,16 @@ export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity)
     `if redis.call('EXISTS', KEYS[3]) == 0 then return 0 end
      redis.call('ZADD', KEYS[1], ARGV[2], ARGV[1])
      redis.call('SET', KEYS[2], ARGV[3], 'EX', 300)
+     redis.call('SET', KEYS[4], ARGV[4], 'EX', 300)
      return 1`,
     {
       keys: [
         redisKey(`matchmaking:${dbType}`),
         redisKey(`match-profile:${identity.key}`),
         redisKey(`connections:socket:${identity.socketId}`),
+        redisKey(`match-queue:${identity.key}`),
       ],
-      arguments: [identity.key, String(Date.now()), JSON.stringify(identity)],
+      arguments: [identity.key, String(Date.now()), JSON.stringify(identity), dbType],
     }
   );
 }
@@ -1156,22 +1163,25 @@ export async function isSocketAlive(socketId: string): Promise<boolean> {
 export async function cancelQueue(identity: string, socketId?: string): Promise<void> {
   const client = stateRedis();
   if (!client) return;
+  const queueIndex = redisKey(`match-queue:${identity}`);
+  const dbType = await client.get(queueIndex);
+  const queueKey = dbType ? redisKey(`matchmaking:${dbType}`) : null;
   if (socketId) {
+    if (!queueKey) return;
     await evalCachedStateScript(
       'matchmaking-cancel-socket-v1',
-      `local profile = redis.call('GET', KEYS[3])
+      `local profile = redis.call('GET', KEYS[2])
        if not profile then return 0 end
        local decodedOk, decoded = pcall(cjson.decode, profile)
        if not decodedOk or decoded.socketId ~= ARGV[2] then return 0 end
        redis.call('ZREM', KEYS[1], ARGV[1])
-       redis.call('ZREM', KEYS[2], ARGV[1])
-       redis.call('DEL', KEYS[3])
+       redis.call('DEL', KEYS[2], KEYS[3])
        return 1`,
       {
         keys: [
-          redisKey('matchmaking:easy'),
-          redisKey('matchmaking:normal'),
+          queueKey,
           redisKey(`match-profile:${identity}`),
+          queueIndex,
         ],
         arguments: [identity, socketId],
       }
@@ -1179,9 +1189,9 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
     return;
   }
   await Promise.all([
-    client.zRem(redisKey('matchmaking:easy'), identity),
-    client.zRem(redisKey('matchmaking:normal'), identity),
+    queueKey ? client.zRem(queueKey, identity) : Promise.resolve(0),
     client.del(redisKey(`match-profile:${identity}`)),
+    client.del(queueIndex),
   ]);
 }
 

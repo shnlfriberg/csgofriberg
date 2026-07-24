@@ -4,6 +4,7 @@ import { PLAYER_ROLE_OPTIONS } from '../../utils/playerRoles';
 import ModalPortal from '../ModalPortal';
 import { toast } from '../Toast';
 import { useTranslation } from 'react-i18next';
+import DifficultyMultiSelect from './DifficultyMultiSelect';
 
 export interface PlayerForm {
   id?: number;
@@ -15,7 +16,7 @@ export interface PlayerForm {
   role: string;
   major_championships: number;
   major_appearances: number;
-  is_easy: boolean;
+  difficulties: string[];
   is_active: boolean;
   is_enabled: boolean;
 }
@@ -29,18 +30,19 @@ export const emptyPlayer: PlayerForm = {
   role: 'Rifler',
   major_championships: 0,
   major_appearances: 0,
-  is_easy: false,
+  difficulties: ['normal'],
   is_active: true,
   is_enabled: true,
 };
 
 interface Props {
   initial: PlayerForm;
+  difficultyKeys: string[];
   onSubmit: (form: PlayerForm) => Promise<void>;
   onCancel: () => void;
 }
 
-export default function PlayerEditForm({ initial, onSubmit, onCancel }: Props) {
+export default function PlayerEditForm({ initial, difficultyKeys, onSubmit, onCancel }: Props) {
   const { t } = useTranslation();
   const [form, setForm] = useState<PlayerForm>(initial);
   const [saving, setSaving] = useState(false);
@@ -137,14 +139,21 @@ export default function PlayerEditForm({ initial, onSubmit, onCancel }: Props) {
           </div>
 
           <div className="admin-player-flags">
-            <label><input type="checkbox" checked={form.is_easy} onChange={(event) => set({ is_easy: event.target.checked })} />{t('admin.easyPool')}</label>
+            <div className="admin-player-difficulty-field">
+              <span className="admin-player-flag-label">{t('admin.difficulties')}</span>
+              <DifficultyMultiSelect
+                options={difficultyKeys}
+                value={form.difficulties}
+                onChange={(difficulties) => set({ difficulties })}
+              />
+            </div>
             <label><input type="checkbox" checked={form.is_active} onChange={(event) => set({ is_active: event.target.checked })} />{t('admin.activePlayer')}</label>
             <label><input type="checkbox" checked={form.is_enabled} onChange={(event) => set({ is_enabled: event.target.checked })} />{t('admin.enabledPlayer')}</label>
           </div>
 
           <div className="admin-player-dialog-actions">
             <button type="button" className="btn btn-ghost" onClick={onCancel} disabled={saving}>{t('common.cancel')}</button>
-            <button className="btn btn-green" disabled={saving}>{saving ? t('admin.saving') : form.id ? t('admin.saveChanges') : t('admin.addPlayer')}</button>
+            <button className="btn btn-green" disabled={saving || form.difficulties.length === 0}>{saving ? t('admin.saving') : form.id ? t('admin.saveChanges') : t('admin.addPlayer')}</button>
           </div>
           </form>
         </div>

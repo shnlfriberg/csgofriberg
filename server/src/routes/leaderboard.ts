@@ -6,11 +6,12 @@ import { cached } from '../services/queryCache';
 import { rateLimit } from '../middleware/rateLimit';
 import { config } from '../config';
 import { optionalAuth, userNameFromUsername } from '../middleware/auth';
+import { isDifficultyAvailable } from '../services/playerCache';
 
 const router = Router();
 router.use(optionalAuth);
 const leaderboardQuery = z.object({
-  type: z.enum(['easy', 'normal', 'multi']).default('easy'),
+  type: z.string().trim().regex(/^(multi|[a-z0-9][a-z0-9_-]{0,31})$/).default('easy'),
 });
 
 /** 排行榜: 简单单人、完整单人和多人分别按胜场排序。 */
@@ -22,6 +23,9 @@ router.get(
     const parsed = leaderboardQuery.safeParse(req.query);
     if (!parsed.success) throw new HttpError(400, 'VALIDATION_FAILED');
     const type = parsed.data.type;
+    if (type !== 'multi' && !isDifficultyAvailable(type)) {
+      throw new HttpError(400, 'DIFFICULTY_UNAVAILABLE');
+    }
     const board = await cached(`leaderboard:${type}`, 30, async () => {
       const rows = type === 'multi'
         ? await db('match_players as mp')

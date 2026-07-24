@@ -16,6 +16,7 @@ import { publishResourceVersion } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getPlayer } from '../services/playerCache';
+import { isKnownDifficultyKey } from '../difficulties';
 import type { GuessFeedback, Player } from '../types';
 
 const router = Router();
@@ -49,6 +50,7 @@ const adminResourceBroadcastLimit = rateLimit({
   failClosed: true,
 });
 const playerRoles = ['Rifler', 'AWPer', 'Coach'] as const;
+const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
 
 const playerSchema = z.object({
   nickname: z.string().min(1).max(64),
@@ -59,13 +61,35 @@ const playerSchema = z.object({
   role: z.enum(playerRoles).default('Rifler'),
   major_championships: z.number().int().min(0).default(0),
   major_appearances: z.number().int().min(0).default(0),
-  is_easy: z.boolean().default(false),
   is_active: z.boolean().default(true),
   is_enabled: z.boolean().default(true),
+  difficulties: z.array(difficultyKeySchema).min(1).max(20).optional(),
 });
 const importedPlayerSchema = playerSchema.extend({
   is_enabled: z.boolean().optional(),
+  is_easy: z.boolean().optional(),
 });
+
+async function assertDifficultyKeys(keys: string[]): Promise<void> {
+  const unique = [...new Set(keys)];
+  if (unique.some((key) => !isKnownDifficultyKey(key))) {
+    throw new HttpError(400, 'INVALID_DIFFICULTY');
+  }
+}
+
+async function replacePlayerDifficulties(
+  executor: typeof db,
+  playerId: number,
+  keys: string[]
+): Promise<void> {
+  const unique = [...new Set(keys)];
+  await executor('player_difficulties').where({ player_id: playerId }).del();
+  if (unique.length) {
+    await executor('player_difficulties').insert(
+      unique.map((key) => ({ player_id: playerId, difficulty_key: key }))
+    );
+  }
+}
 
 const playerListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -436,7 +460,29 @@ router.get(
       .orderBy('nickname')
       .limit(pageSize)
       .offset((page - 1) * pageSize);
-    res.json({ players, total, page, pageSize, totalPages });
+    const playerIds = players.map((player) => Number(player.id));
+    const memberships = playerIds.length
+      ? await db('player_difficulties')
+        .whereIn('player_id', playerIds)
+        .orderBy('difficulty_key')
+        .select('player_id', 'difficulty_key')
+      : [];
+    const difficultiesByPlayer = new Map<number, string[]>();
+    for (const membership of memberships) {
+      const list = difficultiesByPlayer.get(Number(membership.player_id)) ?? [];
+      list.push(String(membership.difficulty_key));
+      difficultiesByPlayer.set(Number(membership.player_id), list);
+    }
+    res.json({
+      players: players.map((player) => ({
+        ...player,
+        difficulties: difficultiesByPlayer.get(Number(player.id)) ?? [],
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages,
+    });
   })
 );
 
@@ -447,10 +493,17 @@ router.post(
   asyncHandler(async (req, res) => {
     const exists = await db('players').where({ nickname: req.body.nickname }).first();
     if (exists) throw new HttpError(409, 'NICKNAME_TAKEN');
-    const [id] = await db('players')
-      .insert(req.body)
-      .returning('id')
-      .then((rows) => rows.map((r: any) => (typeof r === 'object' ? r.id : r)));
+    const difficulties = req.body.difficulties ?? ['normal'];
+    await assertDifficultyKeys(difficulties);
+    const { difficulties: _difficulties, ...values } = req.body;
+    const id = await db.transaction(async (trx) => {
+      const [createdId] = await trx('players')
+        .insert(values)
+        .returning('id')
+        .then((rows) => rows.map((r: any) => (typeof r === 'object' ? r.id : r)));
+      await replacePlayerDifficulties(trx as typeof db, Number(createdId), difficulties);
+      return Number(createdId);
+    });
     await invalidatePlayerCache();
     res.json({ id });
   })
@@ -461,8 +514,15 @@ router.put(
   adminWriteLimit,
   validateBody(playerSchema.partial()),
   asyncHandler(async (req, res) => {
-    const count = await db('players').where({ id: Number(req.params.id) }).update(req.body);
-    if (!count) throw new HttpError(404, 'PLAYER_NOT_FOUND');
+    const id = Number(req.params.id);
+    const { difficulties, ...values } = req.body;
+    if (difficulties) await assertDifficultyKeys(difficulties);
+    await db.transaction(async (trx) => {
+      const exists = await trx('players').where({ id }).first('id');
+      if (!exists) throw new HttpError(404, 'PLAYER_NOT_FOUND');
+      if (Object.keys(values).length) await trx('players').where({ id }).update(values);
+      if (difficulties) await replacePlayerDifficulties(trx as typeof db, id, difficulties);
+    });
     await invalidatePlayerCache();
     res.json({ ok: true });
   })
@@ -498,23 +558,42 @@ router.post(
       const nicknames = req.body.players.map((p: { nickname: string }) => p.nickname);
       const existing = await trx('players')
         .whereIn('nickname', nicknames)
-        .select('nickname', 'is_enabled');
+        .select('id', 'nickname', 'is_enabled');
       const existingNames = new Set(existing.map((p: any) => p.nickname));
       const existingEnabled = new Map(
         existing.map((p: any) => [p.nickname, Boolean(p.is_enabled)])
       );
       updated = req.body.players.filter((p: { nickname: string }) => existingNames.has(p.nickname)).length;
       created = req.body.players.length - updated;
-      const importedPlayers = req.body.players.map((player: { nickname: string; is_enabled?: boolean }) => ({
-        ...player,
-        is_enabled: player.is_enabled ?? existingEnabled.get(player.nickname) ?? true,
-      }));
+      const desiredDifficulties = new Map<string, string[] | null>();
+      const importedPlayers = req.body.players.map((player: any) => {
+        const { difficulties, is_easy, ...values } = player;
+        const desired = difficulties
+          ?? (is_easy !== undefined ? ['normal', ...(is_easy ? ['easy'] : [])] : null)
+          ?? (existingNames.has(player.nickname) ? null : ['normal']);
+        desiredDifficulties.set(player.nickname, desired);
+        return {
+          ...values,
+          is_enabled: player.is_enabled ?? existingEnabled.get(player.nickname) ?? true,
+        };
+      });
+      const difficultyKeys = [...new Set(
+        [...desiredDifficulties.values()].flatMap((keys) => keys ?? [])
+      )];
+      await assertDifficultyKeys(difficultyKeys);
       const chunkSize = 200;
       for (let index = 0; index < importedPlayers.length; index += chunkSize) {
         await trx('players')
           .insert(importedPlayers.slice(index, index + chunkSize))
           .onConflict('nickname')
           .merge();
+      }
+      const savedPlayers = await trx('players').whereIn('nickname', nicknames).select('id', 'nickname');
+      for (const player of savedPlayers) {
+        const difficulties = desiredDifficulties.get(String(player.nickname));
+        if (difficulties) {
+          await replacePlayerDifficulties(trx as typeof db, Number(player.id), difficulties);
+        }
       }
     });
     await invalidatePlayerCache();

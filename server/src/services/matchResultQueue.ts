@@ -6,7 +6,7 @@ import { logTransientError } from './transientLog';
 
 export interface MatchResultPayload {
   recordId: string;
-  dbType: 'easy' | 'normal';
+  dbType: string;
   boType: number;
   winnerKey: string | null;
   reason: string;
@@ -73,8 +73,6 @@ async function persist(payload: MatchResultPayload): Promise<void> {
   });
   if (insertedMatch) {
     await invalidateCached(
-      'leaderboard:easy',
-      'leaderboard:normal',
       'leaderboard:multi',
       ...payload.participants.map((player) => `stats:personal:${player.key}`)
     );

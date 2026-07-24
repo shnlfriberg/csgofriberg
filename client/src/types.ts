@@ -89,7 +89,7 @@ export interface RoomState {
   id: string;
   hostKey: string;
   status: 'waiting' | 'playing' | 'round_over' | 'finished';
-  dbType: 'easy' | 'normal';
+  dbType: string;
   boType: number;
   rematchAllowed: boolean;
   rematchInvite: { inviterKey: string } | null;

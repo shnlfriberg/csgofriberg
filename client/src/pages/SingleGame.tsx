@@ -10,6 +10,8 @@ import { GuessFeedback } from '../types';
 import { useConfirm } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
+import { difficultyLabel } from '../utils/difficulty';
+import { setStoredSingleDifficulty } from '../store/singleDifficulty';
 
 function exitGame(gameId: string): Promise<unknown> {
   return api.post(`/game/${gameId}/exit`);
@@ -29,6 +31,10 @@ export default function SingleGame() {
   const [inputFocused, setInputFocused] = useState(false);
   const gameIdRef = useRef<string | null>(null);
   const boardEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setStoredSingleDifficulty(mode);
+  }, [mode]);
 
   const setCurrentGameId = (id: string | null) => {
     gameIdRef.current = id;
@@ -141,11 +147,12 @@ export default function SingleGame() {
 
   const finished = status !== 'playing';
   const isEasy = mode === 'easy';
+  const modeLabel = difficultyLabel(t, mode);
 
   return (
     <Page
       className={`game-page single-game-page${inputFocused ? ' keyboard-active' : ''}`}
-      title={isEasy ? t('game.singleEasy') : t('game.singleNormal')}
+      title={t('game.singleMode', { defaultValue: `单人 · ${modeLabel}`, mode: modeLabel })}
       icon={isEasy ? <Gamepad2 size={17} /> : <Flame size={17} />}
       actions={
         <>

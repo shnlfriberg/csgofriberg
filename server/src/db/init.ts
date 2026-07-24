@@ -26,7 +26,20 @@ export async function seedPlayersIfEmpty(): Promise<void> {
     is_enabled: p.is_enabled ?? true,
   }));
   await db.batchInsert('players', rows, 50);
+  await syncDifficultyMemberships();
   console.log(`[seed] 已导入 ${rows.length} 名选手`);
+}
+
+async function syncDifficultyMemberships(): Promise<void> {
+  const players = await db('players').select('id', 'is_easy');
+  const memberships = players.flatMap((player) => [
+    { player_id: player.id, difficulty_key: 'normal' },
+    ...(Boolean(player.is_easy) ? [{ player_id: player.id, difficulty_key: 'easy' }] : []),
+  ]);
+  for (let index = 0; index < memberships.length; index += 500) {
+    await db('player_difficulties').insert(memberships.slice(index, index + 500))
+      .onConflict(['player_id', 'difficulty_key']).ignore();
+  }
 }
 
 async function backfillMajorChampionships(): Promise<void> {
@@ -88,4 +101,5 @@ export async function initDb(): Promise<void> {
   await seedPlayersIfEmpty();
   await backfillMajorChampionships();
   await backfillEasyPlayers();
+  await syncDifficultyMemberships();
 }

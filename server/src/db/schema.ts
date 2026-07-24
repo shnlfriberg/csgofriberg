@@ -1,6 +1,7 @@
 import { Knex } from 'knex';
 import { db } from './knex';
 import { userNameFromUsername } from '../services/identityDisplay';
+import { DIFFICULTY_LEVELS } from '../difficulties';
 
 const FIRST_GUESS_BACKFILL_BATCH_SIZE = 1000;
 const USER_DISPLAY_ID_BACKFILL_BATCH_SIZE = 1000;
@@ -202,6 +203,39 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   }
   if (!(await instance.schema.hasColumn('games', 'session_id'))) {
     await instance.schema.alterTable('games', (t) => t.string('session_id', 64).nullable());
+  }
+  if (!(await instance.schema.hasTable('difficulty_levels'))) {
+    await instance.schema.createTable('difficulty_levels', (t) => {
+      t.string('key', 32).primary();
+      t.integer('sort_order').notNullable().defaultTo(0);
+      t.boolean('is_enabled').notNullable().defaultTo(true);
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+  }
+  await instance('difficulty_levels')
+    .insert(DIFFICULTY_LEVELS.map((difficulty) => ({
+      key: difficulty.key,
+      sort_order: difficulty.sortOrder,
+      is_enabled: difficulty.isEnabled,
+    })))
+    .onConflict('key')
+    .merge(['sort_order', 'is_enabled']);
+  if (!(await instance.schema.hasTable('player_difficulties'))) {
+    await instance.schema.createTable('player_difficulties', (t) => {
+      t.integer('player_id').notNullable().references('id').inTable('players').onDelete('CASCADE');
+      t.string('difficulty_key', 32).notNullable().references('key').inTable('difficulty_levels').onDelete('CASCADE');
+      t.primary(['player_id', 'difficulty_key']);
+      t.index(['difficulty_key', 'player_id']);
+    });
+  }
+  const playerRows = await instance('players').select('id', 'is_easy');
+  if (playerRows.length) {
+    await instance('player_difficulties').insert(
+      playerRows.flatMap((player) => [
+        { player_id: player.id, difficulty_key: 'normal' },
+        ...(Boolean(player.is_easy) ? [{ player_id: player.id, difficulty_key: 'easy' }] : []),
+      ])
+    ).onConflict(['player_id', 'difficulty_key']).ignore();
   }
   if (!(await instance.schema.hasColumn('games', 'first_guess_player_id'))) {
     await instance.schema.alterTable('games', (t) => t.integer('first_guess_player_id').nullable());

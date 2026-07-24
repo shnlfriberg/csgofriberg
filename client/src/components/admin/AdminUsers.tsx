@@ -12,6 +12,7 @@ import ReplayDialog, {
   type SingleReplay,
 } from '../ReplayDialog';
 import { useTranslation } from 'react-i18next';
+import { difficultyLabel } from '../../utils/difficulty';
 import { currentLocale } from '../../i18n';
 
 interface AdminUser {
@@ -231,8 +232,8 @@ function UserGamesDialog({ user, onClose }: { user: AdminUser; onClose: () => vo
                 <article className="admin-user-game-item" key={`${game.type}:${game.id}`}>
                   <div className="admin-user-game-heading">
                     <strong>{game.type === 'single'
-                      ? (game.mode === 'normal' ? t('common.normal') : t('common.easy'))
-                      : `${game.mode === 'normal' ? t('common.normal') : t('common.easy')} · BO${game.boType}`}</strong>
+                      ? difficultyLabel(t, game.mode)
+                      : `${difficultyLabel(t, game.mode)} · BO${game.boType}`}</strong>
                     <Badge text={label} color={result === 'won' ? 'green' : 'gray'} />
                   </div>
                   <div className="admin-user-game-details">

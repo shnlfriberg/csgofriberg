@@ -35,6 +35,7 @@ import { toast } from '../components/Toast';
 import ModalPortal from '../components/ModalPortal';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import { difficultyLabel } from '../utils/difficulty';
 
 interface RoundOver {
   winnerKey: string | null;
@@ -825,7 +826,7 @@ export default function MultiRoom() {
         <>
           <Swords size={15} />
           {room.status === 'waiting'
-            ? t('multi.waitingStatus', { database: room.dbType === 'normal' ? t('common.normal') : t('common.easy'), wins: room.winsNeeded })
+            ? t('multi.waitingStatus', { database: difficultyLabel(t, room.dbType), wins: room.winsNeeded })
             : t('multi.playingStatus', { round: room.round, wins: room.winsNeeded })}
           {playing && <Countdown deadline={roundDeadline} onExpire={() => setRoundExpired(true)} />}
           {isSpectator && (

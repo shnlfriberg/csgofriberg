@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { evalCommandScript, redis, redisKey } from '../redis';
 import { GuessFeedback } from '../types';
 
-export type SingleGameMode = 'easy' | 'normal';
+export type SingleGameMode = string;
 
 export interface SingleGameState {
   id: string;

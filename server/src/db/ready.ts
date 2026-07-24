@@ -10,9 +10,10 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'age',
     'major_championships',
     'major_appearances',
-    'is_easy',
     'is_enabled',
   ],
+  difficulty_levels: ['key', 'sort_order', 'is_enabled'],
+  player_difficulties: ['player_id', 'difficulty_key'],
   games: ['id', 'session_id', 'user_id', 'guest_key', 'first_guess_player_id', 'status'],
   match_records: [
     'id',

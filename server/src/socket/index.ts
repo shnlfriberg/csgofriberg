@@ -10,7 +10,12 @@ import {
 } from '../middleware/auth';
 import { consumeRateLimit } from '../middleware/rateLimit';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
-import { getEnabledPlayer, getPlayer, pickCachedTarget } from '../services/playerCache';
+import {
+  getEnabledPlayer,
+  getPlayer,
+  isDifficultyAvailable,
+  pickCachedTarget,
+} from '../services/playerCache';
 import {
   BoType,
   DbType,
@@ -1247,6 +1252,8 @@ export function setupSocket(io: Server) {
         role: existing.players.some((player) => player.key === me.key) ? 'player' : 'spectator',
       });
       const boType = ([1, 3, 5, 7] as BoType[]).includes(payload?.boType) ? payload.boType : 3;
+      const dbType = typeof payload?.dbType === 'string' ? payload.dbType : '';
+      if (!isDifficultyAvailable(dbType)) return ack?.({ code: 'DIFFICULTY_UNAVAILABLE' });
       const now = Date.now();
       const roomId = await genRoomId();
       if (!(await reserveRoomCapacity(String(socket.data.ip), roomId))) {
@@ -1258,7 +1265,7 @@ export function setupSocket(io: Server) {
         ownerIp: String(socket.data.ip),
         hostKey: me.key,
         status: 'waiting',
-        dbType: payload?.dbType === 'normal' ? 'normal' : 'easy',
+        dbType,
         boType,
         rematchAllowed: true,
         rematchInviterKey: null,
@@ -1719,7 +1726,8 @@ export function setupSocket(io: Server) {
         serverNow: Date.now(),
       });
       await cancelQueue(me.key);
-      const dbType: DbType = payload?.dbType === 'normal' ? 'normal' : 'easy';
+      const dbType: DbType = typeof payload?.dbType === 'string' ? payload.dbType : '';
+      if (!isDifficultyAvailable(dbType)) return ack?.({ code: 'DIFFICULTY_UNAVAILABLE' });
       const queuedMe: QueuedIdentity = {
         ...me,
         socketId: socket.id,

@@ -6,6 +6,7 @@ import { PlayerInfoTable } from './AnswerOverlay';
 import ModalPortal from './ModalPortal';
 import type { GuessFeedback, PlayerInfo } from '../types';
 import { useTranslation } from 'react-i18next';
+import { difficultyLabel } from '../utils/difficulty';
 
 export interface SingleReplay {
   type: 'single';
@@ -103,12 +104,12 @@ export default function ReplayDialog({ replay, onClose }: { replay: Replay; onCl
               <p>
                 {replay.type === 'single'
                   ? t('replay.singleSummary', {
-                    mode: replay.mode === 'easy' ? t('common.easy') : t('common.normal'),
+                    mode: difficultyLabel(t, replay.mode),
                     result: replay.status === 'won' ? t('common.win') : t('common.loss'),
                     count: replay.guessCount,
                   })
                   : t('replay.multiSummary', {
-                    mode: replay.mode === 'easy' ? t('common.easy') : t('common.normal'),
+                    mode: difficultyLabel(t, replay.mode),
                     bo: replay.boType,
                     opponent: replay.opponent.displayId,
                     result: replay.result === 'won' ? t('common.win') : replay.result === 'lost' ? t('common.loss') : t('common.draw'),
