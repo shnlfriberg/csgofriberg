@@ -23,7 +23,6 @@ import ThemeToggle from '../components/ThemeToggle';
 import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import LanguageSelect from '../components/LanguageSelect';
-import { trackUmamiEvent } from '../utils/analytics';
 
 function BilibiliIcon() {
   return (
@@ -106,12 +105,7 @@ export default function Home() {
                 {user.role === 'admin' && ` · ${t('home.admin')}`}
               </span>
               {user.role === 'admin' && (
-                <Link
-                  className="btn btn-ghost btn-sm"
-                  to="/admin"
-                  aria-label={t('home.adminPanel')}
-                  onClick={() => trackUmamiEvent('home-admin')}
-                >
+                <Link className="btn btn-ghost btn-sm" to="/admin" aria-label={t('home.adminPanel')}>
                   <Wrench size={15} />
                   <span className="btn-text">{t('home.manage')}</span>
                 </Link>
@@ -121,7 +115,6 @@ export default function Home() {
                 aria-label={t('home.logout')}
                 onClick={() => void logout()}
                 disabled={loggingOut}
-                data-umami-event="home-logout"
               >
                 <LogOut size={15} />
                 <span className="btn-text">{t('home.logout')}</span>
@@ -130,12 +123,7 @@ export default function Home() {
           ) : (
             <>
               <span className="muted">{guestName === '访客' ? t('common.guest') : guestName}</span>
-              <Link
-                className="btn btn-sm"
-                to="/login"
-                aria-label={t('home.loginRegister')}
-                onClick={() => trackUmamiEvent('home-login')}
-              >
+              <Link className="btn btn-sm" to="/login" aria-label={t('home.loginRegister')}>
                 <LogIn size={15} />
                 <span className="btn-text">{t('home.loginRegister')}</span>
               </Link>
@@ -162,7 +150,6 @@ export default function Home() {
             label={t('home.singleMode')}
             description={t('home.singleModeDescription')}
             color="#74e38f"
-            analyticsEvent="home-mode-single"
           />
           <MenuCard
             to="/search"
@@ -170,7 +157,6 @@ export default function Home() {
             label={t('home.search')}
             description={t('home.searchDescription')}
             color="#65a8ff"
-            analyticsEvent="home-mode-search"
           />
           <MenuCard
             to="/multi"
@@ -178,29 +164,20 @@ export default function Home() {
             label={t('home.multiplayer')}
             description={t('home.multiplayerDescription')}
             color="#ffb64e"
-            analyticsEvent="home-mode-multiplayer"
           />
         </div>
         <div className="bottom-bar">
-          <Link to="/stats" className="btn" onClick={() => trackUmamiEvent('home-stats')}>
+          <Link to="/stats" className="btn">
             <BarChart3 size={15} />
             {t('home.stats')}
           </Link>
           {showLeaderboard && (
-            <Link
-              to="/leaderboard"
-              className="btn btn-warning"
-              onClick={() => trackUmamiEvent('home-leaderboard')}
-            >
+            <Link to="/leaderboard" className="btn btn-warning">
               <Trophy size={15} />
               {t('home.leaderboard')}
             </Link>
           )}
-          <Link
-            to="/announcement"
-            className="btn btn-success"
-            onClick={() => trackUmamiEvent('home-announcements')}
-          >
+          <Link to="/announcement" className="btn btn-success">
             <Megaphone size={15} />
             {t('home.announcements')}
           </Link>
