@@ -37,6 +37,6 @@ function escapeHtmlAttribute(value: string): string {
 
 export function injectUmamiScript(indexHtml: string, umami: UmamiConfig | null): string {
   if (!umami) return indexHtml;
-  const script = `<script defer src="${escapeHtmlAttribute(umami.scriptUrl)}" data-website-id="${escapeHtmlAttribute(umami.websiteId)}" data-performance="true"></script>`;
+  const script = `<script defer src="${escapeHtmlAttribute(umami.scriptUrl)}" data-website-id="${escapeHtmlAttribute(umami.websiteId)}"></script>`;
   return indexHtml.replace('</head>', `  ${script}\n</head>`);
 }

@@ -41,6 +41,6 @@ describe('resolveUmamiConfig', () => {
       'src="https://analytics.example.com/script.js?key=a&amp;mode=b"'
     );
     expect(rendered).toContain('data-website-id="site-123"');
-    expect(rendered).toContain('data-performance="true"');
+    expect(rendered).not.toContain('data-performance');
   });
 });

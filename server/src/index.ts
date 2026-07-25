@@ -38,6 +38,8 @@ import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './middlewa
 import { injectUmamiScript } from './services/umami';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
+const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = 'https://static.cloudflareinsights.com';
+const CLOUDFLARE_INSIGHTS_BEACON_ORIGIN = 'https://cloudflareinsights.com';
 
 process.on('unhandledRejection', (reason) => {
   if (isRedisTimeoutError(reason)) {
@@ -90,11 +92,21 @@ async function main() {
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'wasm-unsafe-eval'", ...(config.umami ? [config.umami.origin] : [])],
+        scriptSrc: [
+          "'self'",
+          "'wasm-unsafe-eval'",
+          CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN,
+          ...(config.umami ? [config.umami.origin] : []),
+        ],
         workerSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
         imgSrc: ["'self'", 'data:'],
-        connectSrc: ["'self'", ...config.corsOrigins, ...(config.umami ? [config.umami.origin] : [])],
+        connectSrc: [
+          "'self'",
+          ...config.corsOrigins,
+          CLOUDFLARE_INSIGHTS_BEACON_ORIGIN,
+          ...(config.umami ? [config.umami.origin] : []),
+        ],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
         frameAncestors: ["'none'"],
