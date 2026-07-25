@@ -23,6 +23,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import LanguageSelect from '../components/LanguageSelect';
+import { trackUmamiEvent } from '../utils/analytics';
 
 function BilibiliIcon() {
   return (
@@ -105,7 +106,12 @@ export default function Home() {
                 {user.role === 'admin' && ` · ${t('home.admin')}`}
               </span>
               {user.role === 'admin' && (
-                <Link className="btn btn-ghost btn-sm" to="/admin" aria-label={t('home.adminPanel')} data-umami-event="home-admin">
+                <Link
+                  className="btn btn-ghost btn-sm"
+                  to="/admin"
+                  aria-label={t('home.adminPanel')}
+                  onClick={() => trackUmamiEvent('home-admin')}
+                >
                   <Wrench size={15} />
                   <span className="btn-text">{t('home.manage')}</span>
                 </Link>
@@ -124,7 +130,12 @@ export default function Home() {
           ) : (
             <>
               <span className="muted">{guestName === '访客' ? t('common.guest') : guestName}</span>
-              <Link className="btn btn-sm" to="/login" aria-label={t('home.loginRegister')} data-umami-event="home-login">
+              <Link
+                className="btn btn-sm"
+                to="/login"
+                aria-label={t('home.loginRegister')}
+                onClick={() => trackUmamiEvent('home-login')}
+              >
                 <LogIn size={15} />
                 <span className="btn-text">{t('home.loginRegister')}</span>
               </Link>
@@ -171,17 +182,25 @@ export default function Home() {
           />
         </div>
         <div className="bottom-bar">
-          <Link to="/stats" className="btn" data-umami-event="home-stats">
+          <Link to="/stats" className="btn" onClick={() => trackUmamiEvent('home-stats')}>
             <BarChart3 size={15} />
             {t('home.stats')}
           </Link>
           {showLeaderboard && (
-            <Link to="/leaderboard" className="btn btn-warning" data-umami-event="home-leaderboard">
+            <Link
+              to="/leaderboard"
+              className="btn btn-warning"
+              onClick={() => trackUmamiEvent('home-leaderboard')}
+            >
               <Trophy size={15} />
               {t('home.leaderboard')}
             </Link>
           )}
-          <Link to="/announcement" className="btn btn-success" data-umami-event="home-announcements">
+          <Link
+            to="/announcement"
+            className="btn btn-success"
+            onClick={() => trackUmamiEvent('home-announcements')}
+          >
             <Megaphone size={15} />
             {t('home.announcements')}
           </Link>
