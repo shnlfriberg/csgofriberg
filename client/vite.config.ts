@@ -19,6 +19,12 @@ export default defineConfig({
     },
   },
   build: {
+    chunkSizeWarningLimit: 700,
+    rollupOptions: {
+      output: {
+        inlineDynamicImports: true,
+      },
+    },
     // CSP style-src is 'self' (+ unsafe-inline); data: stylesheet URLs are blocked.
     assetsInlineLimit(filePath, content) {
       if (filePath.endsWith('.css')) return false;

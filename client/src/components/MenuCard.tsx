@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
+import { trackUmamiEvent } from '../utils/analytics';
 
 interface Props {
   to: string;
@@ -18,7 +19,7 @@ export default function MenuCard({ to, icon, label, description, color, analytic
       to={to}
       className="menu-card"
       style={{ ['--menu-color' as string]: color }}
-      data-umami-event={analyticsEvent}
+      onClick={() => trackUmamiEvent(analyticsEvent)}
     >
       <span className="menu-icon">{icon}</span>
       <span className="menu-copy">
