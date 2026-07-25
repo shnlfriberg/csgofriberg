@@ -56,7 +56,7 @@ import {
 } from '../redis';
 import { enqueueMatchResult } from '../services/matchResultQueue';
 import { getPresenceStats, ONLINE_STALE_MS, PresenceStats } from '../services/presence';
-import { GuessFeedback } from '../types';
+import { GuessFeedback, Player } from '../types';
 import { config } from '../config';
 import { logTransientError, logTransientWarning } from '../services/transientLog';
 import { getResourceVersionNotice } from '../services/resourceVersion';
@@ -65,7 +65,7 @@ import { getPlayerPerformance } from '../services/playerPerformance';
 const NEXT_ROUND_DELAY_MS = 6_000;
 const MATCH_START_DELAY_MS = 5_000;
 const ROUND_TIME_MS = 120_000;
-const MULTI_GUESS_INTERVAL_MS = 3_000;
+const MULTI_GUESS_INTERVAL_MS = 2_000;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
 const LOCAL_GUESS_LIMIT = 12;
 const LOCAL_GUESS_WINDOW_MS = 10_000;
@@ -209,9 +209,74 @@ function identityDisplayName(identity: StoredIdentity): string {
   return identity.name;
 }
 
+function replayAnswer(target: Player) {
+  return {
+    id: target.id,
+    nickname: target.nickname,
+    nationality: target.nationality,
+    region: target.region,
+    team: target.team,
+    age: target.age,
+    role: target.role,
+    majorChampionships: target.major_championships,
+    majorAppearances: target.major_appearances,
+    isActive: Boolean(target.is_active),
+  };
+}
+
+function replayGuesses(target: Player, playerIds: number[]) {
+  return playerIds.slice(0, MAX_GUESSES).flatMap((playerId) => {
+    const guess = getPlayer(playerId);
+    return guess ? [visibleGuess(compareGuess(guess, target))] : [];
+  });
+}
+
+function buildMatchReplay(room: StoredRoom, viewerKey: string) {
+  if (room.status !== 'finished' || !room.matchResult || room.players.length !== 2) return null;
+  const me = room.players.find((player) => player.key === viewerKey);
+  const opponent = room.players.find((player) => player.key !== viewerKey);
+  if (!me || !opponent) return null;
+
+  return {
+    id: room.recordId,
+    mode: room.dbType,
+    boType: room.boType,
+    finishedAt: new Date(room.updatedAt).toISOString(),
+    result: room.matchResult.winnerKey === me.key
+      ? 'won' as const
+      : room.matchResult.winnerKey === opponent.key
+        ? 'lost' as const
+        : 'draw' as const,
+    me: { score: me.score },
+    opponent: {
+      displayId: identityDisplayName(opponent),
+      score: opponent.score,
+    },
+    rounds: room.replayRounds.flatMap((round) => {
+      const target = getPlayer(round.targetPlayerId);
+      if (!target) return [];
+      return [{
+        round: round.round,
+        reason: round.reason,
+        winner: round.winnerKey === me.key
+          ? 'me' as const
+          : round.winnerKey === opponent.key
+            ? 'opponent' as const
+            : null,
+        answer: replayAnswer(target),
+        me: { guesses: replayGuesses(target, round.guessesByPlayer[me.key] ?? []) },
+        opponent: {
+          guesses: replayGuesses(target, round.guessesByPlayer[opponent.key] ?? []),
+        },
+      }];
+    }),
+  };
+}
+
 function buildPublicRoom(room: StoredRoom, viewerKey: string) {
   const viewerIsSpectator = room.spectators.some((spectator) => spectator.key === viewerKey);
   const target = room.targetPlayerId ? getPlayer(room.targetPlayerId) : undefined;
+  const matchReplay = buildMatchReplay(room, viewerKey);
   return {
     id: room.id,
     hostKey: room.hostKey,
@@ -247,6 +312,7 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
           answer: answerView(room.targetPlayerId),
         }
       : null,
+    ...(matchReplay ? { matchReplay } : {}),
     players: room.players.map((p) => {
       const guesses = p.guesses.map((feedback) => {
         const guess = getPlayer(feedback.playerId);

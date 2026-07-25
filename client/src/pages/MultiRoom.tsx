@@ -16,6 +16,7 @@ import {
   RotateCcw,
   X,
   CircleAlert,
+  Trophy,
 } from 'lucide-react';
 import Page from '../components/Page';
 import GuessBoard from '../components/GuessBoard';
@@ -36,6 +37,7 @@ import ModalPortal from '../components/ModalPortal';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { difficultyLabel } from '../utils/difficulty';
+import ReplayDialog, { type MultiReplay } from '../components/ReplayDialog';
 
 interface RoundOver {
   winnerKey: string | null;
@@ -50,7 +52,7 @@ interface MatchOver {
   answer: AnswerInfo | null;
 }
 
-const MULTI_GUESS_INTERVAL_MS = 3_000;
+const MULTI_GUESS_INTERVAL_MS = 2_000;
 const ROUND_TIME_MS = 120_000;
 const NEXT_ROUND_DELAY_MS = 6_000;
 
@@ -268,6 +270,8 @@ export default function MultiRoom() {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [roundOver, setRoundOver] = useState<RoundOver | null>(null);
   const [matchOver, setMatchOver] = useState<MatchOver | null>(null);
+  const [matchOverVisible, setMatchOverVisible] = useState(false);
+  const [matchReplay, setMatchReplay] = useState<MultiReplay | null>(null);
   const [offlineNote, setOfflineNote] = useState('');
   const [showRoomCode, setShowRoomCode] = useState(false);
   const [myKey, setMyKey] = useState('');
@@ -300,6 +304,7 @@ export default function MultiRoom() {
     fallbackDurationMs?: number
   ) => {
     const current = roomRef.current;
+    const hadMatchResult = Boolean(current?.matchResult);
     if (!authoritative && (!current || state.id !== current.id)) return;
     if (current && state.id === current.id && state.stateVersion < current.stateVersion) return;
     const receivedAnchor = createClockAnchor(serverNow);
@@ -319,6 +324,11 @@ export default function MultiRoom() {
     setRoundExpired(state.status !== 'playing');
     setRoundOver(state.matchResult ? null : state.roundResult);
     setMatchOver(state.matchResult);
+    if (!state.matchResult) {
+      setMatchOverVisible(false);
+      setMatchReplay(null);
+    }
+    else if (!hadMatchResult) setMatchOverVisible(true);
     if (state.players.every((player) => player.connected)) setOfflineNote('');
   }, []);
 
@@ -350,6 +360,8 @@ export default function MultiRoom() {
     const onRoundStart = (p: { room: RoomState; serverNow?: number }) => {
       setGuessCooldownUntil(0);
       setRoundOver(null);
+      setMatchOverVisible(false);
+      setMatchReplay(null);
       setOfflineNote('');
       setRematchNotice('');
       setRoundExpired(false);
@@ -391,6 +403,7 @@ export default function MultiRoom() {
               rematchInvite: null,
               roundResult: null,
               matchResult: null,
+              matchReplay: undefined,
               players: current.players.map((player) => ({
                 ...player,
                 ready: player.key === current.hostKey,
@@ -420,6 +433,8 @@ export default function MultiRoom() {
         setRoundExpired(true);
         setRoundOver(null);
         setMatchOver(null);
+        setMatchOverVisible(false);
+        setMatchReplay(null);
         setOfflineNote('');
       }
       const actorIsMe = p.actorKey === myKeyRef.current;
@@ -699,6 +714,14 @@ export default function MultiRoom() {
     room.players.length === 2 &&
     room.players.every((player) => player.connected)
   );
+  const viewFinishedMatch = () => {
+    if (!room?.matchReplay) {
+      setMatchOverVisible(false);
+      return;
+    }
+    setMatchOverVisible(false);
+    setMatchReplay({ type: 'multi', ...room.matchReplay });
+  };
   const guessCooldownRemaining = Math.max(
     0,
     guessCooldownUntil - Math.max(cooldownClock, performance.now())
@@ -818,6 +841,16 @@ export default function MultiRoom() {
             >
               <Flag size={15} />
               <span className="btn-text">{surrendering ? t('multi.processing') : t('multi.surrenderRound')}</span>
+            </button>
+          )}
+          {room.status === 'finished' && matchOver && !matchOverVisible && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setMatchOverVisible(true)}
+            >
+              <Trophy size={15} />
+              <span className="btn-text">{t('multi.viewResult')}</span>
             </button>
           )}
         </div>
@@ -987,7 +1020,7 @@ export default function MultiRoom() {
       )}
 
       {/* 整场结算 */}
-      {matchOver && (
+      {matchOver && matchOverVisible && (
         <AnswerOverlay
           title={
             matchOver.winnerKey == null
@@ -999,6 +1032,7 @@ export default function MultiRoom() {
                   : t('multi.matchLost')
           }
           answer={matchOver.answer}
+          onClose={() => setMatchOverVisible(false)}
           extra={
             <div className="match-over-extra">
               <p className="muted">
@@ -1012,6 +1046,10 @@ export default function MultiRoom() {
           }
           actions={
             <>
+              <button className="btn btn-ghost" onClick={viewFinishedMatch}>
+                <Eye size={16} />
+                {t('multi.viewGame')}
+              </button>
               {canRematch && !rematchInviterKey && (
                 <button
                   className="btn btn-success"
@@ -1063,6 +1101,15 @@ export default function MultiRoom() {
 
       {playerStats && (
         <PlayerStatsDialog view={playerStats} onClose={() => setPlayerStats(null)} />
+      )}
+      {matchReplay && (
+        <ReplayDialog
+          replay={matchReplay}
+          onClose={() => {
+            setMatchReplay(null);
+            if (roomRef.current?.matchResult) setMatchOverVisible(true);
+          }}
+        />
       )}
     </Page>
   );

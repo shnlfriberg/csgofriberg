@@ -85,6 +85,26 @@ export interface PlayerPerformanceStats {
   };
 }
 
+export interface MatchReplayRound {
+  round: number;
+  reason: string;
+  winner: 'me' | 'opponent' | null;
+  answer: PlayerInfo;
+  me: { guesses: GuessFeedback[] };
+  opponent: { guesses: GuessFeedback[] };
+}
+
+export interface MatchReplay {
+  id: number | string;
+  mode: string;
+  boType: number;
+  finishedAt: string;
+  result: 'won' | 'lost' | 'draw';
+  me: { score: number };
+  opponent: { displayId: string; score: number };
+  rounds: MatchReplayRound[];
+}
+
 export interface RoomState {
   id: string;
   hostKey: string;
@@ -129,6 +149,7 @@ export interface RoomState {
       majorAppearances: number;
     } | null;
   } | null;
+  matchReplay?: MatchReplay;
 }
 
 export interface RoomPatch {

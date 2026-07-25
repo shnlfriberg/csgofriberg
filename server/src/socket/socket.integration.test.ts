@@ -375,7 +375,7 @@ describe('multiplayer socket integration', () => {
       ]);
       expect(results.every((result) => result.feedback === undefined)).toBe(true);
       results.filter((result) => !result.code).forEach((result) => {
-        expect(result.cooldownMs).toEqual(expect.any(Number));
+        expect(result.cooldownMs).toBe(2_000);
       });
       const finalRoom = await getRoom(created.room.id);
       expect(finalRoom).not.toBeNull();
@@ -563,6 +563,13 @@ describe('multiplayer socket integration', () => {
       expect(Object.keys(matchOver).sort()).toEqual(['room', 'serverNow']);
       expect(matchOver.serverNow).toEqual(expect.any(Number));
       expect(matchOver.room.matchResult).toMatchObject({ reason: 'score' });
+      expect(matchOver.room.matchReplay).toMatchObject({
+        mode: 'easy',
+        boType: 1,
+        rounds: [{ round: 1 }],
+      });
+      const spectatorFinished = await emit(spectator, 'room:sync');
+      expect(spectatorFinished.room).not.toHaveProperty('matchReplay');
       expect(appliedEvents).toBe(0);
       expect(roundOverEvents).toBe(0);
     } finally {
@@ -757,7 +764,7 @@ describe('multiplayer socket integration', () => {
       });
       expect(coolingDown.code).toBe('GUESS_COOLDOWN');
       expect(coolingDown.retryAfterMs).toBeGreaterThan(0);
-      expect(coolingDown.retryAfterMs).toBeLessThanOrEqual(3_000);
+      expect(coolingDown.retryAfterMs).toBeLessThanOrEqual(2_000);
       await new Promise((resolve) => setTimeout(resolve, coolingDown.retryAfterMs + 25));
 
       const secondAppliedPromise = onceEvent(a, 'game:guess:applied');
@@ -1050,28 +1057,83 @@ describe('multiplayer socket integration', () => {
     const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
     const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
     try {
-      const created = await emit(a, 'room:create', { dbType: 'easy', boType: 1 });
+      const created = await emit(a, 'room:create', { dbType: 'easy', boType: 3 });
       createdRoomIds.push(created.room.id);
       await emit(b, 'room:join', { roomId: created.room.id });
       await emit(b, 'room:ready', { ready: true });
       await emit(a, 'game:start');
-      const before = await emit(a, 'room:sync');
       const stored = JSON.parse((await redis()!.get(redisKey(`room:${created.room.id}`)))!);
+      await withRoomLock(created.room.id, (room) => {
+        const winner = room.players.find((player) => player.key === `g:${keyA}`)!;
+        winner.score = 1;
+        room.round = 2;
+        room.replayRounds = [{
+          round: 1,
+          targetPlayerId: room.targetPlayerId!,
+          winnerKey: winner.key,
+          reason: 'guessed',
+          guessesByPlayer: {
+            [`g:${keyA}`]: [room.targetPlayerId!],
+            [`g:${keyB}`]: [],
+          },
+        }];
+        for (const player of room.players) {
+          player.guesses = [];
+          player.lastGuessAt = null;
+        }
+        return { room };
+      });
+      const before = await emit(a, 'room:sync');
+      expect(before.room).not.toHaveProperty('matchReplay');
       const matchOverPromise = onceEvent(a, 'match:over');
+      const opponentMatchOverPromise = onceEvent(b, 'match:over');
       const guessed = await emit(a, 'game:guess', {
         playerId: stored.targetPlayerId,
         roundId: before.room.roundId,
         eventId: `result-${stamp}-0001`,
       });
       const matchOver = await matchOverPromise;
+      const opponentMatchOver = await opponentMatchOverPromise;
       expect(guessed.room).toBeUndefined();
       expect(matchOver.room.status).toBe('finished');
+      expect(matchOver.room.matchReplay).toMatchObject({
+        id: expect.any(String),
+        mode: 'easy',
+        boType: 3,
+        result: 'won',
+        me: { score: 2 },
+        opponent: { score: 0 },
+      });
+      expect(matchOver.room.matchReplay.rounds).toHaveLength(2);
+      expect(matchOver.room.matchReplay.rounds.map((round: any) => ({
+        round: round.round,
+        winner: round.winner,
+        myGuesses: round.me.guesses.length,
+        opponentGuesses: round.opponent.guesses.length,
+      }))).toEqual([
+        { round: 1, winner: 'me', myGuesses: 1, opponentGuesses: 0 },
+        { round: 2, winner: 'me', myGuesses: 1, opponentGuesses: 0 },
+      ]);
+      expect(opponentMatchOver.room.matchReplay).toMatchObject({
+        result: 'lost',
+        me: { score: 0 },
+        opponent: { score: 2 },
+      });
+      expect(opponentMatchOver.room.matchReplay.rounds.map((round: any) => ({
+        winner: round.winner,
+        myGuesses: round.me.guesses.length,
+        opponentGuesses: round.opponent.guesses.length,
+      }))).toEqual([
+        { winner: 'opponent', myGuesses: 0, opponentGuesses: 1 },
+        { winner: 'opponent', myGuesses: 0, opponentGuesses: 1 },
+      ]);
       const restored = await emit(a, 'room:sync');
       expect(restored.room.matchResult).toMatchObject({
         winnerKey: `g:${keyA}`,
         reason: 'score',
       });
       expect(restored.room.roundResult).toBeNull();
+      expect(restored.room.matchReplay.rounds).toHaveLength(2);
     } finally {
       a.disconnect();
       b.disconnect();

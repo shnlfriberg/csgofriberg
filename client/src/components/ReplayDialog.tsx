@@ -4,7 +4,7 @@ import Badge from './Badge';
 import GuessBoard from './GuessBoard';
 import { PlayerInfoTable } from './AnswerOverlay';
 import ModalPortal from './ModalPortal';
-import type { GuessFeedback, PlayerInfo } from '../types';
+import type { GuessFeedback, MatchReplay, MatchReplayRound, PlayerInfo } from '../types';
 import { useTranslation } from 'react-i18next';
 import { difficultyLabel } from '../utils/difficulty';
 
@@ -20,25 +20,10 @@ export interface SingleReplay {
   guesses: GuessFeedback[];
 }
 
-export interface MultiReplayRound {
-  round: number;
-  reason: string;
-  winner: 'me' | 'opponent' | null;
-  answer: PlayerInfo;
-  me: { guesses: GuessFeedback[] };
-  opponent: { guesses: GuessFeedback[] };
-}
+export type MultiReplayRound = MatchReplayRound;
 
-export interface MultiReplay {
+export interface MultiReplay extends MatchReplay {
   type: 'multi';
-  id: number;
-  mode: string;
-  boType: number;
-  finishedAt: string;
-  result: 'won' | 'lost' | 'draw';
-  me: { score: number };
-  opponent: { displayId: string; score: number };
-  rounds: MultiReplayRound[];
 }
 
 export type Replay = SingleReplay | MultiReplay;

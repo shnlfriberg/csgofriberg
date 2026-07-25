@@ -13,3 +13,4 @@ data/pgdata/
 .docker-runtime-test/
 .pnpm-store/
 rule.txt
+AGENTS.md
