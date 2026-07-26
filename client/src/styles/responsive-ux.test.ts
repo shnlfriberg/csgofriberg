@@ -114,4 +114,27 @@ describe('desktop/mobile layout contracts', () => {
     expect(widths).toHaveLength(8);
     expect(widths.reduce((a, b) => a + b, 0)).toBe(100);
   });
+
+  it('keeps mobile multiplayer tables compact without truncating content or changing desktop sizing', () => {
+    const responsive = readCss('./responsive.css');
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.6rem,\s*2\.75cqw,\s*0\.78rem\)/
+    );
+    expect(responsive).toMatch(
+      /\.player-board\s+\.game-table\s+td\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*normal/s
+    );
+    expect(responsive).toMatch(
+      /\.player-board\s+\.game-table\s+th\s*\{[^}]*white-space:\s*normal;[^}]*overflow-wrap:\s*anywhere;[^}]*word-break:\s*normal/s
+    );
+
+    const mobileBoardRules = responsive
+      .slice(responsive.indexOf('@media (max-width: 640px)'))
+      .match(/\.player-board\s+\.game-table[^{]*\{[^}]*\}/gs) ?? [];
+    expect(mobileBoardRules.join('\n')).not.toMatch(/overflow:\s*hidden|text-overflow:\s*ellipsis/);
+
+    const multiplayer = readCss('./home-multiplayer.css');
+    expect(multiplayer).toMatch(
+      /\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.66rem,\s*3\.2cqw,\s*0\.95rem\)/s
+    );
+  });
 });
