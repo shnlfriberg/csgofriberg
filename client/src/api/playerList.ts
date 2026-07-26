@@ -15,6 +15,34 @@ const REVALIDATE_INTERVAL_MS = 30_000;
 let memory: CachedPlayerList | null = null;
 let loading: Promise<PlayerSuggestion[]> | null = null;
 let validatedAt: number | null = null;
+let cacheGeneration = 0;
+const listeners = new Set<(players: PlayerSuggestion[]) => void>();
+
+function removeStored(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Browser storage may be unavailable; the in-memory cache still works.
+  }
+}
+
+function writeStored(value: CachedPlayerList): void {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+  } catch {
+    // Keep serving the in-memory snapshot when persistence is unavailable.
+  }
+}
+
+function publish(players: PlayerSuggestion[]): void {
+  for (const listener of listeners) {
+    try {
+      listener(players);
+    } catch {
+      // One mounted consumer must not break cache refresh for the others.
+    }
+  }
+}
 
 function readStored(): CachedPlayerList | null {
   if (memory) return memory;
@@ -22,16 +50,17 @@ function readStored(): CachedPlayerList | null {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? 'null') as CachedPlayerList | null;
     if (parsed?.players?.length) memory = parsed;
   } catch {
-    localStorage.removeItem(STORAGE_KEY);
+    removeStored();
   }
   return memory;
 }
 
-async function refresh(cached: CachedPlayerList | null): Promise<PlayerSuggestion[]> {
+async function refresh(cached: CachedPlayerList | null, generation: number): Promise<PlayerSuggestion[]> {
   const response = await api.get('/players/list', {
     headers: cached ? { 'If-None-Match': `\"players-${cached.version}\"` } : undefined,
     validateStatus: (status) => (status >= 200 && status < 300) || status === 304,
   });
+  if (generation !== cacheGeneration) return memory?.players ?? cached?.players ?? [];
   if (response.status === 304 && cached) {
     memory = cached;
     validatedAt = performance.now();
@@ -43,31 +72,47 @@ async function refresh(cached: CachedPlayerList | null): Promise<PlayerSuggestio
   };
   memory = next;
   validatedAt = performance.now();
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  writeStored(next);
+  if (!cached || cached.version !== next.version) publish(next.players);
   return next.players;
+}
+
+function startRefresh(cached: CachedPlayerList | null): Promise<PlayerSuggestion[]> {
+  if (loading) return loading;
+  const task = refresh(cached, cacheGeneration);
+  loading = task;
+  void task.then(
+    () => { if (loading === task) loading = null; },
+    () => { if (loading === task) loading = null; }
+  );
+  return task;
+}
+
+function revalidateInBackground(cached: CachedPlayerList): void {
+  if (validatedAt !== null && performance.now() - validatedAt <= REVALIDATE_INTERVAL_MS) return;
+  void startRefresh(cached).catch(() => undefined);
 }
 
 export async function getPlayerList(): Promise<PlayerSuggestion[]> {
   const cached = readStored();
   if (cached) {
-    if (validatedAt === null || performance.now() - validatedAt > REVALIDATE_INTERVAL_MS) {
-      loading ??= refresh(cached).finally(() => { loading = null; });
-      try {
-        return await loading;
-      } catch {
-        return cached.players;
-      }
-    }
+    revalidateInBackground(cached);
     return cached.players;
   }
-  loading ??= refresh(null).finally(() => { loading = null; });
-  return loading;
+  return startRefresh(null);
+}
+
+export function subscribePlayerList(listener: (players: PlayerSuggestion[]) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
 }
 
 export function clearPlayerListCache(): void {
+  cacheGeneration += 1;
   memory = null;
+  loading = null;
   validatedAt = null;
-  localStorage.removeItem(STORAGE_KEY);
+  removeStored();
 }
 
 export function searchPlayerList(players: PlayerSuggestion[], query: string): PlayerSuggestion[] {

@@ -1,5 +1,5 @@
-import { FormEvent, useEffect, useId, useRef, useState } from 'react';
-import { getPlayerList, searchPlayerList } from '../api/playerList';
+import { FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { getPlayerList, searchPlayerList, subscribePlayerList } from '../api/playerList';
 import { errMsg } from '../api/client';
 import { toast } from './Toast';
 import { useTranslation } from 'react-i18next';
@@ -41,16 +41,27 @@ export default function GuessInputBar({
   const list = useRef<HTMLUListElement>(null);
   const listId = useId();
   const textRef = useRef('');
+  const focused = useRef(false);
   const refocusAfterSubmit = useRef(false);
   const players = useRef<Suggestion[]>([]);
   const visiblePlaceholder = placeholder ?? t('guess.placeholder');
   const visibleButtonText = buttonText ?? t('guess.submit');
 
-  useEffect(() => {
-    void getPlayerList().then((list) => {
-      players.current = list;
-    }).catch((error) => toast.error(errMsg(error)));
+  const applyPlayerList = useCallback((list: Suggestion[]) => {
+    players.current = list;
+    const query = textRef.current;
+    if (!query.trim()) return;
+    const next = searchPlayerList(list, query);
+    setItems(next);
+    setActive((current) => Math.min(current, Math.max(0, next.length - 1)));
+    setOpen(focused.current && next.length > 0);
   }, []);
+
+  useEffect(() => {
+    const unsubscribe = subscribePlayerList(applyPlayerList);
+    void getPlayerList().then(applyPlayerList).catch((error) => toast.error(errMsg(error)));
+    return unsubscribe;
+  }, [applyPlayerList]);
 
   useEffect(() => {
     window.clearTimeout(timer.current);
@@ -60,13 +71,16 @@ export default function GuessInputBar({
       return;
     }
     timer.current = window.setTimeout(() => {
-      void getPlayerList().then((list) => {
-        players.current = list;
-        const next = searchPlayerList(list, text);
-        setItems(next);
-        setActive(0);
-        setOpen(next.length > 0);
-      }).catch((error) => toast.error(errMsg(error)));
+      const query = textRef.current;
+      const next = searchPlayerList(players.current, query);
+      setItems(next);
+      setActive(0);
+      setOpen(focused.current && next.length > 0);
+      if (players.current.length) {
+        void getPlayerList().then((list) => {
+          if (textRef.current === query) applyPlayerList(list);
+        }).catch(() => undefined);
+      }
     }, 80);
     return () => window.clearTimeout(timer.current);
   }, [text]);
@@ -168,10 +182,13 @@ export default function GuessInputBar({
             setText(e.target.value);
           }}
           onFocus={() => {
+            focused.current = true;
             if (items.length) setOpen(true);
+            void getPlayerList().catch(() => undefined);
             onFocusChange?.(true);
           }}
           onBlur={() => {
+            focused.current = false;
             onFocusChange?.(false);
             setTimeout(() => setOpen(false), 150);
           }}

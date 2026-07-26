@@ -20,6 +20,7 @@ vi.mock('../api/client', async () => {
 
 vi.mock('../api/playerList', () => ({
   getPlayerList: vi.fn(async () => [{ id: 1, nickname: 's1mple' }]),
+  subscribePlayerList: vi.fn(() => () => undefined),
   searchPlayerList: (list: Array<{ id: number; nickname: string }>, query: string) =>
     list.filter((item) => item.nickname.toLowerCase().includes(query.trim().toLowerCase())),
 }));

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GuessInputBar from './GuessInputBar';
 import { renderWithProviders } from '../test/render';
@@ -8,9 +8,16 @@ const players = [
   { id: 1, nickname: 's1mple' },
   { id: 2, nickname: 'ZywOo' },
 ];
+let playerListListener: ((list: typeof players) => void) | null = null;
 
 vi.mock('../api/playerList', () => ({
   getPlayerList: vi.fn(async () => players),
+  subscribePlayerList: vi.fn((listener: (list: typeof players) => void) => {
+    playerListListener = listener;
+    return () => {
+      if (playerListListener === listener) playerListListener = null;
+    };
+  }),
   searchPlayerList: (list: typeof players, query: string) =>
     list.filter((item) => item.nickname.toLowerCase().includes(query.trim().toLowerCase())),
 }));
@@ -18,6 +25,7 @@ vi.mock('../api/playerList', () => ({
 describe('GuessInputBar', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    playerListListener = null;
   });
 
   it('shows submitting on the button only, never a secondary status line', async () => {
@@ -66,5 +74,26 @@ describe('GuessInputBar', () => {
   it('renders external status only when explicitly provided (e.g. multi cooldown)', () => {
     renderWithProviders(<GuessInputBar onPick={vi.fn()} statusText="冷却 2s" />);
     expect(screen.getByRole('status')).toHaveTextContent('冷却 2s');
+  });
+
+  it('keeps the current query open while a background player-list update arrives', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<GuessInputBar onPick={vi.fn()} />);
+
+    const input = screen.getByPlaceholderText('输入选手昵称...');
+    await user.type(input, 's1');
+    await screen.findByText('s1mple');
+
+    act(() => {
+      playerListListener?.([
+        ...players,
+        { id: 3, nickname: 's1ren' },
+      ]);
+    });
+
+    expect(input).toHaveValue('s1');
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('s1mple')).toBeInTheDocument();
+    expect(screen.getByText('s1ren')).toBeInTheDocument();
   });
 });
