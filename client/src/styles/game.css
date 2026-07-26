@@ -131,6 +131,14 @@
   font-weight: 700;
 }
 /* ===== 状态栏进度点 ===== */
+.guess-progress-dock { display: none; }
+@media (max-width: 640px) {
+  .guess-progress-dock {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 8px;
+  }
+}
 .guess-progress { display: inline-flex; align-items: center; gap: 4px; }
 .guess-progress i {
   width: 8px;

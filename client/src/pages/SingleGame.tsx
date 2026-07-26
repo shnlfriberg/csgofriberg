@@ -255,11 +255,20 @@ export default function SingleGame() {
             </button>
           </div>
         ) : (
-          <GuessInputBar
-            onPick={(p) => guess(p.id)}
-            onFocusChange={setInputFocused}
-            disabled={busy || !gameId}
-          />
+          <>
+            <div className="guess-progress-dock" aria-hidden="true">
+              <span className="guess-progress">
+                {Array.from({ length: maxGuesses }, (_, i) => (
+                  <i key={i} className={i < guesses.length ? 'used' : ''} />
+                ))}
+              </span>
+            </div>
+            <GuessInputBar
+              onPick={(p) => guess(p.id)}
+              onFocusChange={setInputFocused}
+              disabled={busy || !gameId}
+            />
+          </>
         )
       }
     >
