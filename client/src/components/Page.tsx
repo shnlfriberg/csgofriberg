@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Home } from 'lucide-react';
 import ThemeToggle from './ThemeToggle';
@@ -33,8 +33,14 @@ export default function Page({
   showHome = true,
 }: Props) {
   const { t } = useTranslation();
+  useEffect(() => {
+    document.title = `${title} · ${t('common.brand')}`;
+  }, [title, t]);
   return (
     <div className={`page${className ? ` ${className}` : ''}`}>
+      <a className="skip-link" href="#main-content">
+        {t('common.skipToContent')}
+      </a>
       <div className="header-bar">
         <span className="title">
           {icon}

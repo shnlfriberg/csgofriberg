@@ -46,10 +46,12 @@ interface Props {
   extra?: ReactNode;
   actions: ReactNode;
   onClose?: () => void;
+  /** 胜负配色:win 绿色调头部,lose 中性 */
+  tone?: 'win' | 'lose';
 }
 
 /** 结算/答案遮罩卡片 */
-export default function AnswerOverlay({ title, answer, extra, actions, onClose }: Props) {
+export default function AnswerOverlay({ title, answer, extra, actions, onClose, tone }: Props) {
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -71,7 +73,11 @@ export default function AnswerOverlay({ title, answer, extra, actions, onClose }
           if (event.target === event.currentTarget) onClose?.();
         }}
       >
-        <div className="overlay-card" role="dialog" aria-modal="true">
+        <div
+          className={`overlay-card${tone ? ` overlay-card-${tone}` : ''}`}
+          role="dialog"
+          aria-modal="true"
+        >
           <h2>{title}</h2>
           {extra}
           {answer && (

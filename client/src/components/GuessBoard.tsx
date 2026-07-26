@@ -75,7 +75,10 @@ export default function GuessBoard({ guesses }: { guesses: MultiplayerGuessFeedb
         </thead>
         <tbody>
           {guesses.map((g, i) => (
-            <tr key={'hidden' in g ? `hidden-${i}` : `${g.playerId}-${i}`}>
+            <tr
+              key={'hidden' in g ? `hidden-${i}` : `${g.playerId}-${i}`}
+              className={`${i === guesses.length - 1 ? 'row-latest' : ''} ${g.correct ? 'row-correct' : ''}`}
+            >
               <td
                 className={`name ${g.correct ? 'correct' : ''} ${'hidden' in g ? 'masked-cell' : ''}`}
                 data-label={columns[0]}

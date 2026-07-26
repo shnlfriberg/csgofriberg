@@ -11,6 +11,8 @@ import Stats from './pages/Stats';
 import Leaderboard from './pages/Leaderboard';
 import Announcements from './pages/Announcements';
 import Admin from './pages/Admin';
+import NotFound from './pages/NotFound';
+import RouteError from './components/RouteError';
 import Page from './components/Page';
 import { Wrench } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -32,19 +34,24 @@ function RequireAdmin() {
 }
 
 export const router = createBrowserRouter([
-  { path: '/', element: <Home /> },
-  { path: '/login', element: <Login /> },
-  { path: '/search', element: <Search /> },
-  { path: '/single', element: <SingleLobby /> },
-  { path: '/single/:mode', element: <SingleGame /> },
-  { path: '/multi', element: <MultiLobby /> },
-  { path: '/multi/room', element: <MultiRoom /> },
-  { path: '/stats', element: <Stats /> },
-  { path: '/leaderboard', element: <Leaderboard /> },
-  { path: '/announcement', element: <Announcements /> },
   {
-    element: <RequireAdmin />,
-    children: [{ path: '/admin', element: <Admin /> }],
+    errorElement: <RouteError />,
+    children: [
+      { path: '/', element: <Home /> },
+      { path: '/login', element: <Login /> },
+      { path: '/search', element: <Search /> },
+      { path: '/single', element: <SingleLobby /> },
+      { path: '/single/:mode', element: <SingleGame /> },
+      { path: '/multi', element: <MultiLobby /> },
+      { path: '/multi/room', element: <MultiRoom /> },
+      { path: '/stats', element: <Stats /> },
+      { path: '/leaderboard', element: <Leaderboard /> },
+      { path: '/announcement', element: <Announcements /> },
+      {
+        element: <RequireAdmin />,
+        children: [{ path: '/admin', element: <Admin /> }],
+      },
+      { path: '*', element: <NotFound /> },
+    ],
   },
-  { path: '*', element: <Navigate to="/" replace /> },
 ]);

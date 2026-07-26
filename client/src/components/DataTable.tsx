@@ -13,14 +13,25 @@ interface Props<T> {
   rows: T[];
   rowKey: (row: T) => string | number;
   empty?: string;
+  /** 加载中:空数据时显示骨架而非空态文案,表格容器标记 aria-busy */
+  loading?: boolean;
 }
 
 /** 通用数据表格 */
-export default function DataTable<T>({ columns, rows, rowKey, empty }: Props<T>) {
+export default function DataTable<T>({ columns, rows, rowKey, empty, loading }: Props<T>) {
   const { t } = useTranslation();
-  if (!rows.length) return <p className="muted">{empty ?? t('common.noData')}</p>;
+  if (!rows.length) {
+    if (loading) {
+      return (
+        <div className="table-skeleton" role="status" aria-label={t('common.loading')}>
+          <i /><i /><i /><i /><i />
+        </div>
+      );
+    }
+    return <p className="muted">{empty ?? t('common.noData')}</p>;
+  }
   return (
-    <div className={styles.scroll}>
+    <div className={styles.scroll} aria-busy={loading || undefined}>
       <table className={styles.table}>
         <thead>
           <tr>

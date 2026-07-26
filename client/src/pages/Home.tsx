@@ -54,14 +54,16 @@ export default function Home() {
   const guestName = useSyncExternalStore(subscribeGuestName, getGuestName, () => '访客');
 
   useEffect(() => {
+    document.title = `${t('common.brand')} - ${t('home.subtitle')}`;
+  }, [t]);
+
+  useEffect(() => {
     void fetch('/api/health', { credentials: 'include' })
       .then((response) => response.ok ? response.json() : null)
       .then((data: { features?: { leaderboard?: boolean } } | null) => {
-        if (typeof data?.features?.leaderboard === 'boolean') {
-          setShowLeaderboard(data.features.leaderboard);
-        }
+        setShowLeaderboard(typeof data?.features?.leaderboard === 'boolean' ? data.features.leaderboard : true);
       })
-      .catch(() => undefined);
+      .catch(() => setShowLeaderboard(true));
   }, []);
 
   const logout = async () => {
@@ -91,6 +93,9 @@ export default function Home() {
 
   return (
     <div className="page home-page">
+      <a className="skip-link" href="#main-content">
+        {t('common.skipToContent')}
+      </a>
       <div className="header-bar">
         <span className="title">{t('common.brand')}</span>
         <span className="btns">
@@ -152,18 +157,18 @@ export default function Home() {
             color="#74e38f"
           />
           <MenuCard
-            to="/search"
-            icon={<Search size={22} />}
-            label={t('home.search')}
-            description={t('home.searchDescription')}
-            color="#65a8ff"
-          />
-          <MenuCard
             to="/multi"
             icon={<Globe size={22} />}
             label={t('home.multiplayer')}
             description={t('home.multiplayerDescription')}
             color="#ffb64e"
+          />
+          <MenuCard
+            to="/search"
+            icon={<Search size={22} />}
+            label={t('home.search')}
+            description={t('home.searchDescription')}
+            color="#65a8ff"
           />
         </div>
         <div className="bottom-bar">

@@ -7,18 +7,54 @@
       content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content"
     />
     <meta name="theme-color" content="#160a13" />
-    <style>
-      html[data-theme='blast']:not([data-theme-ready]) body { visibility: hidden; }
-    </style>
-    <link rel="stylesheet" href="/src/styles/index.css" />
-    <link rel="stylesheet" href="/src/styles/themes/blast-foundation.css" media="not all" data-blast-theme />
-    <link rel="stylesheet" href="/src/styles/themes/blast-pages.css" media="not all" data-blast-theme />
-    <link rel="stylesheet" href="/src/styles/themes/blast-responsive.css" media="not all" data-blast-theme />
-    <script src="/theme-init.js"></script>
+    <meta name="description" content="弗一把 - CS:GO / CS2 Major 选手猜测游戏，支持单人多难度与多人实时对战。" />
+    <script>
+      try {
+        var storedUiTheme = localStorage.getItem('ui-theme');
+        var initTheme =
+          storedUiTheme === 'light'
+            ? 'light'
+            : storedUiTheme === 'blast'
+              ? 'blast'
+              : window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches
+                ? 'light'
+                : 'blast';
+        document.documentElement.dataset.theme = initTheme;
+        document.documentElement.style.colorScheme = initTheme === 'blast' ? 'dark' : 'light';
+        document.documentElement.style.background = initTheme === 'blast' ? '#160a13' : '#f3f0ea';
+        var themeColorMeta = document.querySelector('meta[name="theme-color"]');
+        if (themeColorMeta) themeColorMeta.content = initTheme === 'blast' ? '#160a13' : '#f3f0ea';
+        document.documentElement.dataset.themeReady = '';
+      } catch (_) {
+        document.documentElement.dataset.theme = 'blast';
+        document.documentElement.style.background = '#160a13';
+        document.documentElement.dataset.themeReady = '';
+      }
+    </script>
     <title>弗一把 - CS Major 选手猜测游戏</title>
   </head>
   <body>
+    <noscript>需要启用 JavaScript 才能运行本应用。/ JavaScript is required to run this app.</noscript>
     <div id="root"></div>
+    <link rel="stylesheet" href="/src/styles/index.css" />
+    <link rel="stylesheet" href="/src/styles/themes/blast-foundation.css" media="all" data-blast-theme />
+    <link rel="stylesheet" href="/src/styles/themes/blast-pages.css" media="all" data-blast-theme />
+    <link rel="stylesheet" href="/src/styles/themes/blast-responsive.css" media="all" data-blast-theme />
+    <script>
+      try {
+        if (document.documentElement.dataset.theme === 'light') {
+          var blastSheets = document.querySelectorAll('link[data-blast-theme]');
+          for (var i = 0; i < blastSheets.length; i += 1) {
+            blastSheets[i].media = 'not all';
+            var preload = document.createElement('link');
+            preload.rel = 'preload';
+            preload.as = 'style';
+            preload.href = blastSheets[i].href;
+            document.head.appendChild(preload);
+          }
+        }
+      } catch (_) {}
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

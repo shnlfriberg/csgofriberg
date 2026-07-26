@@ -4,6 +4,7 @@ import cors from 'cors';
 import helmet from 'helmet';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { config, validateProductionConfig } from './config';
@@ -88,6 +89,20 @@ async function main() {
 
   const app = express();
   app.set('trust proxy', config.trustProxy ? 1 : false);
+
+  // index.html 含内联脚本(主题开关、启动屏进度),CSP 不放开 unsafe-inline,
+  // 而是从实际服务的 HTML 计算各内联脚本的 sha256 哈希加入 script-src
+  const clientDist = path.resolve(__dirname, '../../client/dist');
+  const clientIndexPath = path.join(clientDist, 'index.html');
+  const rawIndexHtml = fs.existsSync(clientIndexPath)
+    ? fs.readFileSync(clientIndexPath, 'utf8')
+    : null;
+  const inlineScriptHashes = rawIndexHtml
+    ? [...rawIndexHtml.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)].map(
+        (match) => `'sha256-${crypto.createHash('sha256').update(match[1], 'utf8').digest('base64')}'`
+      )
+    : [];
+
   app.use(helmet({
     contentSecurityPolicy: {
       directives: {
@@ -97,6 +112,7 @@ async function main() {
           "'wasm-unsafe-eval'",
           CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN,
           ...(config.umami ? [config.umami.origin] : []),
+          ...inlineScriptHashes,
         ],
         workerSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
@@ -153,12 +169,8 @@ async function main() {
   app.use('/api/admin', adminRoutes);
 
   // 生产环境托管前端构建产物
-  const clientDist = path.resolve(__dirname, '../../client/dist');
-  if (fs.existsSync(clientDist)) {
-    const indexHtml = injectUmamiScript(
-      fs.readFileSync(path.join(clientDist, 'index.html'), 'utf8'),
-      config.umami
-    );
+  if (rawIndexHtml !== null) {
+    const indexHtml = injectUmamiScript(rawIndexHtml, config.umami);
     app.use(express.static(clientDist, { index: false, setHeaders: setClientAssetCacheHeaders }));
     app.use(rejectMissingClientAsset);
     app.get(/^(?!\/api|\/socket\.io).*/, (_req, res) => {

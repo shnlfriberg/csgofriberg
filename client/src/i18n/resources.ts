@@ -11,6 +11,8 @@ export const resources = {
         loading: '正在加载...',
         noData: '暂无数据',
         unknown: '未知',
+        skipToContent: '跳转到主要内容',
+        retry: '重试',
         easy: '简单版',
         normal: '完整版',
         active: '现役',
@@ -117,6 +119,8 @@ export const resources = {
         placeholder: '输入选手昵称...', submit: '提交猜测', submitting: '提交中...',
         columns: { nickname: '昵称', team: '队伍', nationality: '国家或地区', age: '年龄', role: '位置', majorChampionships: 'Major 冠军', majorAppearances: 'Major 次数', status: '状态' },
       },
+      notFound: { title: '页面不存在', message: '你访问的页面不存在或已被移除。' },
+      errorPage: { title: '页面出错了', message: '页面渲染时发生错误，请刷新重试。', reload: '刷新页面' },
       game: {
         singleMode: '单人 · {{mode}}', restart: '重新开始', reveal: '查看答案',
         restartTitle: '重新开始？', restartMessage: '当前游戏进度会被清除，并立即生成一局新游戏。',
@@ -167,6 +171,7 @@ export const resources = {
         empty: '还没有{{type}}排行记录',
       },
       stats: {
+        loadFailed: '统计数据加载失败',
         title: '统计', personal: '个人统计', global: '全站统计', registeredUsers: '注册用户', singleGames: '单人总场次',
         singleWins: '单人胜场', singleWinRate: '单人胜率', globalWinRate: '全站单人胜率', avgWinningGuesses: '平均猜测次数（胜场）',
         bestGuess: '最快猜中', topFirstGuess: '最多首猜选手', multiGamesWins: '多人对局 / 胜场', multiGames: '多人对局',
@@ -232,6 +237,7 @@ export const resources = {
       },
       common: {
         brand: '弗一把', guest: 'Guest', home: 'Home', close: 'Close', cancel: 'Cancel', confirm: 'Confirm', loading: 'Loading...', noData: 'No data', unknown: 'Unknown',
+        skipToContent: 'Skip to main content', retry: 'Retry',
         easy: 'Easy', normal: 'Full', active: 'Active', retired: 'Retired', win: 'Win', loss: 'Loss', draw: 'Draw', me: 'Me',
         previousPage: 'Previous page', nextPage: 'Next page', page: 'Page {{page}}', lightTheme: 'Light', darkTheme: 'Dark',
         switchLight: 'Switch to light theme', switchDark: 'Switch to dark theme', language: 'Language',
@@ -279,6 +285,8 @@ export const resources = {
         placeholder: 'Enter a player nickname...', submit: 'Submit guess', submitting: 'Submitting...',
         columns: { nickname: 'Nickname', team: 'Team', nationality: 'Country / Region', age: 'Age', role: 'Role', majorChampionships: 'Major titles', majorAppearances: 'Majors', status: 'Status' },
       },
+      notFound: { title: 'Page not found', message: 'The page you are looking for does not exist or has been removed.' },
+      errorPage: { title: 'Something went wrong', message: 'The page failed to render. Please reload and try again.', reload: 'Reload' },
       game: {
         singleMode: 'Solo · {{mode}}', restart: 'Restart', reveal: 'Reveal answer', restartTitle: 'Restart?',
         restartMessage: 'Current progress will be cleared and a new game will start immediately.', leaveTitle: 'Return home?',
@@ -323,6 +331,7 @@ export const resources = {
         unranked: 'Unranked', typeLabel: 'Leaderboard type', easy: 'Solo Easy', normal: 'Solo Full', multi: 'Multiplayer', empty: 'No {{type}} leaderboard records yet',
       },
       stats: {
+        loadFailed: 'Failed to load statistics',
         title: 'Stats', personal: 'Personal Stats', global: 'Site-wide Stats', registeredUsers: 'Registered users', singleGames: 'Solo games', singleWins: 'Solo wins',
         singleWinRate: 'Solo win rate', globalWinRate: 'Site-wide solo win rate', avgWinningGuesses: 'Average guesses (wins)', bestGuess: 'Fastest solve',
         topFirstGuess: 'Most common first guess', multiGamesWins: 'Multiplayer games / wins', multiGames: 'Multiplayer games', personalReplays: 'My Replays',
@@ -385,6 +394,7 @@ export const resources = {
       },
       common: {
         brand: '弗一把', guest: 'ゲスト', home: 'メインメニュー', close: '閉じる', cancel: 'キャンセル', confirm: '確認', loading: '読み込み中...', noData: 'データがありません', unknown: '不明',
+        skipToContent: '本文へスキップ', retry: '再試行',
         easy: 'イージー', normal: 'フル', active: '現役', retired: '引退', win: '勝利', loss: '敗北', draw: '引き分け', me: '自分',
         previousPage: '前のページ', nextPage: '次のページ', page: '{{page}} ページ', lightTheme: 'ライト', darkTheme: 'ダーク',
         switchLight: 'ライトテーマに切り替え', switchDark: 'ダークテーマに切り替え', language: '言語',
@@ -431,6 +441,8 @@ export const resources = {
         placeholder: '選手のニックネームを入力...', submit: '予想を送信', submitting: '送信中...',
         columns: { nickname: 'ニックネーム', team: 'チーム', nationality: '国・地域', age: '年齢', role: '役割', majorChampionships: 'Major 優勝', majorAppearances: 'Major 出場', status: '状態' },
       },
+      notFound: { title: 'ページが見つかりません', message: 'お探しのページは存在しないか、削除されました。' },
+      errorPage: { title: 'エラーが発生しました', message: 'ページの表示中にエラーが発生しました。再読み込みしてください。', reload: '再読み込み' },
       game: {
         singleMode: 'ソロ · {{mode}}', restart: 'やり直す', reveal: '答えを見る', restartTitle: 'やり直しますか？',
         restartMessage: '現在の進行状況を消去し、すぐに新しいゲームを開始します。', leaveTitle: 'メインメニューに戻りますか？',
@@ -475,6 +487,7 @@ export const resources = {
         unranked: '順位なし', typeLabel: 'ランキング種別', easy: 'ソロ・イージー', normal: 'ソロ・フル', multi: 'マルチプレイ', empty: '{{type}}のランキング記録はまだありません',
       },
       stats: {
+        loadFailed: '統計データの読み込みに失敗しました',
         title: '統計', personal: '個人統計', global: '全体統計', registeredUsers: '登録ユーザー', singleGames: 'ソロ試合数', singleWins: 'ソロ勝利数',
         singleWinRate: 'ソロ勝率', globalWinRate: '全体ソロ勝率', avgWinningGuesses: '平均予想数（勝利時）', bestGuess: '最速正解', topFirstGuess: '最も多い初手',
         multiGamesWins: 'マルチ試合 / 勝利', multiGames: 'マルチ試合', personalReplays: '自分のリプレイ', replayType: 'リプレイ種別', single: 'ソロ', multi: 'マルチ',

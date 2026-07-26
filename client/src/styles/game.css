@@ -66,6 +66,81 @@
   background: currentColor;
   opacity: 0.55;
 }
+@media (prefers-reduced-motion: no-preference) {
+  .game-table tr.row-latest td { animation: cell-reveal 0.3s ease backwards; }
+  .game-table tr.row-latest td:nth-child(2) { animation-delay: 0.06s; }
+  .game-table tr.row-latest td:nth-child(3) { animation-delay: 0.12s; }
+  .game-table tr.row-latest td:nth-child(4) { animation-delay: 0.18s; }
+  .game-table tr.row-latest td:nth-child(5) { animation-delay: 0.24s; }
+  .game-table tr.row-latest td:nth-child(6) { animation-delay: 0.3s; }
+  .game-table tr.row-latest td:nth-child(7) { animation-delay: 0.36s; }
+  .game-table tr.row-latest td:nth-child(8) { animation-delay: 0.42s; }
+  .game-table tr.row-correct td.name { animation: cell-reveal 0.3s ease backwards, win-pulse 0.5s ease 0.55s; }
+}
+@keyframes cell-reveal {
+  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+}
+@keyframes win-pulse {
+  50% { transform: scale(1.05); }
+}
+
+/* ===== 游戏页空态 / 首猜引导 ===== */
+.game-empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-light);
+}
+.game-empty p { margin: 0; }
+.game-empty-title { font-weight: 600; color: var(--text); }
+.game-empty-sub { font-size: 0.8rem; }
+.game-empty-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.guess-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  justify-content: center;
+  margin-top: 14px;
+  font-size: 0.8rem;
+  color: var(--text-sec);
+}
+.guess-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.guess-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  font-style: normal;
+}
+.guess-legend .legend-correct { background: var(--correct); }
+.guess-legend .legend-close { background: var(--close); }
+.guess-legend .legend-wrong { background: var(--wrong); }
+.guess-legend .legend-arrow {
+  display: inline-grid;
+  place-items: center;
+  background: transparent;
+  color: var(--text-sec);
+  font-weight: 700;
+}
+/* ===== 状态栏进度点 ===== */
+.guess-progress { display: inline-flex; align-items: center; gap: 4px; }
+.guess-progress i {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: transparent;
+  font-style: normal;
+}
+.guess-progress i.used { border-color: var(--primary); background: var(--primary); }
 
 .room-player-row {
   display: flex;
@@ -199,6 +274,9 @@
   flex-wrap: wrap;
   margin-top: 20px;
 }
+.overlay-card-win { border-top: 4px solid var(--correct); }
+.overlay-card-win h2 { color: var(--correct); }
+.overlay-card-lose { border-top: 4px solid var(--border-strong); }
 
 /* ===== 通用确认模态框 ===== */
 .confirm-backdrop {

@@ -117,9 +117,8 @@ export default function Leaderboard() {
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
-          empty={loading
-            ? t('common.loading')
-            : t('leaderboard.empty', { type: type === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, type) })}
+          loading={loading}
+          empty={t('leaderboard.empty', { type: type === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, type) })}
         />
       </div>
     </Page>

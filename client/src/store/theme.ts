@@ -6,7 +6,11 @@ const listeners = new Set<() => void>();
 
 function storedTheme(): Theme {
   try {
-    return localStorage.getItem(STORAGE_KEY) === 'light' ? 'light' : 'blast';
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === 'light') return 'light';
+    if (stored === 'blast') return 'blast';
+    // 未显式选择过主题时跟随系统偏好
+    return window.matchMedia?.('(prefers-color-scheme: light)').matches ? 'light' : 'blast';
   } catch {
     return 'blast';
   }
@@ -22,13 +26,9 @@ function renderTheme(theme: Theme): void {
   document.documentElement.dataset.theme = theme;
   document.documentElement.style.colorScheme = theme === 'blast' ? 'dark' : 'light';
   document.documentElement.style.background = theme === 'blast' ? '#160a13' : '#f3f0ea';
+  // 链接在 index.html 中按级联顺序位于主样式表之后,切换只翻转 media,不移动节点
   for (const stylesheet of blastStylesheets()) {
-    if (theme === 'blast') {
-      stylesheet.media = 'all';
-      document.head.append(stylesheet);
-    } else {
-      stylesheet.media = 'not all';
-    }
+    stylesheet.media = theme === 'blast' ? 'all' : 'not all';
   }
   document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.setAttribute(
     'content',
@@ -64,7 +64,7 @@ export function setTheme(theme: Theme): void {
 
 window.addEventListener('storage', (event) => {
   if (event.key !== STORAGE_KEY) return;
-  const theme: Theme = event.newValue === 'light' ? 'light' : 'blast';
+  const theme: Theme = event.newValue === 'light' ? 'light' : event.newValue === 'blast' ? 'blast' : storedTheme();
   if (theme === currentTheme) return;
   currentTheme = theme;
   renderTheme(theme);

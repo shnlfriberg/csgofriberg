@@ -131,8 +131,8 @@
   .menu-card { min-height: 136px; gap: 10px; padding: 20px 10px; border-radius: 15px; }
   .menu-card .menu-icon { width: 48px; height: 48px; border-radius: 14px; }
   .menu-card .menu-label { font-size: 0.98rem; }
-  .bottom-bar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .bottom-bar .btn { min-width: 0; padding-inline: 10px; font-size: 0.88rem; }
+  .bottom-bar { gap: 8px; }
+  .bottom-bar .btn { min-width: 0; padding-inline: 12px; font-size: 0.88rem; }
   .game-rules-backdrop { padding: 10px; }
   .game-rules-dialog { max-height: calc(100dvh - 20px); }
   .game-rules-dialog-heading {
@@ -314,7 +314,6 @@
   }
   .menu-copy { min-width: 0; text-align: left; }
   .menu-description { display: block; }
-  .bottom-bar { grid-template-columns: 1fr; }
   .rule-quick-guide { grid-template-columns: 1fr; }
   .rule-feedback:nth-child(even) { border-left: 0; }
   .rule-feedback:nth-child(n + 2) { border-top: 1px solid var(--border); }

@@ -535,7 +535,7 @@ html:not([data-theme='blast']) .menu-arrow {
   transition: transform 0.24s ease;
 }
 
-html:not([data-theme='blast']) .bottom-bar .btn { min-height: 46px; }
+html:not([data-theme='blast']) .bottom-bar .btn { min-height: 38px; }
 
 /* ===== 大厅 / 多人 ===== */
 html:not([data-theme='blast']) .presence-item {

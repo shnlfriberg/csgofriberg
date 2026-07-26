@@ -184,7 +184,7 @@
   transition: transform 0.24s ease;
 }
 
-.bottom-bar .btn { min-height: 46px; }
+.bottom-bar .btn { min-height: 38px; }
 
 .presence-item {
   border-color: rgba(255, 255, 255, 0.1);

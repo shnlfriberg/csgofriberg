@@ -145,6 +145,7 @@ export default function SingleGame() {
       }
     } catch (err) {
       toast.error(errMsg(err));
+      return false;
     }
   };
 
@@ -222,7 +223,16 @@ export default function SingleGame() {
       statusBar={
         <>
           <Target size={14} />
-          {t('game.guesses', { current: guesses.length, max: maxGuesses })}
+          <span
+            className="guess-progress"
+            role="img"
+            aria-label={t('game.guesses', { current: guesses.length, max: maxGuesses })}
+            title={t('game.guesses', { current: guesses.length, max: maxGuesses })}
+          >
+            {Array.from({ length: maxGuesses }, (_, i) => (
+              <i key={i} className={i < guesses.length ? 'used' : ''} />
+            ))}
+          </span>
           <span style={{ color: 'var(--border)' }}>|</span>
           {busyStatus
             ?? (finished
@@ -259,11 +269,11 @@ export default function SingleGame() {
           <div ref={boardEndRef} className="guess-board-end" aria-hidden="true" />
         </div>
       ) : startError ? (
-        <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-light)' }}>
+        <div className="game-empty">
           <Target size={32} strokeWidth={1.5} />
-          <p style={{ fontWeight: 600, color: 'var(--text)' }}>{t('game.startFailedTitle')}</p>
+          <p className="game-empty-title">{t('game.startFailedTitle')}</p>
           <p>{startError}</p>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}>
+          <div className="game-empty-actions">
             <button className="btn" onClick={() => void start(false)} disabled={busy}>
               {starting ? t('game.starting') : t('game.startRetry')}
             </button>
@@ -273,25 +283,28 @@ export default function SingleGame() {
           </div>
         </div>
       ) : busy ? (
-        <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-light)' }}>
-          <div className="spinner" style={{ margin: '0 auto' }} />
-          <p style={{ marginTop: 12 }}>{busyStatus}</p>
+        <div className="game-empty">
+          <div className="spinner" />
+          <p>{busyStatus}</p>
         </div>
       ) : (
-        <div style={{ textAlign: 'center', padding: '48px 16px', color: 'var(--text-light)' }}>
+        <div className="game-empty">
           <Target size={32} strokeWidth={1.5} />
           <p>{t('game.startHint')}</p>
-          {mode === 'easy' ? (
-            <p style={{ fontSize: '0.8rem' }}>{t('game.easyHint')}</p>
-          ) : (
-            <p style={{ fontSize: '0.8rem' }}>{t('game.normalHint')}</p>
-          )}
+          <p className="game-empty-sub">{mode === 'easy' ? t('game.easyHint') : t('game.normalHint')}</p>
+          <div className="guess-legend" aria-label={t('rules.feedbackLabel')}>
+            <span><i className="legend-correct" />{t('rules.greenTitle')}</span>
+            <span><i className="legend-close" />{t('rules.yellowTitle')}</span>
+            <span><i className="legend-wrong" />{t('rules.grayTitle')}</span>
+            <span><i className="legend-arrow">↕</i>{t('rules.arrowTitle')}</span>
+          </div>
         </div>
       )}
       {showOverlay && (
         <AnswerOverlay
           title={status === 'won' ? t('game.congratulations') : t('game.correctAnswer')}
           answer={answer}
+          tone={status === 'won' ? 'win' : 'lose'}
           onClose={busy ? undefined : () => setShowOverlay(false)}
           extra={
             <p className="muted">

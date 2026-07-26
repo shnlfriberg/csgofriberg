@@ -90,11 +90,21 @@ export default function Stats() {
   const [opponentStatsLoading, setOpponentStatsLoading] = useState(false);
   const requestId = useRef(0);
 
-  useEffect(() => {
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState(false);
+
+  const loadStats = useCallback(() => {
+    setStatsLoading(true);
+    setStatsError(false);
     api.get<StatsResponse>('/stats/me')
       .then((res) => setStats(res.data))
-      .catch((err) => toast.error(errMsg(err)));
+      .catch(() => setStatsError(true))
+      .finally(() => setStatsLoading(false));
   }, []);
+
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
 
   const loadReplays = useCallback(async () => {
     const currentRequest = ++requestId.current;
@@ -193,6 +203,24 @@ export default function Stats() {
   return (
     <Page title={t('stats.title')} icon={<BarChart3 size={17} />}>
       <div className="stats-content">
+        {!stats && statsLoading && (
+          <div className="stats-overview-grid" aria-busy="true">
+            <section className="card" role="status" aria-label={t('common.loading')}>
+              <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
+            </section>
+            <section className="card" aria-hidden="true">
+              <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
+            </section>
+          </div>
+        )}
+        {!stats && !statsLoading && statsError && (
+          <div className="card game-empty-actions" style={{ alignItems: 'center' }}>
+            <p className="muted" style={{ margin: 0 }}>{t('stats.loadFailed')}</p>
+            <button className="btn btn-ghost btn-sm" type="button" onClick={loadStats}>
+              {t('common.retry')}
+            </button>
+          </div>
+        )}
         {stats && (
           <div className="stats-overview-grid">
             <section className="card">
@@ -240,14 +268,16 @@ export default function Stats() {
                 columns={singleColumns}
                 rows={items.filter((item): item is SingleReplayItem => item.type === 'single')}
                 rowKey={(game) => game.id}
-                empty={loading ? t('common.loading') : t('stats.noSingle')}
+                loading={loading}
+                empty={t('stats.noSingle')}
               />
             ) : (
               <DataTable
                 columns={multiColumns}
                 rows={items.filter((item): item is MultiReplayItem => item.type === 'multi')}
                 rowKey={(game) => game.id}
-                empty={loading ? t('common.loading') : t('stats.noMulti')}
+                loading={loading}
+                empty={t('stats.noMulti')}
               />
             )}
           </div>

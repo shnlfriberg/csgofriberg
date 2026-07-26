@@ -66,6 +66,36 @@
 .page-loading { display: grid; place-items: center; min-height: 180px; }
 @keyframes loading-shimmer { to { background-position: -200% 0; } }
 
+.skip-link {
+  position: fixed;
+  top: -100px;
+  left: 12px;
+  z-index: 300;
+  padding: 9px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top 0.16s ease;
+}
+.skip-link:focus { top: 12px; }
+
+.table-skeleton {
+  display: grid;
+  gap: 10px;
+  padding: 6px 0;
+}
+.table-skeleton i {
+  height: 16px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--bg) 25%, var(--border) 50%, var(--bg) 75%);
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.2s linear infinite;
+}
+.table-skeleton i:nth-child(even) { width: 82%; }
+
 /* ===== 状态栏 ===== */
 .status-bar {
   padding: 10px var(--page-inline);

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { FormEvent, useEffect, useId, useRef, useState } from 'react';
 import { getPlayerList, searchPlayerList } from '../api/playerList';
 import { errMsg } from '../api/client';
 import { toast } from './Toast';
@@ -38,6 +38,8 @@ export default function GuessInputBar({
   const [submitting, setSubmitting] = useState(false);
   const timer = useRef<number>();
   const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLUListElement>(null);
+  const listId = useId();
   const textRef = useRef('');
   const refocusAfterSubmit = useRef(false);
   const players = useRef<Suggestion[]>([]);
@@ -68,6 +70,11 @@ export default function GuessInputBar({
     }, 80);
     return () => window.clearTimeout(timer.current);
   }, [text]);
+
+  useEffect(() => {
+    if (!open) return;
+    list.current?.children[active]?.scrollIntoView({ block: 'nearest' });
+  }, [active, open]);
 
   useEffect(() => {
     if (submitting || disabled || !refocusAfterSubmit.current) return;
@@ -125,10 +132,13 @@ export default function GuessInputBar({
   return (
     <>
       {open && (
-        <ul className="autocomplete-list">
+        <ul className="autocomplete-list" role="listbox" id={listId} ref={list} aria-label={visiblePlaceholder}>
           {items.map((item, i) => (
             <li
               key={item.id}
+              id={`${listId}-opt-${i}`}
+              role="option"
+              aria-selected={i === active}
               className={i === active ? 'active' : ''}
               onMouseDown={(event) => {
                 event.preventDefault();
@@ -148,6 +158,11 @@ export default function GuessInputBar({
           disabled={disabled}
           placeholder={visiblePlaceholder}
           autoComplete="off"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={open && items.length ? `${listId}-opt-${active}` : undefined}
           onChange={(e) => {
             textRef.current = e.target.value;
             setText(e.target.value);
@@ -168,6 +183,19 @@ export default function GuessInputBar({
             } else if (e.key === 'ArrowUp') {
               e.preventDefault();
               setActive((a) => (a - 1 + items.length) % items.length);
+            } else if (e.key === 'Escape') {
+              if (open) {
+                e.preventDefault();
+                setOpen(false);
+              }
+            } else if (e.key === 'Tab' && !e.shiftKey && open) {
+              const completed = items[active].nickname;
+              if (completed !== text) {
+                e.preventDefault();
+                textRef.current = completed;
+                setText(completed);
+              }
+              setOpen(false);
             }
           }}
         />
