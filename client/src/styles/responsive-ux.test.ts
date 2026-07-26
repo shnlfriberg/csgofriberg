@@ -68,8 +68,30 @@ describe('desktop/mobile layout contracts', () => {
     // 唯一的刻度旋钮。上界必须是常规宽度下生效的那一项(0.95rem ≈ 15.2px),
     // 否则 cqw 会在放大页面时因容器变窄而抵消掉缩放
     expect(multiplayer).toMatch(
-      /\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.66rem,\s*3\.6cqw,\s*0\.95rem\)/s
+      /\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.66rem,\s*3\.2cqw,\s*0\.95rem\)/s
     );
+    // cqw 系数不能超过「不换行」上限,否则手机竖屏等窄容器会整片折行
+    const cqw = Number(
+      /\.player-board\s+\.game-table\s*\{[^}]*?([\d.]+)cqw/s.exec(multiplayer)?.[1]
+    );
+    const hPad = Number(
+      /\.player-board\s+\.game-table\s+td\s*\{[^}]*padding:\s*[\d.]+em\s+([\d.]+)em/s.exec(
+        multiplayer
+      )?.[1]
+    );
+    // 列宽% ÷ (字符数 × 字宽 + 箭头 + 2×横向留白),取最紧的一列
+    const demand = [
+      { w: 21, n: 11, cjk: false }, { w: 16, n: 8, cjk: false },
+      { w: 14, n: 7, cjk: false }, { w: 9, n: 2, cjk: false, arrow: true },
+      { w: 13, n: 3, cjk: true }, { w: 8, n: 1, cjk: false, arrow: true },
+      { w: 9, n: 2, cjk: false, arrow: true }, { w: 10, n: 2, cjk: true },
+    ];
+    const ceiling = Math.min(
+      ...demand.map(
+        (c) => c.w / (c.n * (c.cjk ? 1 : 0.5) + (c.arrow ? 0.88 : 0) + 2 * hPad)
+      )
+    );
+    expect(cqw).toBeLessThanOrEqual(ceiling);
     // 板内尺寸全部由该字号用 em 派生 —— 出现 px 就意味着又引入了不随缩放变化的死值。
     // 先剥注释:说明文字里会提到 1920px 之类的设计基准,不该被当成声明扫到
     const boardBlock = multiplayer

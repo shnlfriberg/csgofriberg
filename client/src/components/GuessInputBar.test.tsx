@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GuessInputBar from './GuessInputBar';
 import { renderWithProviders } from '../test/render';
@@ -95,5 +95,18 @@ describe('GuessInputBar', () => {
     expect(input).toHaveAttribute('aria-expanded', 'true');
     expect(screen.getByText('s1mple')).toBeInTheDocument();
     expect(screen.getByText('s1ren')).toBeInTheDocument();
+  });
+
+  it('filters the in-memory list in the same input event without debounce', () => {
+    renderWithProviders(<GuessInputBar onPick={vi.fn()} />);
+    act(() => playerListListener?.(players));
+
+    const input = screen.getByPlaceholderText('输入选手昵称...');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 's1' } });
+
+    expect(input).toHaveValue('s1');
+    expect(screen.getByText('s1mple')).toBeInTheDocument();
+    expect(input).toHaveAttribute('aria-expanded', 'true');
   });
 });

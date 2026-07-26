@@ -12,5 +12,6 @@ data/imports/players-origin.json
 data/pgdata/
 .docker-runtime-test/
 .pnpm-store/
+.claude/
 rule.txt
 AGENTS.md
