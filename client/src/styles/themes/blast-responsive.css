@@ -27,13 +27,13 @@
   .home-page .page-scroll { padding-top: 14px; }
   .home-hero { min-height: 275px; clip-path: polygon(0 0, calc(100% - 22px) 0, 100% 22px, 100% 100%, 22px 100%, 0 calc(100% - 22px)); }
   .home-hero h1 { font-size: clamp(3.2rem, 18vw, 4.6rem); text-shadow: 3px 3px 0 rgba(217, 255, 63, 0.2); }
-  .hero-kicker { margin-bottom: 11px; font-size: 0.65rem; letter-spacing: 0.11em; }
+  .hero-kicker { margin-bottom: 11px; font-size: var(--fs-2xs); letter-spacing: 0.11em; }
   .home-hero .hero-subtitle { font-size: 0.94rem; }
   .menu-grid { gap: 10px; }
   .menu-card { min-height: 158px; padding: 18px 13px; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px)); }
   .menu-card .menu-icon { width: 43px; height: 43px; }
   .menu-card .menu-label { font-size: 1.02rem; }
-  .menu-description { font-size: 0.72rem; }
+  .menu-description { font-size: var(--fs-2xs); }
   .menu-arrow { right: 12px; bottom: 11px; width: 15px; height: 15px; }
   .card::before { left: 14px; width: 44px; }
   .game-table tr { border-color: rgba(255, 255, 255, 0.1); background: #190c15; }
@@ -53,12 +53,12 @@
   }
   .menu-card .menu-icon { flex: 0 0 auto; }
   .menu-copy { padding-right: 24px; }
-  .menu-description { display: block; font-size: 0.78rem; }
+  .menu-description { display: block; font-size: var(--fs-xs); }
   .menu-arrow { right: 14px; bottom: 14px; }
 }
 
 @media (max-width: 400px) {
-  .hero-kicker { font-size: 0.58rem; }
+  .hero-kicker { font-size: var(--fs-3xs); }
   .menu-description { display: block; }
   .menu-card { min-height: 102px; padding: 14px; }
   .menu-card .menu-icon { width: 40px; height: 40px; }

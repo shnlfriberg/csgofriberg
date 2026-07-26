@@ -17,6 +17,8 @@ import {
   X,
   CircleAlert,
   Trophy,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import Page from '../components/Page';
 import GuessBoard from '../components/GuessBoard';
@@ -35,7 +37,6 @@ import { toast } from '../components/Toast';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { difficultyLabel } from '../utils/difficulty';
-import ReplayDialog, { type MultiReplay } from '../components/ReplayDialog';
 import PlayerStatsDialog, { type PlayerStatsView } from '../components/PlayerStatsDialog';
 
 interface RoundOver {
@@ -51,7 +52,7 @@ interface MatchOver {
   answer: AnswerInfo | null;
 }
 
-const MULTI_GUESS_INTERVAL_MS = 2_000;
+const MULTI_GUESS_INTERVAL_MS = 1_000;
 const ROUND_TIME_MS = 120_000;
 const NEXT_ROUND_DELAY_MS = 6_000;
 
@@ -202,7 +203,7 @@ export default function MultiRoom() {
   const [roundOver, setRoundOver] = useState<RoundOver | null>(null);
   const [matchOver, setMatchOver] = useState<MatchOver | null>(null);
   const [matchOverVisible, setMatchOverVisible] = useState(false);
-  const [matchReplay, setMatchReplay] = useState<MultiReplay | null>(null);
+  const [replayRoundIndex, setReplayRoundIndex] = useState<number | null>(null);
   const [offlineNote, setOfflineNote] = useState('');
   const [showRoomCode, setShowRoomCode] = useState(false);
   const [myKey, setMyKey] = useState('');
@@ -257,7 +258,7 @@ export default function MultiRoom() {
     setMatchOver(state.matchResult);
     if (!state.matchResult) {
       setMatchOverVisible(false);
-      setMatchReplay(null);
+      setReplayRoundIndex(null);
     }
     else if (!hadMatchResult) setMatchOverVisible(true);
     if (state.players.every((player) => player.connected)) setOfflineNote('');
@@ -292,7 +293,7 @@ export default function MultiRoom() {
       setGuessCooldownUntil(0);
       setRoundOver(null);
       setMatchOverVisible(false);
-      setMatchReplay(null);
+      setReplayRoundIndex(null);
       setOfflineNote('');
       setRematchNotice('');
       setRoundExpired(false);
@@ -365,7 +366,7 @@ export default function MultiRoom() {
         setRoundOver(null);
         setMatchOver(null);
         setMatchOverVisible(false);
-        setMatchReplay(null);
+        setReplayRoundIndex(null);
         setOfflineNote('');
       }
       const actorIsMe = p.actorKey === myKeyRef.current;
@@ -651,7 +652,7 @@ export default function MultiRoom() {
       return;
     }
     setMatchOverVisible(false);
-    setMatchReplay({ type: 'multi', ...room.matchReplay });
+    setReplayRoundIndex(0);
   };
   const guessCooldownRemaining = Math.max(
     0,
@@ -734,6 +735,14 @@ export default function MultiRoom() {
 
   const leftPlayer = me ?? room.players[0];
   const rightPlayer = me ? opponent : room.players[1];
+  const replay = room.matchReplay;
+  const replayRound = replayRoundIndex == null ? null : replay?.rounds[replayRoundIndex] ?? null;
+  const displayedLeftPlayer = leftPlayer && replayRound
+    ? { ...leftPlayer, guessCount: replayRound.me.guesses.length, guesses: replayRound.me.guesses }
+    : leftPlayer;
+  const displayedRightPlayer = rightPlayer && replayRound
+    ? { ...rightPlayer, guessCount: replayRound.opponent.guesses.length, guesses: replayRound.opponent.guesses }
+    : rightPlayer;
 
   return (
     <Page
@@ -841,6 +850,44 @@ export default function MultiRoom() {
         </span>
       </div>
 
+      {replay && replayRound && replayRoundIndex != null && (
+        <div className="multi-inline-replay" aria-label={t('replay.pagination')}>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            aria-label={t('replay.previousRound')}
+            title={t('replay.previousRound')}
+            disabled={replayRoundIndex === 0}
+            onClick={() => setReplayRoundIndex((current) => current == null ? 0 : Math.max(0, current - 1))}
+          >
+            <ChevronLeft size={17} />
+          </button>
+          <div className="multi-inline-replay-meta">
+            <strong>{t('replay.roundPage', { current: replayRoundIndex + 1, total: replay.rounds.length })}</strong>
+            <span>{t('replay.correctAnswer', { name: replayRound.answer.nickname })}</span>
+            <span className="badge">
+              {replayRound.winner === 'me'
+                ? t('replay.meWon')
+                : replayRound.winner === 'opponent'
+                  ? t('replay.opponentWon')
+                  : t('common.draw')}
+            </span>
+          </div>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            aria-label={t('replay.nextRound')}
+            title={t('replay.nextRound')}
+            disabled={replayRoundIndex >= replay.rounds.length - 1}
+            onClick={() => setReplayRoundIndex((current) => current == null
+              ? 0
+              : Math.min(replay.rounds.length - 1, current + 1))}
+          >
+            <ChevronRight size={17} />
+          </button>
+        </div>
+      )}
+
       {/* 等待区 */}
       {room.status === 'waiting' && (
         <div className="card room-waiting-card">
@@ -901,22 +948,24 @@ export default function MultiRoom() {
       {/* 对局区:左右分栏(移动端上下堆叠) */}
       {room.status !== 'waiting' && (
         <div className="boards">
-          {leftPlayer && (
+          {displayedLeftPlayer && (
             <PlayerBoard
-              player={leftPlayer}
+              key={`${displayedLeftPlayer.key}:${replayRound?.round ?? room.roundId}`}
+              player={displayedLeftPlayer}
               room={room}
-              title={me ? t('multi.myGuesses') : leftPlayer.name}
-              isSelf={leftPlayer.key === myKey}
-              boardRef={leftPlayer.key === myKey ? ownBoardRef : undefined}
+              title={me ? t('multi.myGuesses') : displayedLeftPlayer.name}
+              isSelf={displayedLeftPlayer.key === myKey}
+              boardRef={displayedLeftPlayer.key === myKey ? ownBoardRef : undefined}
             />
           )}
-          {rightPlayer && (
+          {displayedRightPlayer && (
             <PlayerBoard
-              player={rightPlayer}
+              key={`${displayedRightPlayer.key}:${replayRound?.round ?? room.roundId}`}
+              player={displayedRightPlayer}
               room={room}
-              title={rightPlayer.name}
-              isSelf={rightPlayer.key === myKey}
-              boardRef={rightPlayer.key === myKey ? ownBoardRef : undefined}
+              title={displayedRightPlayer.name}
+              isSelf={displayedRightPlayer.key === myKey}
+              boardRef={displayedRightPlayer.key === myKey ? ownBoardRef : undefined}
             />
           )}
         </div>
@@ -1035,15 +1084,6 @@ export default function MultiRoom() {
 
       {playerStats && (
         <PlayerStatsDialog view={playerStats} onClose={() => setPlayerStats(null)} />
-      )}
-      {matchReplay && (
-        <ReplayDialog
-          replay={matchReplay}
-          onClose={() => {
-            setMatchReplay(null);
-            if (roomRef.current?.matchResult) setMatchOverVisible(true);
-          }}
-        />
       )}
     </Page>
   );

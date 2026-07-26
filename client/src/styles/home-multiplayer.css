@@ -45,7 +45,7 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   padding: 24px 0;
-  max-width: 900px;
+  max-width: 56.25rem;
   margin: 0 auto;
 }
 .menu-card {
@@ -137,7 +137,7 @@
 .single-difficulty-copy small { color: var(--text-light); }
 .single-difficulty-check { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid var(--border); border-radius: 50%; color: #201118; }
 .single-difficulty-option.active .single-difficulty-check { border-color: var(--primary); background: var(--primary); }
-.single-difficulty-badge { position: absolute; top: 9px; right: 12px; color: var(--success); font-size: .68rem; font-weight: 800; }
+.single-difficulty-badge { position: absolute; top: 9px; right: 12px; color: var(--success); font-size: var(--fs-2xs); font-weight: 800; }
 .single-lobby-action { display: flex; justify-content: center; padding: 14px 0 4px; border-top: 1px solid var(--border); }
 
 /* ===== 首页游戏规则 ===== */
@@ -222,7 +222,7 @@
   margin-bottom: 2px;
   color: var(--rule-accent);
   font-family: Bahnschrift, 'Arial Narrow', sans-serif;
-  font-size: 0.68rem;
+  font-size: var(--fs-2xs);
   font-weight: 800;
   letter-spacing: 0.14em;
 }
@@ -251,7 +251,7 @@
   font-size: 1.05rem;
   white-space: nowrap;
 }
-.guess-limit span { color: var(--text-sec); font-size: 0.72rem; font-weight: 600; }
+.guess-limit span { color: var(--text-sec); font-size: var(--fs-2xs); font-weight: 600; }
 .rule-quick-guide {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -269,7 +269,7 @@
 .rule-feedback + .rule-feedback { border-left: 1px solid var(--border); }
 .rule-feedback div { display: grid; gap: 2px; min-width: 0; }
 .rule-feedback strong { font-size: 0.85rem; line-height: 1.35; }
-.rule-feedback div span { color: var(--text-light); font-size: 0.73rem; line-height: 1.35; }
+.rule-feedback div span { color: var(--text-light); font-size: var(--fs-2xs); line-height: 1.35; }
 .rule-color-swatch {
   width: 12px;
   height: 30px;
@@ -309,7 +309,7 @@
   color: var(--rule-accent);
 }
 .rule-panel-title > div { display: grid; }
-.rule-panel-title small { color: var(--text-light); font-family: Consolas, monospace; font-size: 0.65rem; }
+.rule-panel-title small { color: var(--text-light); font-family: Consolas, monospace; font-size: var(--fs-2xs); }
 .rule-panel-title h3 { margin: 0; font-size: 1rem; }
 .rule-panel > p { margin: 0 0 14px; color: var(--text-sec); line-height: 1.65; }
 .rule-field-grid {
@@ -328,7 +328,7 @@
 }
 .rule-field-grid > div:nth-child(n + 2) { border-left-color: var(--close); }
 .rule-field-grid strong { font-size: 0.82rem; }
-.rule-field-grid span { color: var(--text-light); font-size: 0.76rem; line-height: 1.5; }
+.rule-field-grid span { color: var(--text-light); font-size: var(--fs-xs); line-height: 1.5; }
 .rule-result-notes {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -354,7 +354,7 @@
   height: 26px;
   margin-right: 8px;
   border-radius: 50%;
-  font-size: 0.72rem;
+  font-size: var(--fs-2xs);
   font-weight: 800;
 }
 .rule-result-win { background: color-mix(in srgb, var(--success) 14%, transparent); color: var(--success); }
@@ -380,7 +380,7 @@
   background: color-mix(in srgb, var(--warning) 14%, transparent);
   color: var(--warning);
   font-family: Consolas, monospace;
-  font-size: 0.72rem;
+  font-size: var(--fs-2xs);
   font-weight: 800;
 }
 .region-list { display: grid; gap: 1px; background: var(--border); }
@@ -390,7 +390,7 @@
   gap: 12px;
   padding: 9px 11px;
   background: var(--card);
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   line-height: 1.45;
 }
 .region-item strong { color: var(--rule-accent); }
@@ -405,7 +405,7 @@
     'create match'
     'create join';
   gap: 16px;
-  max-width: 980px;
+  max-width: 61.25rem;
   margin: 0 auto;
 }
 .lobby-grid > :nth-child(1) { grid-area: create; }
@@ -590,17 +590,17 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  gap: clamp(14px, 4vw, 40px);
-  width: min(920px, 100%);
+  gap: clamp(0.875rem, 4vw, 2.5rem);
+  width: min(57.5rem, 100%);
   margin-inline: auto;
-  min-height: 78px;
-  padding: 14px;
+  min-height: 4.875rem;
+  padding: 0.875rem;
   font-size: 1.1rem;
 }
 .score-bar .player-name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.375rem;
   font-weight: 600;
   min-width: 0;
   overflow: hidden;
@@ -616,9 +616,9 @@
 .player-stats-trigger {
   display: inline-grid;
   place-items: center;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 1.75rem;
+  width: 1.75rem;
+  height: 1.75rem;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -631,14 +631,14 @@
 .player-stats-trigger:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .player-stats-trigger:disabled { cursor: default; opacity: 0.58; }
 .player-stats-spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid currentColor;
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 0.125rem solid currentColor;
   border-right-color: transparent;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
-.player-stats-dialog { width: min(620px, 100%); }
+.player-stats-dialog { width: min(38.75rem, 100%); }
 .player-stats-backdrop { z-index: 230; }
 .player-stats-dialog-body { padding: 0; }
 .player-stats-body {
@@ -647,7 +647,7 @@
   gap: 0;
   padding: 0;
 }
-.player-stats-body section { min-width: 0; padding: 24px; }
+.player-stats-body section { min-width: 0; padding: 1.5rem; }
 .player-stats-body section + section { border-left: 1px solid var(--border); }
 .player-stats-body h3 { margin: 0 0 14px; font-size: 1rem; }
 .player-stats-list { display: grid; gap: 0; margin: 0; }
@@ -655,8 +655,8 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 16px;
-  padding: 9px 0;
+  gap: 1rem;
+  padding: 0.5625rem 0;
   border-bottom: 1px solid var(--border);
 }
 .player-stats-list div:last-child { border-bottom: 0; }
@@ -670,10 +670,36 @@
   font-family: Consolas, monospace;
   flex-shrink: 0;
 }
+.multi-inline-replay {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr) 2.25rem;
+  align-items: center;
+  gap: 0.875rem;
+  width: min(57.5rem, 100%);
+  margin-inline: auto;
+}
+.multi-inline-replay > .btn {
+  width: 2.25rem;
+  min-width: 2.25rem;
+  height: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0;
+}
+.multi-inline-replay-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  min-width: 0;
+  color: var(--text-sec);
+  text-align: center;
+}
+.multi-inline-replay-meta strong { color: var(--text); }
+.multi-inline-replay-meta > span:not(.badge) { min-width: 0; overflow-wrap: anywhere; }
 .countdown {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 0.3125rem;
   font-family: Consolas, monospace;
   font-weight: 700;
   font-size: 1rem;
@@ -682,8 +708,70 @@
 .boards {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 0.875rem;
   align-items: start;
   min-width: 0;
 }
 .boards > * { min-width: 0; max-width: 100%; }
+
+/* 多人棋盘:整块只有一个刻度旋钮 —— .game-table 的 font-size。
+   它随容器宽度连续变化(cqw),上下界用 rem 跟着根字号一起补偿缩放;
+   板内其余尺寸一律用 em 从这个字号派生。
+   全程没有断点,所以浏览器缩放时不会出现密度突变(旧版在 560px/390px
+   两个 px 阈值上会让行内边距从 13px 直接掉到 6px)。
+
+   注意:cqw 必须写在容器的后代上 —— 容器不能查询自身,
+   写在 .player-board 上会去解析它的祖先容器(或小视口),得到错误的值。 */
+.player-board { container-type: inline-size; }
+.player-board .game-table {
+  /* 唯一的刻度旋钮 —— 想整体改大小只动上界 0.95rem。
+     三项的分工:
+     - 上界 0.95rem 是常规宽度下真正生效的那一项。视口 <1920px 时 root 固定,
+       用户放大页面能 1:1 拿到放大;视口 ≥1920px 时 root 等比补偿,缩小页面物理尺寸不变。
+     - 中间的 cqw 只在容器真的窄到放不下时才接管(高倍缩放/窄屏),防止溢出。
+     - 下界 0.66rem 是可读性底线。
+     注意别让 cqw 在常规宽度下就生效:容器宽度会随放大页面而变窄,cqw 主导时
+     会反过来抵消缩放 —— 之前 200% 缩放只放大到 1.46 倍就是这个原因。 */
+  font-size: clamp(0.66rem, 3.6cqw, 0.95rem);
+  border-spacing: 0.3em;
+}
+.player-board .game-table th {
+  padding: 0.5em 0.3em;
+  font-size: 0.92em;
+  line-height: 1.18;
+}
+.player-board .game-table td {
+  padding: 0.72em 0.42em;
+  border-radius: 0.5em;
+  line-height: 1.22;
+}
+.player-board .game-table td .dir {
+  margin-left: 0.16em;
+  vertical-align: -0.13em;
+}
+.player-board .game-table td .dir svg { width: 0.72em; height: 0.72em; }
+
+/* 列宽按放大后的实际内容重调(仅多人双栏,单人宽表沿用 game.css 的比例)。
+   列宽是 % 、字号是 cqw,两者都随容器等比变化 —— 所以这套比例调一次
+   在任何缩放档下都成立,不会像固定 px 那样在某个宽度上突然放不下。
+   数字列原先各占 12%(Major 冠军只有 1 位数),把富余让给选手名与战队。 */
+.player-board .game-table th:nth-child(1),
+.player-board .game-table td:nth-child(1) { width: 21%; }
+.player-board .game-table th:nth-child(2),
+.player-board .game-table td:nth-child(2) { width: 16%; }
+.player-board .game-table th:nth-child(3),
+.player-board .game-table td:nth-child(3) { width: 14%; }
+.player-board .game-table th:nth-child(4),
+.player-board .game-table td:nth-child(4) { width: 9%; }
+.player-board .game-table th:nth-child(5),
+.player-board .game-table td:nth-child(5) { width: 13%; }
+.player-board .game-table th:nth-child(6),
+.player-board .game-table td:nth-child(6) { width: 8%; }
+.player-board .game-table th:nth-child(7),
+.player-board .game-table td:nth-child(7) { width: 9%; }
+.player-board .game-table th:nth-child(8),
+.player-board .game-table td:nth-child(8) { width: 10%; }
+.player-board .game-table td.masked-cell:empty::after {
+  width: 0.42em;
+  height: 0.42em;
+}

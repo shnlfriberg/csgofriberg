@@ -263,12 +263,7 @@ html:not([data-theme='blast']) .game-table td:not(.correct):not(.close):not(.wro
   box-shadow: 0 1px 3px rgba(32, 17, 24, 0.05);
 }
 
-html:not([data-theme='blast']) .game-table tbody tr {
-  animation: day-surface-enter 0.38s cubic-bezier(0.2, 0.72, 0.25, 1) both;
-}
-html:not([data-theme='blast']) .game-table tbody tr:nth-child(2) { animation-delay: 45ms; }
-html:not([data-theme='blast']) .game-table tbody tr:nth-child(3) { animation-delay: 90ms; }
-html:not([data-theme='blast']) .game-table tbody tr:nth-child(4) { animation-delay: 135ms; }
+/* 猜测行的入场动画统一在 game.css(不做垂直位移),此处不再重复定义 */
 html:not([data-theme='blast']) .game-table td.correct,
 html:not([data-theme='blast']) .game-table td.close { transition: filter 0.2s ease, transform 0.2s ease; }
 
@@ -408,7 +403,7 @@ html:not([data-theme='blast']) .hero-kicker {
   border-left: 3px solid var(--primary);
   color: var(--primary-strong);
   font-family: Bahnschrift, 'Arial Narrow', sans-serif;
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -451,7 +446,7 @@ html:not([data-theme='blast']) .home-hero .hero-subtitle {
 html:not([data-theme='blast']) .home-hero .muted { position: relative; }
 
 /* ===== 首页菜单卡 ===== */
-html:not([data-theme='blast']) .menu-grid { gap: 14px; max-width: 1100px; }
+html:not([data-theme='blast']) .menu-grid { gap: 14px; max-width: 68.75rem; }
 
 html:not([data-theme='blast']) .menu-card {
   position: relative;
@@ -672,7 +667,7 @@ html:not([data-theme='blast']) .resource-version-value {
     font-size: clamp(2.9rem, 16vw, 4.2rem);
     text-shadow: 3px 3px 0 var(--primary);
   }
-  html:not([data-theme='blast']) .hero-kicker { margin-bottom: 11px; font-size: 0.65rem; letter-spacing: 0.11em; }
+  html:not([data-theme='blast']) .hero-kicker { margin-bottom: 11px; font-size: var(--fs-2xs); letter-spacing: 0.11em; }
   html:not([data-theme='blast']) .home-hero .hero-subtitle { font-size: 0.94rem; }
   html:not([data-theme='blast']) .menu-grid { gap: 10px; }
   html:not([data-theme='blast']) .menu-card {
@@ -682,7 +677,7 @@ html:not([data-theme='blast']) .resource-version-value {
   }
   html:not([data-theme='blast']) .menu-card .menu-icon { width: 43px; height: 43px; }
   html:not([data-theme='blast']) .menu-card .menu-label { font-size: 1.02rem; }
-  html:not([data-theme='blast']) .menu-description { font-size: 0.72rem; }
+  html:not([data-theme='blast']) .menu-description { font-size: var(--fs-2xs); }
   html:not([data-theme='blast']) .menu-arrow { right: 12px; bottom: 11px; width: 15px; height: 15px; }
   html:not([data-theme='blast']) .card::before { left: 14px; width: 44px; }
 }
@@ -697,7 +692,7 @@ html:not([data-theme='blast']) .resource-version-value {
 }
 
 @media (max-width: 400px) {
-  html:not([data-theme='blast']) .hero-kicker { font-size: 0.58rem; }
+  html:not([data-theme='blast']) .hero-kicker { font-size: var(--fs-3xs); }
   html:not([data-theme='blast']) .menu-card { min-height: 102px; padding: 14px; }
   html:not([data-theme='blast']) .menu-card .menu-icon { width: 40px; height: 40px; }
   html:not([data-theme='blast']) .menu-copy { padding-right: 18px; }

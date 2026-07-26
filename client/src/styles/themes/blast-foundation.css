@@ -300,12 +300,7 @@ select.input { color-scheme: dark; }
 }
 .game-table td.correct { color: #07160e; }
 .game-table td.close { color: #211406; }
-.game-table tbody tr {
-  animation: surface-enter 0.38s cubic-bezier(0.2, 0.72, 0.25, 1) both;
-}
-.game-table tbody tr:nth-child(2) { animation-delay: 45ms; }
-.game-table tbody tr:nth-child(3) { animation-delay: 90ms; }
-.game-table tbody tr:nth-child(4) { animation-delay: 135ms; }
+/* 猜测行的入场动画统一在 game.css(不做垂直位移),此处不再重复定义 */
 .game-table td.correct,
 .game-table td.close { transition: filter 0.2s ease, transform 0.2s ease; }
 

@@ -375,7 +375,7 @@ describe('multiplayer socket integration', () => {
       ]);
       expect(results.every((result) => result.feedback === undefined)).toBe(true);
       results.filter((result) => !result.code).forEach((result) => {
-        expect(result.cooldownMs).toBe(2_000);
+        expect(result.cooldownMs).toBe(1_000);
       });
       const finalRoom = await getRoom(created.room.id);
       expect(finalRoom).not.toBeNull();
@@ -694,6 +694,21 @@ describe('multiplayer socket integration', () => {
       expect(spectatorView.guesses[0].playerId).toBe(wrongGuess.id);
       expect(spectatorView.guesses[0].nickname).toEqual(expect.any(String));
       expect(spectatorView.guesses[0].attributes.nationality).toHaveProperty('value');
+
+      const roundOverPromise = onceEvent(b, 'round:over');
+      await emit(b, 'game:guess', {
+        playerId: stored.targetPlayerId,
+        roundId: syncedA.room.roundId,
+        eventId: `hidden-${stamp}-0002`,
+      });
+      const roundOver = await roundOverPromise;
+      expect(roundOver.room.status).toBe('round_over');
+      const revealedOpponent = roundOver.room.players.find(
+        (player: any) => player.key === `g:${keyA}`
+      );
+      expect(revealedOpponent.guesses[0].playerId).toBe(wrongGuess.id);
+      expect(revealedOpponent.guesses[0].nickname).toEqual(expect.any(String));
+      expect(revealedOpponent.guesses[0].attributes.nationality).toHaveProperty('value');
     } finally {
       a.disconnect();
       b.disconnect();
@@ -764,7 +779,7 @@ describe('multiplayer socket integration', () => {
       });
       expect(coolingDown.code).toBe('GUESS_COOLDOWN');
       expect(coolingDown.retryAfterMs).toBeGreaterThan(0);
-      expect(coolingDown.retryAfterMs).toBeLessThanOrEqual(2_000);
+      expect(coolingDown.retryAfterMs).toBeLessThanOrEqual(1_000);
       await new Promise((resolve) => setTimeout(resolve, coolingDown.retryAfterMs + 25));
 
       const secondAppliedPromise = onceEvent(a, 'game:guess:applied');

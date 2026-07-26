@@ -67,6 +67,8 @@
   opacity: 0.55;
 }
 @media (prefers-reduced-motion: no-preference) {
+  .game-table tbody tr { animation: row-enter 0.32s ease both; }
+
   .game-table tr.row-latest td { animation: cell-reveal 0.3s ease backwards; }
   .game-table tr.row-latest td:nth-child(2) { animation-delay: 0.06s; }
   .game-table tr.row-latest td:nth-child(3) { animation-delay: 0.12s; }
@@ -77,8 +79,11 @@
   .game-table tr.row-latest td:nth-child(8) { animation-delay: 0.42s; }
   .game-table tr.row-correct td.name { animation: cell-reveal 0.3s ease backwards, win-pulse 0.5s ease 0.55s; }
 }
+@keyframes row-enter {
+  from { opacity: 0; }
+}
 @keyframes cell-reveal {
-  from { opacity: 0; transform: translateY(4px) scale(0.96); }
+  from { opacity: 0; transform: scale(0.94); }
 }
 @keyframes win-pulse {
   50% { transform: scale(1.05); }
@@ -158,7 +163,7 @@
   padding: 8px 0;
 }
 .room-waiting-card {
-  width: min(920px, 100%);
+  width: min(57.5rem, 100%);
   margin-inline: auto;
   text-align: center;
 }
@@ -198,12 +203,12 @@
   padding: 12px var(--page-inline);
   padding-bottom: calc(12px + env(safe-area-inset-bottom));
 }
-.input-bar { display: flex; gap: 10px; width: 100%; min-width: 0; max-width: 900px; margin: 0 auto; }
+.input-bar { display: flex; gap: 10px; width: 100%; min-width: 0; max-width: 56.25rem; margin: 0 auto; }
 .input-bar .input { flex: 1; min-width: 0; font-size: 1.05rem; }
 .input-bar .btn { flex-shrink: 0; white-space: nowrap; }
 .guess-input-feedback {
   width: 100%;
-  max-width: 900px;
+  max-width: 56.25rem;
   min-height: 20px;
   margin: 6px auto 0;
   color: var(--warning);
@@ -217,7 +222,7 @@
   right: clamp(16px, 4vw, 48px);
   bottom: 100%;
   margin: 0 auto 6px;
-  max-width: 900px;
+  max-width: 56.25rem;
   padding: 5px;
   list-style: none;
   background: var(--card);

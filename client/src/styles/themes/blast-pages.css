@@ -61,7 +61,7 @@
   border-left: 3px solid var(--primary);
   color: var(--primary);
   font-family: Bahnschrift, 'Arial Narrow', sans-serif;
-  font-size: 0.76rem;
+  font-size: var(--fs-xs);
   font-weight: 800;
   letter-spacing: 0.16em;
   text-transform: uppercase;
@@ -103,7 +103,7 @@
 
 .home-hero .muted { position: relative; color: #aa95a5; }
 
-.menu-grid { gap: 14px; max-width: 1100px; }
+.menu-grid { gap: 14px; max-width: 68.75rem; }
 
 .menu-card {
   position: relative;

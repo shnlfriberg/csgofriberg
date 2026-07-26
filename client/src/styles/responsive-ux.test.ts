@@ -29,13 +29,13 @@ describe('desktop/mobile layout contracts', () => {
     );
   });
 
-  it('hides chrome when mobile keyboard is open and keeps multiplayer boards stacked', () => {
+  it('hides chrome for mobile keyboards and stacks multiplayer boards only when space is genuinely narrow', () => {
     const responsive = readCss('./responsive.css');
     expect(responsive).toMatch(
       /\.game-page\.keyboard-active\s+\.header-bar,\s*\n?\s*\.game-page\.keyboard-active\s+\.status-bar\s*\{\s*display:\s*none/
     );
     expect(responsive).toMatch(
-      /@media\s*\(max-width:\s*960px\)\s*\{[\s\S]*\.boards\s*\{[^}]*grid-template-columns:\s*1fr/
+      /@media\s*\(max-width:\s*960px\)\s*and\s*\(pointer:\s*coarse\),\s*\(max-width:\s*700px\)\s*\{[\s\S]*\.boards\s*\{[^}]*grid-template-columns:\s*1fr/
     );
     expect(responsive).toMatch(
       /\.leaderboard-card\s+table\s+th:nth-child\(1\)\s*\{\s*width:\s*7%/
@@ -43,5 +43,53 @@ describe('desktop/mobile layout contracts', () => {
     expect(responsive).toMatch(
       /\.leaderboard-card-multi\s+table\s+th:nth-child\(1\)\s*\{\s*width:\s*8%/
     );
+  });
+
+  it('keeps wide low-zoom layouts at the 1920px design scale', () => {
+    const tokens = readCss('./tokens.css');
+    // 单一根字号刻度,不再包媒体查询:下界 100% 已覆盖 1600–1920 区间
+    expect(tokens).toMatch(/^html\s*\{\s*font-size:\s*clamp\(100%,\s*0\.833333vw,\s*400%\);\s*\}/m);
+    expect(tokens).not.toMatch(/@media\s*\(min-width:\s*1600px\)/);
+
+    const multiplayer = readCss('./home-multiplayer.css');
+    expect(multiplayer).toMatch(/\.score-bar\s*\{[^}]*width:\s*min\(57\.5rem,\s*100%\)/s);
+    expect(multiplayer).toMatch(/\.boards\s*\{[^}]*gap:\s*0\.875rem/s);
+  });
+
+  it('scales the multiplayer board continuously so browser zoom cannot snap its density', () => {
+    // 参与版心宽度计算的间距,上下界必须是 rem,否则棋盘宽度占比会随缩放漂移
+    const tokens = readCss('./tokens.css');
+    expect(tokens).toMatch(/--page-inline:\s*clamp\(1rem,\s*4vw,\s*3\.25rem\)/);
+    expect(readCss('./controls.css')).toMatch(
+      /\.card\s*\{[^}]*padding:\s*clamp\(1\.125rem,\s*2\.25vw,\s*1\.5rem\)/s
+    );
+
+    const multiplayer = readCss('./home-multiplayer.css');
+    // 唯一的刻度旋钮。上界必须是常规宽度下生效的那一项(0.95rem ≈ 15.2px),
+    // 否则 cqw 会在放大页面时因容器变窄而抵消掉缩放
+    expect(multiplayer).toMatch(
+      /\.player-board\s+\.game-table\s*\{[^}]*font-size:\s*clamp\(0\.66rem,\s*3\.6cqw,\s*0\.95rem\)/s
+    );
+    // 板内尺寸全部由该字号用 em 派生 —— 出现 px 就意味着又引入了不随缩放变化的死值。
+    // 先剥注释:说明文字里会提到 1920px 之类的设计基准,不该被当成声明扫到
+    const boardBlock = multiplayer
+      .slice(multiplayer.indexOf('.player-board {'))
+      .replace(/\/\*[\s\S]*?\*\//g, '');
+    const boardRules = boardBlock.match(/\.player-board\s+\.game-table[^{]*\{[^}]*\}/gs) ?? [];
+    expect(boardRules.length).toBeGreaterThan(3);
+    for (const rule of boardRules) {
+      expect(rule).not.toMatch(/:\s*[^;{}]*\b\d+(\.\d+)?px\b/);
+    }
+    // 断点式容器查询已移除:有台阶就有缩放时的密度跳变
+    expect(multiplayer).not.toMatch(/@container\s*\(max-width:\s*(560|390)px\)/);
+
+    // 多人棋盘自己的列宽比例必须正好占满 100%,否则 table-layout: fixed 会自行分配余量
+    const widths = [
+      ...multiplayer.matchAll(
+        /\.player-board\s+\.game-table\s+td:nth-child\(\d\)\s*\{\s*width:\s*(\d+)%/g
+      ),
+    ].map((m) => Number(m[1]));
+    expect(widths).toHaveLength(8);
+    expect(widths.reduce((a, b) => a + b, 0)).toBe(100);
   });
 });

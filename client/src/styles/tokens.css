@@ -24,8 +24,17 @@
   --shadow-lg: 0 28px 70px rgba(32, 17, 24, 0.2);
   --radius: 4px;
   --radius-sm: 3px;
-  --content-max: 1180px;
-  --page-inline: clamp(16px, 4vw, 52px);
+  /* rem 定义(=1180px@16px 基准):随根字号放大,宽屏低缩放时整个版面等比变大 */
+  --content-max: 73.75rem;
+  /* 上下界必须是 rem:px 界不参与根字号补偿,会让版心占比随缩放漂移,
+     进而把棋盘推过断点。中间的 vw 保留 —— 补偿分支上 vw 与 root 成正比。 */
+  --page-inline: clamp(1rem, 4vw, 3.25rem);
+
+  /* 流式小字号刻度:随视口宽度在可读下限与上限间连续过渡,
+     窄屏不再跌破下限,宽屏(含高缩放桌面)自动放大到上限 */
+  --fs-3xs: clamp(0.66rem, 0.56rem + 0.45vw, 0.8rem);
+  --fs-2xs: clamp(0.72rem, 0.62rem + 0.45vw, 0.86rem);
+  --fs-xs: clamp(0.78rem, 0.7rem + 0.4vw, 0.92rem);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -39,7 +48,13 @@ body,
   overflow-x: clip;
 }
 
-html { font-size: 16px; }
+/* 全站唯一的缩放刻度。以 1920px 为设计基准(1920/120=16px):
+   - 视口 < 1920px 时 clamp 取下界 100%,即用户在浏览器/系统里设的默认字号,
+     用户主动放大页面时版面随之变大(WCAG 1.4.4 要求文字可缩放到 200%);
+   - 视口 ≥ 1920px 时(大屏,或用户缩小页面导致 CSS 视口变宽)根字号等比补偿,
+     物理占比保持恒定,上限 400% 覆盖 4K 低缩放场景。
+   下界 100% 已经让 1600–1920 区间恒为默认字号,不需要额外的媒体查询包一层。 */
+html { font-size: clamp(100%, 0.833333vw, 400%); }
 html[data-theme='blast'],
 html[data-theme='blast'] body { background-color: #160a13; }
 

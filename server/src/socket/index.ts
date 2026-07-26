@@ -65,7 +65,7 @@ import { getPlayerPerformance } from '../services/playerPerformance';
 const NEXT_ROUND_DELAY_MS = 6_000;
 const MATCH_START_DELAY_MS = 5_000;
 const ROUND_TIME_MS = 120_000;
-const MULTI_GUESS_INTERVAL_MS = 2_000;
+const MULTI_GUESS_INTERVAL_MS = 1_000;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
 const LOCAL_GUESS_LIMIT = 12;
 const LOCAL_GUESS_WINDOW_MS = 10_000;
@@ -275,6 +275,7 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
 
 function buildPublicRoom(room: StoredRoom, viewerKey: string) {
   const viewerIsSpectator = room.spectators.some((spectator) => spectator.key === viewerKey);
+  const roundIsComplete = room.status === 'round_over' || room.status === 'finished';
   const target = room.targetPlayerId ? getPlayer(room.targetPlayerId) : undefined;
   const matchReplay = buildMatchReplay(room, viewerKey);
   return {
@@ -325,7 +326,7 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
         connected: p.connected,
         score: p.score,
         guessCount: guesses.length,
-        guesses: viewerIsSpectator || p.key === viewerKey
+        guesses: viewerIsSpectator || roundIsComplete || p.key === viewerKey
           ? guesses.map(visibleGuess)
           : guesses.map(hiddenGuess),
       };

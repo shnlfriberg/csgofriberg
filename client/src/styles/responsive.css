@@ -5,13 +5,18 @@
 }
 
 @media (max-width: 960px) {
-  .boards { grid-template-columns: 1fr; }
-  .boards .player-board-opponent { order: 1; }
-  .boards .player-board-self { order: 2; }
   .lobby-grid { grid-template-columns: 1fr; grid-template-areas: none; max-width: 760px; }
   .lobby-grid > :nth-child(1),
   .lobby-grid > :nth-child(2),
   .lobby-grid > :nth-child(3) { grid-area: auto; }
+}
+
+/* 对战区左右分栏只在触屏窄幅时堆叠:桌面(细指针)即使高缩放/低分辨率
+   把视口压窄也保持左右布局,700px 以下实在放不下才堆叠 */
+@media (max-width: 960px) and (pointer: coarse), (max-width: 700px) {
+  .boards { grid-template-columns: 1fr; }
+  .boards .player-board-opponent { order: 1; }
+  .boards .player-board-self { order: 2; }
 }
 
 @media (max-width: 760px) {
@@ -28,7 +33,7 @@
 }
 
 @media (max-width: 640px) {
-  :root { --page-inline: 14px; }
+  :root { --page-inline: 0.875rem; }
   .player-stats-body { grid-template-columns: 1fr; }
   .player-stats-body section { padding: 20px 18px; }
   .player-stats-body section + section { border-top: 1px solid var(--border); border-left: 0; }
@@ -75,7 +80,7 @@
     width: 100%;
     min-width: 0;
     table-layout: fixed;
-    font-size: 0.66rem;
+    font-size: var(--fs-2xs);
   }
   .leaderboard-card table thead { display: table-header-group; }
   .leaderboard-card table tbody { display: table-row-group; }
@@ -94,7 +99,7 @@
   }
   .leaderboard-card table th {
     padding-block: 7px;
-    font-size: 0.55rem;
+    font-size: var(--fs-3xs);
     line-height: 1.15;
     white-space: normal;
     overflow-wrap: anywhere;
@@ -120,10 +125,10 @@
     min-width: 14px;
     height: 14px;
     padding-inline: 2px;
-    font-size: 0.52rem;
+    font-size: var(--fs-3xs);
   }
   .leaderboard-self-summary { flex-wrap: wrap; }
-  .leaderboard-mode-tabs button { padding-inline: 5px; font-size: 0.75rem; }
+  .leaderboard-mode-tabs button { padding-inline: 5px; font-size: var(--fs-xs); }
 
   .home-hero { padding: 34px 18px 28px; border-radius: 18px; }
   .home-hero h1 { font-size: 2.35rem; }
@@ -165,14 +170,14 @@
     min-width: 0;
     table-layout: fixed;
     border-spacing: 2px;
-    font-size: 0.64rem;
+    font-size: var(--fs-2xs);
   }
   .game-table thead { display: table-header-group; }
   .game-table tbody { display: table-row-group; }
   .game-table tr { display: table-row; }
   .game-table th {
     padding: 5px 1px;
-    font-size: 0.56rem;
+    font-size: var(--fs-3xs);
     line-height: 1.12;
     position: static;
   }
@@ -190,7 +195,7 @@
   .game-table td::before { content: none; }
   .game-table td .dir { margin-left: 1px; }
   .game-table td .dir svg { width: 9px; height: 9px; }
-  .boards .card { padding: 8px; }
+  .boards .card { padding: 0.5rem; }
   .input-dock { padding-block: 10px; }
   .input-bar { gap: 8px; }
   .input-bar .input { min-width: 0; font-size: 1rem; }
@@ -213,6 +218,9 @@
   .score-bar { gap: 10px; min-height: 68px; padding: 10px; }
   .score-bar .score { font-size: 1.55rem; }
   .score-bar .player-name { font-size: 0.9rem; }
+  .multi-inline-replay { gap: 8px; }
+  .multi-inline-replay-meta { flex-wrap: wrap; gap: 4px 8px; font-size: 0.88rem; }
+  .multi-inline-replay-meta > span:not(.badge) { flex-basis: 100%; }
   .status-bar > span { min-width: 0; overflow-wrap: anywhere; }
 
   .presence-grid { grid-template-columns: 1fr; gap: 10px; }
@@ -327,15 +335,15 @@
 }
 
 @media (max-width: 400px) {
-  :root { --page-inline: 10px; }
+  :root { --page-inline: 0.625rem; }
   .header-bar .title { max-width: calc(100vw - 120px); }
   .bottom-bar .btn { font-size: 0.88rem; }
   .menu-card { min-height: 102px; }
   .input-bar .btn { padding-inline: 10px; }
   .join-room-form .btn { padding-inline: 8px; }
   .score-bar .player-name svg { display: none; }
-  .game-table { border-spacing: 1px; font-size: 0.58rem; }
-  .game-table th { padding: 4px 0; font-size: 0.5rem; }
+  .game-table { border-spacing: 1px; }
+  .game-table th { padding: 4px 0; }
   .game-table td { padding: 5px 1px; }
   .game-table td .dir svg { width: 8px; height: 8px; }
   .overlay-card .btns,
