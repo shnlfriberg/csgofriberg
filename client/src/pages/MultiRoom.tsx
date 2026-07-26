@@ -26,18 +26,17 @@ import { getSocket } from '../api/socket';
 import { translate } from '../i18n/messages';
 import {
   MultiplayerGuessFeedback,
-  PlayerPerformanceStats,
   RoomPatch,
   RoomState,
   RoomPlayer,
 } from '../types';
 import { useConfirm } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
-import ModalPortal from '../components/ModalPortal';
 import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { difficultyLabel } from '../utils/difficulty';
 import ReplayDialog, { type MultiReplay } from '../components/ReplayDialog';
+import PlayerStatsDialog, { type PlayerStatsView } from '../components/PlayerStatsDialog';
 
 interface RoundOver {
   winnerKey: string | null;
@@ -122,74 +121,6 @@ const ROUND_OVER_REASON: Record<string, string> = {
   timeout: 'multi.roundReasons.timeout',
   surrender: 'multi.roundReasons.surrender',
 };
-
-interface PlayerStatsView {
-  playerKey: string;
-  displayId: string;
-  stats: PlayerPerformanceStats;
-}
-
-function formatWinRate(value: number): string {
-  return `${(value * 100).toFixed(1)}%`;
-}
-
-function PlayerStatsDialog({ view, onClose }: { view: PlayerStatsView; onClose: () => void }) {
-  const { t } = useTranslation();
-  const titleId = `player-stats-${view.playerKey.replace(/[^a-zA-Z0-9_-]/g, '-')}`;
-  useEffect(() => {
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = oldOverflow;
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [onClose]);
-
-  const { single, multi } = view.stats;
-  return (
-    <ModalPortal>
-      <div className="replay-backdrop" onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}>
-        <div className="replay-dialog player-stats-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-          <div className="replay-heading">
-            <div>
-              <h2 id={titleId}>{t('multi.playerStats')}</h2>
-              <p>{view.displayId}</p>
-            </div>
-            <button className="confirm-close" type="button" aria-label={t('multi.closeStats')} onClick={onClose}>
-              <X size={18} />
-            </button>
-          </div>
-          <div className="replay-dialog-body player-stats-body">
-            <section>
-              <h3>{t('multi.singleStats')}</h3>
-              <dl className="player-stats-list">
-                <div><dt>{t('multi.games')}</dt><dd>{single.games}</dd></div>
-                <div><dt>{t('multi.winsLosses')}</dt><dd>{single.wins} / {single.losses}</dd></div>
-                <div><dt>{t('multi.winRate')}</dt><dd>{formatWinRate(single.winRate)}</dd></div>
-                <div><dt>{t('multi.avgWinningGuesses')}</dt><dd>{single.avgGuesses?.toFixed(1) ?? '-'}</dd></div>
-                <div><dt>{t('multi.fastest')}</dt><dd>{single.bestGuesses ?? '-'}</dd></div>
-              </dl>
-            </section>
-            <section>
-              <h3>{t('multi.multiStats')}</h3>
-              <dl className="player-stats-list">
-                <div><dt>{t('multi.games')}</dt><dd>{multi.games}</dd></div>
-                <div><dt>{t('multi.winsLosses')}</dt><dd>{multi.wins} / {multi.losses}</dd></div>
-                <div><dt>{t('multi.winRate')}</dt><dd>{formatWinRate(multi.winRate)}</dd></div>
-              </dl>
-            </section>
-          </div>
-        </div>
-      </div>
-    </ModalPortal>
-  );
-}
 
 /** 使用浏览器单调时钟显示服务端校准后的截止时间。 */
 function Countdown({ deadline, onExpire }: { deadline: number | null; onExpire?: () => void }) {
@@ -751,7 +682,7 @@ export default function MultiRoom() {
         toast.error(translate('INTERNAL_ERROR'));
         return;
       }
-      setPlayerStats(res as PlayerStatsView);
+      setPlayerStats({ displayId: res.displayId, stats: res.stats });
     });
   };
 

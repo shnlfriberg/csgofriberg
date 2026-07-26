@@ -608,6 +608,8 @@
   animation: spin 0.7s linear infinite;
 }
 .player-stats-dialog { width: min(620px, 100%); }
+.player-stats-backdrop { z-index: 230; }
+.player-stats-dialog-body { padding: 0; }
 .player-stats-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

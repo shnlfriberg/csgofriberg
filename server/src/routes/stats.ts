@@ -6,6 +6,7 @@ import { asyncHandler, HttpError, validateParams, validateQuery } from '../middl
 import { cached } from '../services/queryCache';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getPlayer } from '../services/playerCache';
+import { getPlayerPerformance } from '../services/playerPerformance';
 import { GuessFeedback, Player } from '../types';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 
@@ -387,6 +388,47 @@ router.get(
       finishedAt: game.finished_at,
       answer: answerView(target),
       guesses,
+    });
+  })
+);
+
+/** 回放对手战绩。对手由当前身份参与的指定对局唯一确定。 */
+router.get(
+  '/matches/:id/opponent-stats',
+  rateLimit({
+    name: 'stats-opponent-performance',
+    limit: 30,
+    windowSeconds: 60,
+    key: requestIdentity,
+    failClosed: true,
+  }),
+  validateParams(replayIdParams),
+  asyncHandler(async (req, res) => {
+    const identityKey = identityKeyFor(req);
+    if (!identityKey) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
+    const { id } = req.params as unknown as z.infer<typeof replayIdParams>;
+
+    const opponent = await db('match_players as me')
+      .join('match_players as opponent', 'opponent.match_id', 'me.match_id')
+      .leftJoin('users as opponent_user', 'opponent_user.id', 'opponent.user_id')
+      .where('me.match_id', id)
+      .where('me.player_key', identityKey)
+      .whereNot('opponent.player_key', identityKey)
+      .first(
+        'opponent.player_key as key',
+        'opponent.player_name as name',
+        'opponent.user_id as userId',
+        'opponent_user.username'
+      );
+    if (!opponent) throw new HttpError(404, 'GAME_NOT_FOUND');
+
+    res.json({
+      displayId: identityDisplayId(opponent),
+      stats: await getPlayerPerformance({
+        key: String(opponent.key),
+        userId: opponent.userId == null ? null : Number(opponent.userId),
+        name: typeof opponent.name === 'string' ? opponent.name : '',
+      }),
     });
   })
 );

@@ -155,6 +155,7 @@
   margin: 0 0 10px;
   font-size: 0.94rem;
 }
+.replay-side h4 > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .replay-round-pagination {
   display: flex;
   align-items: center;

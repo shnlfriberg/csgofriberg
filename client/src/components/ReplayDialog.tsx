@@ -1,12 +1,13 @@
-import { useEffect, useId, useState } from 'react';
-import { ChevronLeft, ChevronRight, Swords, User, X } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { BarChart3, ChevronLeft, ChevronRight, Swords, User, X } from 'lucide-react';
 import Badge from './Badge';
 import GuessBoard from './GuessBoard';
 import { PlayerInfoTable } from './AnswerOverlay';
 import ModalPortal from './ModalPortal';
-import type { GuessFeedback, MatchReplay, MatchReplayRound, PlayerInfo } from '../types';
+import type { GuessFeedback, MatchReplay, MatchReplayRound, PlayerInfo, PlayerPerformanceStats } from '../types';
 import { useTranslation } from 'react-i18next';
 import { difficultyLabel } from '../utils/difficulty';
+import PlayerStatsDialog from './PlayerStatsDialog';
 
 export interface SingleReplay {
   type: 'single';
@@ -47,21 +48,41 @@ function AnswerSection({ answer }: { answer: PlayerInfo }) {
   );
 }
 
-export default function ReplayDialog({ replay, onClose }: { replay: Replay; onClose: () => void }) {
+interface ReplayDialogProps {
+  replay: Replay;
+  onClose: () => void;
+  opponentStats?: PlayerPerformanceStats | null;
+  opponentStatsLoading?: boolean;
+  onViewOpponentStats?: () => void;
+}
+
+export default function ReplayDialog({
+  replay,
+  onClose,
+  opponentStats = null,
+  opponentStatsLoading = false,
+  onViewOpponentStats,
+}: ReplayDialogProps) {
   const { t } = useTranslation();
   const titleId = useId();
   const [roundIndex, setRoundIndex] = useState(0);
+  const [showOpponentStats, setShowOpponentStats] = useState(false);
   const roundCount = replay.type === 'multi' ? replay.rounds.length : 0;
   const activeRound = replay.type === 'multi' ? replay.rounds[roundIndex] : null;
+  const opponentStatsOpen = Boolean(showOpponentStats && opponentStats && replay.type === 'multi');
+  const opponentStatsOpenRef = useRef(opponentStatsOpen);
+  opponentStatsOpenRef.current = opponentStatsOpen;
 
   useEffect(() => {
     setRoundIndex(0);
+    setShowOpponentStats(false);
   }, [replay.id, replay.type]);
 
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKeyDown = (event: KeyboardEvent) => {
+      if (opponentStatsOpenRef.current) return;
       if (event.key === 'Escape') onClose();
       if (replay.type === 'multi' && replay.rounds.length > 0 && event.key === 'ArrowLeft') {
         setRoundIndex((current) => Math.max(0, current - 1));
@@ -78,11 +99,18 @@ export default function ReplayDialog({ replay, onClose }: { replay: Replay; onCl
   }, [onClose, replay]);
 
   return (
-    <ModalPortal>
-      <div className="replay-backdrop" onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}>
-        <div className="replay-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <>
+      <ModalPortal>
+        <div className="replay-backdrop" onMouseDown={(event) => {
+          if (event.target === event.currentTarget) onClose();
+        }}>
+          <div
+            className="replay-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={titleId}
+            aria-hidden={opponentStatsOpen || undefined}
+          >
           <div className="replay-heading">
             <div>
               <h2 id={titleId}>{replay.type === 'single' ? t('replay.singleTitle') : t('replay.multiTitle')}</h2>
@@ -137,7 +165,25 @@ export default function ReplayDialog({ replay, onClose }: { replay: Replay; onCl
                           : <p className="muted">{t('replay.noRoundGuesses')}</p>}
                       </div>
                       <div className="replay-side">
-                        <h4><Swords size={15} />{replay.opponent.displayId}</h4>
+                        <h4>
+                          <Swords size={15} />
+                          <span>{replay.opponent.displayId}</span>
+                          {onViewOpponentStats && (
+                            <button
+                              type="button"
+                              className="player-stats-trigger"
+                              aria-label={t('multi.viewPlayerStats', { player: replay.opponent.displayId })}
+                              title={t('multi.viewStats')}
+                              disabled={opponentStatsLoading}
+                              onClick={() => {
+                                setShowOpponentStats(true);
+                                if (!opponentStats) onViewOpponentStats();
+                              }}
+                            >
+                              {opponentStatsLoading ? <span className="player-stats-spinner" /> : <BarChart3 size={16} />}
+                            </button>
+                          )}
+                        </h4>
                         {activeRound.opponent.guesses.length
                           ? <GuessBoard guesses={activeRound.opponent.guesses} />
                           : <p className="muted">{t('replay.noRoundGuesses')}</p>}
@@ -159,8 +205,15 @@ export default function ReplayDialog({ replay, onClose }: { replay: Replay; onCl
               </div>
             )}
           </div>
+          </div>
         </div>
-      </div>
-    </ModalPortal>
+      </ModalPortal>
+      {opponentStatsOpen && opponentStats && replay.type === 'multi' && (
+        <PlayerStatsDialog
+          view={{ displayId: replay.opponent.displayId, stats: opponentStats }}
+          onClose={() => setShowOpponentStats(false)}
+        />
+      )}
+    </>
   );
 }

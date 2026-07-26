@@ -157,6 +157,26 @@ describe('stats and replay', () => {
       expect(multiReplay.data.rounds[0].opponent.guesses[0].playerId).toBe(otherPlayer.id);
       expect(multiReplay.data.opponent.displayId).toBe(guestNameFromKey(otherKey));
 
+      const opponentStats = await request(
+        `/api/stats/matches/${matchId}/opponent-stats`,
+        guestCookie(ownerKey)
+      );
+      expect(opponentStats.response.status).toBe(200);
+      expect(opponentStats.data).toEqual({
+        displayId: guestNameFromKey(otherKey),
+        stats: {
+          single: {
+            games: 0,
+            wins: 0,
+            losses: 0,
+            winRate: 0,
+            avgGuesses: null,
+            bestGuesses: null,
+          },
+          multi: { games: 1, wins: 0, losses: 1, winRate: 0 },
+        },
+      });
+
       const forbidden = await request(`/api/stats/games/${gameId}/replay`, guestCookie(otherKey));
       expect(forbidden.response.status).toBe(404);
       expect(forbidden.data.code).toBe('GAME_NOT_FOUND');
@@ -164,6 +184,13 @@ describe('stats and replay', () => {
       const forbiddenMulti = await request(`/api/stats/matches/${matchId}/replay`, guestCookie(`third-${stamp}`));
       expect(forbiddenMulti.response.status).toBe(404);
       expect(forbiddenMulti.data.code).toBe('GAME_NOT_FOUND');
+
+      const forbiddenStats = await request(
+        `/api/stats/matches/${matchId}/opponent-stats`,
+        guestCookie(`third-${stamp}`)
+      );
+      expect(forbiddenStats.response.status).toBe(404);
+      expect(forbiddenStats.data.code).toBe('GAME_NOT_FOUND');
     } finally {
       await db('games').where({ session_id: sessionId }).del();
       await db('match_records').where({ id: matchId }).del();

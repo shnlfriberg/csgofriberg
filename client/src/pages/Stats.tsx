@@ -9,6 +9,7 @@ import ReplayDialog, { type MultiReplay, type Replay, type SingleReplay } from '
 import { useTranslation } from 'react-i18next';
 import { difficultyLabel } from '../utils/difficulty';
 import { currentLocale } from '../i18n';
+import type { PlayerPerformanceStats } from '../types';
 
 interface SingleStats {
   totalGames: number;
@@ -85,6 +86,8 @@ export default function Stats() {
   const [loading, setLoading] = useState(false);
   const [replay, setReplay] = useState<Replay | null>(null);
   const [replayLoadingId, setReplayLoadingId] = useState<number | null>(null);
+  const [opponentStats, setOpponentStats] = useState<PlayerPerformanceStats | null>(null);
+  const [opponentStatsLoading, setOpponentStatsLoading] = useState(false);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -120,6 +123,7 @@ export default function Stats() {
 
   const openReplay = async (item: SingleReplayItem | MultiReplayItem) => {
     setReplayLoadingId(item.id);
+    setOpponentStats(null);
     try {
       if (item.type === 'single') {
         const res = await api.get<Omit<SingleReplay, 'type'>>(`/stats/games/${item.id}/replay`);
@@ -132,6 +136,21 @@ export default function Stats() {
       toast.error(errMsg(err));
     } finally {
       setReplayLoadingId(null);
+    }
+  };
+
+  const loadOpponentStats = async () => {
+    if (replay?.type !== 'multi' || opponentStatsLoading) return;
+    setOpponentStatsLoading(true);
+    try {
+      const res = await api.get<{ displayId: string; stats: PlayerPerformanceStats }>(
+        `/stats/matches/${replay.id}/opponent-stats`
+      );
+      setOpponentStats(res.data.stats);
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setOpponentStatsLoading(false);
     }
   };
 
@@ -280,7 +299,18 @@ export default function Stats() {
           </div>
         </section>
       </div>
-      {replay && <ReplayDialog replay={replay} onClose={() => setReplay(null)} />}
+      {replay && (
+        <ReplayDialog
+          replay={replay}
+          opponentStats={opponentStats}
+          opponentStatsLoading={opponentStatsLoading}
+          onViewOpponentStats={replay.type === 'multi' ? () => void loadOpponentStats() : undefined}
+          onClose={() => {
+            setReplay(null);
+            setOpponentStats(null);
+          }}
+        />
+      )}
     </Page>
   );
 }
