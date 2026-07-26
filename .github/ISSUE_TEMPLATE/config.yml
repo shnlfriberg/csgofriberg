@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 选手数据纠错 / 新增选手
+    url: https://github.com/shnlfriberg/csgo-major-db/issues/new/choose
+    about: 选手信息有误或缺失请到数据仓库反馈,那里有专门的表单模板。

@@ -94,6 +94,8 @@
 }
 .btn-bilibili { background: #00aeec; }
 .btn-bilibili:hover { background: #0096cc; }
+.btn-github { background: #24292f; }
+.btn-github:hover { background: #3a4149; }
 
 .single-lobby-subtitle { margin: 0 0 4px; }
 .single-difficulty-grid {

@@ -1,0 +1,48 @@
+name: 问题反馈
+description: 报告游戏功能、界面或服务异常
+title: '[Bug] '
+labels: [bug]
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题范围
+      options:
+        - 单人模式
+        - 多人对战 / 房间
+        - 排行榜 / 统计 / 回放
+        - 登录 / 账号
+        - 界面 / 样式 / 主题
+        - 其他
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: 问题描述
+      description: 发生了什么？预期应该是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 进入多人大厅
+        2. 创建 BO3 房间
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 环境
+      description: 浏览器与设备（以及使用的主题、语言）
+      placeholder: Chrome 138 / Windows 11 / 暗色主题 / 中文
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 截图、控制台报错、房间号、大致发生时间等（有助于排查）

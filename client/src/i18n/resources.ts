@@ -56,6 +56,7 @@ export const resources = {
         leaderboard: '排行榜',
         announcements: '更新公告',
         bilibili: 'B站：怂皇的一天',
+        github: 'GitHub',
       },
       rules: {
         trigger: '游戏规则',
@@ -248,7 +249,7 @@ export const resources = {
         logoutMessage: 'You will switch to a guest session and any active multiplayer connection will be closed.', logoutConfirm: 'Log out',
         loginRegister: 'Log in / Sign up', singleMode: 'Solo mode', singleModeDescription: 'Choose a difficulty before starting a solo game',
         search: 'Player search', searchDescription: 'Teams, countries or regions, and Major history', multiplayer: 'Multiplayer',
-        multiplayerDescription: 'Create a room or find a match', stats: 'Stats', leaderboard: 'Leaderboard', announcements: 'Updates', bilibili: 'Bilibili: 怂皇的一天',
+        multiplayerDescription: 'Create a room or find a match', stats: 'Stats', leaderboard: 'Leaderboard', announcements: 'Updates', bilibili: 'Bilibili: 怂皇的一天', github: 'GitHub',
       },
       rules: {
         trigger: 'Game Rules', title: 'Game Rules', description: 'Use color and arrow feedback from each guess to identify the randomly selected pro player.',
@@ -404,7 +405,7 @@ export const resources = {
         restoring: 'ログイン状態を復元中', admin: '管理者', adminPanel: '管理画面', manage: '管理', logout: 'ログアウト', logoutTitle: 'ログアウトしますか？',
         logoutMessage: 'ゲスト状態に切り替わり、進行中のマルチプレイ接続は終了します。', logoutConfirm: 'ログアウト', loginRegister: 'ログイン / 登録', singleMode: 'ソロモード', singleModeDescription: '難易度を選んでソロゲームを開始',
         search: '選手検索', searchDescription: 'チーム、国・地域、Major 経歴',
-        multiplayer: 'マルチプレイ', multiplayerDescription: 'ルーム作成またはランダムマッチ', stats: '統計', leaderboard: 'ランキング', announcements: '更新情報', bilibili: 'Bilibili：怂皇的一天',
+        multiplayer: 'マルチプレイ', multiplayerDescription: 'ルーム作成またはランダムマッチ', stats: '統計', leaderboard: 'ランキング', announcements: '更新情報', bilibili: 'Bilibili：怂皇的一天', github: 'GitHub',
       },
       rules: {
         trigger: 'ゲームルール', title: 'ゲームルール', description: '各予想の色と矢印のヒントを使い、ランダムに選ばれたプロ選手を当てます。',

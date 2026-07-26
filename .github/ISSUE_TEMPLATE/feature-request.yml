@@ -1,0 +1,23 @@
+name: 功能建议
+description: 提议新功能或现有功能的改进
+title: '[建议] '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 当前缺少什么，或哪里用起来不顺？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 期望的方案
+      description: 你希望它是什么样的？
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 其他可选方案或补充说明

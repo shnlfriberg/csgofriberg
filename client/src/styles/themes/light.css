@@ -181,6 +181,8 @@ html:not([data-theme='blast']) .btn-accent { background: var(--accent); color: #
 html:not([data-theme='blast']) .btn-accent:hover:not(:disabled) { background: #5a39c2; color: #fff; }
 html:not([data-theme='blast']) .btn-bilibili { background: #00aeec; color: #fff; }
 html:not([data-theme='blast']) .btn-bilibili:hover:not(:disabled) { background: #0096cc; color: #fff; }
+html:not([data-theme='blast']) .btn-github { background: #24292f; color: #fff; }
+html:not([data-theme='blast']) .btn-github:hover:not(:disabled) { background: #3a4149; color: #fff; }
 
 html:not([data-theme='blast']) .btn:focus-visible,
 html:not([data-theme='blast']) .input:focus-visible,
