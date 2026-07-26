@@ -49,15 +49,19 @@ body {
   min-height: 100dvh;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
     'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  color: var(--text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 浅色底纹只在非 blast 下生效:blast 用户在深色样式表到达前保持 html 内联深底,不闪白 */
+html:not([data-theme='blast']) body {
   background:
     radial-gradient(circle at 10% -6%, rgba(201, 234, 22, 0.13), transparent 30rem),
     radial-gradient(circle at 94% 4%, rgba(106, 72, 215, 0.07), transparent 26rem),
     repeating-linear-gradient(118deg, transparent 0 92px, rgba(32, 17, 24, 0.016) 92px 93px),
     var(--bg);
-  color: var(--text);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  text-rendering: optimizeLegibility;
 }
 
 button, input, select, textarea { font: inherit; }
