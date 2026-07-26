@@ -524,6 +524,29 @@
 .join-room-form { display: grid; grid-template-columns: minmax(0, 180px) auto auto; gap: 10px; align-items: center; }
 .join-room-form .input { max-width: none !important; }
 .room-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.room-code-wrap { position: relative; display: inline-flex; }
+/* 小屏下按钮内的房间号被隐藏,改由按钮下方弹出气泡展示 */
+.room-code-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  display: none;
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  font-family: Consolas, 'JetBrains Mono', monospace;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  white-space: nowrap;
+  user-select: all;
+}
+@media (max-width: 520px) {
+  .room-code-pop { display: block; }
+}
 .room-code-toggle {
   display: inline-flex;
   align-items: center;

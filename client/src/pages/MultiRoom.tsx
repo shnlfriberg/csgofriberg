@@ -742,17 +742,20 @@ export default function MultiRoom() {
       icon={<Globe size={17} />}
       actions={
         <div className="room-actions">
-          <button
-            type="button"
-            className="room-code-toggle"
-            onClick={() => setShowRoomCode((visible) => !visible)}
-            title={showRoomCode ? t('multi.hideRoomCode') : t('multi.showRoomCode')}
-            aria-label={showRoomCode ? t('multi.hideRoomCode') : t('multi.showRoomCode')}
-            aria-pressed={showRoomCode}
-          >
-            {showRoomCode ? <EyeOff size={15} /> : <Eye size={15} />}
-            <span>{showRoomCode ? room.id : '•••••'}</span>
-          </button>
+          <span className="room-code-wrap">
+            <button
+              type="button"
+              className="room-code-toggle"
+              onClick={() => setShowRoomCode((visible) => !visible)}
+              title={showRoomCode ? t('multi.hideRoomCode') : t('multi.showRoomCode')}
+              aria-label={showRoomCode ? t('multi.hideRoomCode') : t('multi.showRoomCode')}
+              aria-pressed={showRoomCode}
+            >
+              {showRoomCode ? <EyeOff size={15} /> : <Eye size={15} />}
+              <span>{showRoomCode ? room.id : '•••••'}</span>
+            </button>
+            {showRoomCode && <span className="room-code-pop">{room.id}</span>}
+          </span>
           <button
             className="btn btn-danger btn-sm"
             aria-label={isSpectator ? t('multi.exitSpectating') : t('multi.leaveRoom')}
