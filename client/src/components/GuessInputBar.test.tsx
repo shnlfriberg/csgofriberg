@@ -109,4 +109,28 @@ describe('GuessInputBar', () => {
     expect(screen.getByText('s1mple')).toBeInTheDocument();
     expect(input).toHaveAttribute('aria-expanded', 'true');
   });
+
+  it('cycles completion with Tab and reverses with Shift+Tab', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<GuessInputBar onPick={vi.fn()} />);
+
+    const input = screen.getByPlaceholderText('输入选手昵称...');
+    await user.type(input, 's1');
+    act(() => {
+      playerListListener?.([
+        { id: 1, nickname: 's1mple' },
+        { id: 3, nickname: 's1ren' },
+      ]);
+    });
+
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(input).toHaveValue('s1mple');
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+
+    fireEvent.keyDown(input, { key: 'Tab' });
+    expect(input).toHaveValue('s1ren');
+
+    fireEvent.keyDown(input, { key: 'Tab', shiftKey: true });
+    expect(input).toHaveValue('s1mple');
+  });
 });

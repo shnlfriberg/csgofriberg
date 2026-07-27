@@ -12,6 +12,18 @@ interface CachedPlayerList {
 
 const STORAGE_KEY = 'player-list-v1';
 const REVALIDATE_INTERVAL_MS = 30_000;
+const LEET_EQUIVALENTS: Record<string, string> = {
+  '0': 'o',
+  '1': 'i',
+  '2': 'z',
+  '3': 'e',
+  '4': 'a',
+  '5': 's',
+  '6': 'g',
+  '7': 't',
+  '8': 'b',
+  '9': 'g',
+};
 let memory: CachedPlayerList | null = null;
 let loading: Promise<PlayerSuggestion[]> | null = null;
 let validatedAt: number | null = null;
@@ -115,16 +127,34 @@ export function clearPlayerListCache(): void {
   removeStored();
 }
 
+function normalizeSearch(value: string): string {
+  return value.trim().toLocaleLowerCase('en-US');
+}
+
+function normalizeLeet(value: string): string {
+  return normalizeSearch(value).replace(/[0-9]/g, (character) => LEET_EQUIVALENTS[character]);
+}
+
+function matchScore(nickname: string, query: string, leetQuery: string): number {
+  const name = normalizeSearch(nickname);
+  const leetName = normalizeLeet(nickname);
+  if (name === query) return 0;
+  if (leetName === leetQuery) return 1;
+  if (name.startsWith(query)) return 2;
+  if (leetName.startsWith(leetQuery)) return 3;
+  if (name.includes(query)) return 4;
+  if (leetName.includes(leetQuery)) return 5;
+  return Number.POSITIVE_INFINITY;
+}
+
 export function searchPlayerList(players: PlayerSuggestion[], query: string): PlayerSuggestion[] {
-  const normalized = query.trim().toLocaleLowerCase();
+  const normalized = normalizeSearch(query);
   if (!normalized) return [];
+  const leetQuery = normalizeLeet(query);
   return players
-    .filter((player) => player.nickname.toLocaleLowerCase().includes(normalized))
-    .sort((a, b) => {
-      const aName = a.nickname.toLocaleLowerCase();
-      const bName = b.nickname.toLocaleLowerCase();
-      return Number(bName.startsWith(normalized)) - Number(aName.startsWith(normalized)) ||
-        a.nickname.localeCompare(b.nickname);
-    })
+    .map((player) => ({ player, score: matchScore(player.nickname, normalized, leetQuery) }))
+    .filter((entry) => Number.isFinite(entry.score))
+    .sort((a, b) => a.score - b.score || a.player.nickname.localeCompare(b.player.nickname))
+    .map((entry) => entry.player)
     .slice(0, 10);
 }

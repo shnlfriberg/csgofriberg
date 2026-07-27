@@ -3,6 +3,7 @@ import { api } from './client';
 import {
   clearPlayerListCache,
   getPlayerList,
+  searchPlayerList,
   subscribePlayerList,
 } from './playerList';
 
@@ -51,5 +52,22 @@ describe('playerList cache', () => {
     await expect(getPlayerList()).resolves.toEqual(updated);
 
     unsubscribe();
+  });
+
+  it('matches leet nicknames while keeping direct matches ahead of equivalents', () => {
+    const players = [
+      { id: 1, nickname: 's1mple' },
+      { id: 2, nickname: 'simplex' },
+      { id: 3, nickname: 'B1t' },
+      { id: 4, nickname: 'bitwise' },
+      { id: 5, nickname: 'f0rest' },
+    ];
+
+    expect(searchPlayerList(players, 'simple').map((player) => player.nickname))
+      .toEqual(['s1mple', 'simplex']);
+    expect(searchPlayerList(players, 'bit').map((player) => player.nickname))
+      .toEqual(['B1t', 'bitwise']);
+    expect(searchPlayerList(players, 'forest').map((player) => player.nickname))
+      .toEqual(['f0rest']);
   });
 });
