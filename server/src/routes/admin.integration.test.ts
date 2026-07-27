@@ -18,8 +18,19 @@ function authCookie(user: { id: number; token_version: number }): string {
   return `csgofriberg_session=${signToken(user)}`;
 }
 
-async function request(path: string, cookie: string) {
-  const response = await fetch(`${baseUrl}${path}`, { headers: { Cookie: cookie } });
+async function request(
+  path: string,
+  cookie: string,
+  options: { method?: string; body?: unknown } = {}
+) {
+  const response = await fetch(`${baseUrl}${path}`, {
+    method: options.method,
+    headers: {
+      Cookie: cookie,
+      ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+  });
   return { response, data: await response.json() };
 }
 
@@ -146,9 +157,27 @@ describe('admin user management', () => {
           username,
           displayId,
           role: 'user',
+          leaderboardHidden: false,
           createdAt: expect.any(String),
         }),
       ]);
+
+      const hidden = await request(
+        `/api/admin/users/${targetUser.id}/leaderboard-visibility`,
+        adminSession,
+        { method: 'PATCH', body: { hidden: true } }
+      );
+      expect(hidden.response.status).toBe(200);
+      expect(hidden.data).toEqual({ id: Number(targetUser.id), leaderboardHidden: true });
+      expect(Boolean((await db('users').where({ id: targetUser.id }).first()).leaderboard_hidden)).toBe(true);
+
+      const invalidVisibility = await request(
+        `/api/admin/users/${targetUser.id}/leaderboard-visibility`,
+        adminSession,
+        { method: 'PATCH', body: { hidden: 'yes' } }
+      );
+      expect(invalidVisibility.response.status).toBe(400);
+      expect(invalidVisibility.data).toEqual({ code: 'VALIDATION_FAILED' });
 
       const stats = await request(`/api/admin/users/${targetUser.id}/stats`, adminSession);
       expect(stats.response.status).toBe(200);
@@ -208,6 +237,13 @@ describe('admin user management', () => {
       const forbidden = await request(`/api/admin/users/${targetUser.id}/stats`, authCookie(targetUser));
       expect(forbidden.response.status).toBe(403);
       expect(forbidden.data).toEqual({ code: 'FORBIDDEN' });
+
+      const restored = await request(
+        `/api/admin/users/${targetUser.id}/leaderboard-visibility`,
+        adminSession,
+        { method: 'PATCH', body: { hidden: false } }
+      );
+      expect(restored.data.leaderboardHidden).toBe(false);
     } finally {
       await db('games').where('session_id', 'like', `${sessionPrefix}%`).del();
       await db('match_records').where('room_id', 'like', `${matchPrefix}%`).del();

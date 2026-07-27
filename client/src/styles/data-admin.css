@@ -275,6 +275,18 @@
 .admin-users-table table td { text-align: center; vertical-align: middle; }
 .admin-user-actions { display: flex; justify-content: center; gap: 6px; min-width: 230px; }
 .admin-user-actions .btn { min-height: 32px; padding: 6px 10px; white-space: nowrap; }
+.admin-user-leaderboard-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.admin-user-leaderboard-toggle:has(input:disabled) { cursor: default; opacity: 0.58; }
 .admin-players-header {
   display: flex;
   align-items: center;

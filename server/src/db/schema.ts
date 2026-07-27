@@ -107,6 +107,7 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('password_hash', 128).notNullable();
       t.string('role', 16).notNullable().defaultTo('user');
       t.integer('token_version').notNullable().defaultTo(0);
+      t.boolean('leaderboard_hidden').notNullable().defaultTo(false);
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
     });
   }
@@ -115,6 +116,11 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   }
   if (!(await instance.schema.hasColumn('users', 'display_id'))) {
     await instance.schema.alterTable('users', (t) => t.string('display_id', 8).nullable());
+  }
+  if (!(await instance.schema.hasColumn('users', 'leaderboard_hidden'))) {
+    await instance.schema.alterTable('users', (t) => {
+      t.boolean('leaderboard_hidden').notNullable().defaultTo(false);
+    });
   }
   await backfillUserDisplayIds(instance);
   const usersIndexConcurrently = instance.client.config.client === 'pg' ? ' concurrently' : '';

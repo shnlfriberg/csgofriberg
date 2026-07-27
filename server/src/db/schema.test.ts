@@ -59,6 +59,7 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasColumn('match_records', 'forfeited_key')).toBe(true);
     expect(await instance.schema.hasColumn('games', 'first_guess_player_id')).toBe(true);
     expect(await instance.schema.hasColumn('users', 'display_id')).toBe(true);
+    expect(await instance.schema.hasColumn('users', 'leaderboard_hidden')).toBe(true);
     expect(await instance.schema.hasTable('api_tokens')).toBe(true);
     expect(await instance.schema.hasColumn('api_tokens', 'token_hash')).toBe(true);
     expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);

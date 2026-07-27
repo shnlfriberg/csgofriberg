@@ -32,6 +32,7 @@ import {
   updatePlayer,
 } from '../services/playerMutations';
 import { createApiToken, listApiTokens, revokeApiToken } from '../services/apiTokens';
+import { DIFFICULTY_LEVELS } from '../difficulties';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -79,6 +80,7 @@ const userGameListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(5).max(30).default(10),
 });
 const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
+const userLeaderboardVisibilitySchema = z.object({ hidden: z.boolean() });
 const apiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(64),
   expiresInDays: z.number().int().min(1).max(365).default(90),
@@ -153,7 +155,7 @@ router.get(
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(parsed.page, totalPages);
     const users = await query.clone()
-      .select('id', 'username', 'display_id', 'role', 'created_at')
+      .select('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'created_at')
       .orderBy('created_at', 'desc')
       .orderBy('id', 'desc')
       .limit(pageSize)
@@ -164,6 +166,7 @@ router.get(
         username: user.username,
         displayId: user.display_id || userNameFromUsername(user.username),
         role: user.role,
+        leaderboardHidden: Boolean(user.leaderboard_hidden),
         createdAt: user.created_at,
       })),
       total,
@@ -182,7 +185,7 @@ router.get(
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const user = await db('users')
       .where({ id })
-      .first('id', 'username', 'display_id', 'role', 'created_at');
+      .first('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'created_at');
     if (!user) throw new HttpError(404, 'USER_NOT_FOUND');
     res.json({
       user: {
@@ -190,6 +193,7 @@ router.get(
         username: user.username,
         displayId: user.display_id || userNameFromUsername(user.username),
         role: user.role,
+        leaderboardHidden: Boolean(user.leaderboard_hidden),
         createdAt: user.created_at,
       },
       stats: await getPlayerPerformance({
@@ -504,6 +508,24 @@ router.post(
   validateBody(playerImportSchema),
   asyncHandler(async (req, res) => {
     res.json(await importPlayers(req.body.players));
+  })
+);
+
+router.patch(
+  '/users/:id/leaderboard-visibility',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  validateBody(userLeaderboardVisibilitySchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const { hidden } = req.body as z.infer<typeof userLeaderboardVisibilitySchema>;
+    const updated = await db('users').where({ id }).update({ leaderboard_hidden: hidden });
+    if (!updated) throw new HttpError(404, 'USER_NOT_FOUND');
+    await invalidateCached(
+      ...DIFFICULTY_LEVELS.map((difficulty) => `leaderboard:${difficulty.key}`),
+      'leaderboard:multi'
+    );
+    res.json({ id, leaderboardHidden: hidden });
   })
 );
 

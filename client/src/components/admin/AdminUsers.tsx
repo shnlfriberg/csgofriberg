@@ -20,6 +20,7 @@ interface AdminUser {
   username: string;
   displayId: string;
   role: 'user' | 'admin';
+  leaderboardHidden: boolean;
   createdAt: string;
 }
 
@@ -294,6 +295,7 @@ export default function AdminUsers() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [statsLoadingId, setStatsLoadingId] = useState<number | null>(null);
+  const [visibilityUpdatingId, setVisibilityUpdatingId] = useState<number | null>(null);
   const [statsView, setStatsView] = useState<UserStatsView | null>(null);
   const [gamesUser, setGamesUser] = useState<AdminUser | null>(null);
   const requestId = useRef(0);
@@ -341,10 +343,39 @@ export default function AdminUsers() {
     }
   };
 
+  const updateLeaderboardVisibility = async (user: AdminUser, hidden: boolean) => {
+    if (visibilityUpdatingId !== null) return;
+    setVisibilityUpdatingId(user.id);
+    try {
+      await api.patch(`/admin/users/${user.id}/leaderboard-visibility`, { hidden });
+      setUsers((current) => current.map((item) => item.id === user.id
+        ? { ...item, leaderboardHidden: hidden }
+        : item));
+      setStatsView((current) => current?.user.id === user.id
+        ? { ...current, user: { ...current.user, leaderboardHidden: hidden } }
+        : current);
+      toast.success(hidden ? t('admin.leaderboardHiddenSuccess') : t('admin.leaderboardVisibleSuccess'));
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setVisibilityUpdatingId(null);
+    }
+  };
+
   const columns: Column<AdminUser>[] = [
     { key: 'username', title: t('admin.username') },
     { key: 'displayId', title: t('admin.anonymousId') },
     { key: 'role', title: t('admin.permission'), render: (user) => user.role === 'admin' ? t('admin.adminRole') : t('admin.userRole') },
+    {
+      key: 'leaderboardHidden',
+      title: t('admin.leaderboardStatus'),
+      render: (user) => (
+        <Badge
+          text={user.leaderboardHidden ? t('admin.leaderboardHidden') : t('admin.leaderboardVisible')}
+          color={user.leaderboardHidden ? 'gray' : 'green'}
+        />
+      ),
+    },
     { key: 'createdAt', title: t('admin.createdAt'), render: (user) => formatDate(user.createdAt) },
     {
       key: 'actions',
@@ -364,6 +395,18 @@ export default function AdminUsers() {
             <History size={15} />
             {t('admin.gameRecords')}
           </button>
+          <label className="admin-user-leaderboard-toggle">
+            <input
+              type="checkbox"
+              checked={user.leaderboardHidden}
+              disabled={visibilityUpdatingId !== null}
+              aria-label={user.leaderboardHidden
+                ? t('admin.showUserOnLeaderboard', { user: user.username })
+                : t('admin.hideUserFromLeaderboard', { user: user.username })}
+              onChange={(event) => void updateLeaderboardVisibility(user, event.target.checked)}
+            />
+            <span>{user.leaderboardHidden ? t('admin.showOnLeaderboard') : t('admin.hideFromLeaderboard')}</span>
+          </label>
         </span>
       ),
     },

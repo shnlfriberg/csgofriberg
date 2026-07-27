@@ -196,6 +196,21 @@ describe('leaderboard', () => {
         rank: expect.any(Number),
       });
 
+      await db('users').where({ id: userIds[0] }).update({ leaderboard_hidden: true });
+      await invalidateCached('leaderboard:beginner', 'leaderboard:easy', 'leaderboard:normal', 'leaderboard:multi');
+      for (const hiddenType of ['beginner', 'easy', 'normal', 'multi']) {
+        const hiddenResponse = await fetch(`${baseUrl}/api/leaderboard?type=${hiddenType}`, {
+          headers: { Cookie: `csgofriberg_session=${token}` },
+        });
+        const hiddenData = await hiddenResponse.json();
+        expect(hiddenResponse.status).toBe(200);
+        expect(hiddenData.items.some((row: any) => row.id === userIds[0])).toBe(false);
+        expect(hiddenData.currentUser).toEqual({
+          displayId: userNameFromUsername(users[0].username),
+          rank: null,
+        });
+      }
+
       const invalidResponse = await fetch(`${baseUrl}/api/leaderboard?type=unknown`);
       expect(invalidResponse.status).toBe(400);
     } finally {
