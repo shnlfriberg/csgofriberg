@@ -28,7 +28,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'replay',
   ],
   match_players: ['id', 'match_id', 'player_key', 'is_winner'],
-  announcements: ['id', 'title', 'content'],
+  announcements: ['id', 'title', 'content', 'is_popup'],
 };
 
 /** Applications only verify the migrated schema; DDL remains owned by the migrate service. */

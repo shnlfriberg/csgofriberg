@@ -420,7 +420,13 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.increments('id').primary();
       t.string('title', 128).notNullable();
       t.text('content').notNullable();
+      t.boolean('is_popup').notNullable().defaultTo(false);
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+  }
+  if (!(await instance.schema.hasColumn('announcements', 'is_popup'))) {
+    await instance.schema.alterTable('announcements', (t) => {
+      t.boolean('is_popup').notNullable().defaultTo(false);
     });
   }
 }

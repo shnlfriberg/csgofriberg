@@ -395,6 +395,15 @@
 .admin-announcements-card > h3 { justify-content: center; text-align: center; }
 .admin-announcement-form { display: flex; flex-direction: column; gap: 8px; }
 .admin-announcement-form > .btn { width: fit-content; align-self: center; margin-top: 4px; }
+.admin-announcement-option {
+  display: inline-flex;
+  align-items: center;
+  align-self: center;
+  gap: 8px;
+  color: var(--text-sec);
+  cursor: pointer;
+}
+.admin-announcement-option input { width: 17px; height: 17px; margin: 0; accent-color: var(--primary); }
 .admin-announcement-list { margin-top: 12px; }
 .admin-announcement-row {
   display: flex;

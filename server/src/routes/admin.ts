@@ -543,6 +543,7 @@ router.delete(
 const announcementSchema = z.object({
   title: z.string().trim().min(1).max(128),
   content: z.string().trim().min(1).max(10000),
+  is_popup: z.boolean().default(false),
 });
 
 router.post(

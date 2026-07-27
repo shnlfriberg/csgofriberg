@@ -327,6 +327,7 @@
   .admin-announcement-row > .btn { align-self: flex-end; }
   .overlay-card .btns,
   .confirm-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .announcement-popup-actions { display: flex; }
   .overlay-card .btns .btn,
   .confirm-actions .btn { width: 100%; }
   .room-player-row { flex-wrap: wrap; }
@@ -387,6 +388,7 @@
   .game-table td .dir svg { width: 8px; height: 8px; }
   .overlay-card .btns,
   .confirm-actions { grid-template-columns: 1fr; }
+  .announcement-popup-actions .btn { width: 100%; }
   .room-ready-actions { flex-direction: column; }
   .room-waiting-card .room-ready-actions {
     flex-direction: row;

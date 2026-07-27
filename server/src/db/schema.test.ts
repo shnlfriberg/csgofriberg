@@ -60,6 +60,7 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasColumn('users', 'display_id')).toBe(true);
     expect(await instance.schema.hasTable('api_tokens')).toBe(true);
     expect(await instance.schema.hasColumn('api_tokens', 'token_hash')).toBe(true);
+    expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
     const player = await instance('players').where({ nickname: 'legacy' }).first();
     expect(player.age).toBe(new Date().getFullYear() - 1990);
     expect((await instance('players').columnInfo('age')).nullable).toBe(false);
@@ -96,5 +97,26 @@ describe('player schema migration', () => {
     await ensureSchema(instance);
     const user = await instance('users').where({ username: 'legacy-user' }).first();
     expect(user.display_id).toBe(userNameFromUsername('legacy-user'));
+  });
+
+  it('adds the popup flag to an existing announcements table', async () => {
+    const instance = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+    });
+    instances.push(instance);
+    await instance.schema.createTable('announcements', (table) => {
+      table.increments('id').primary();
+      table.string('title', 128).notNullable();
+      table.text('content').notNullable();
+      table.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+    await instance('announcements').insert({ title: 'legacy', content: 'content' });
+
+    await ensureSchema(instance);
+
+    expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
+    expect((await instance('announcements').where({ title: 'legacy' }).first()).is_popup).toBe(0);
   });
 });

@@ -8,6 +8,7 @@ import { ensurePow } from './api/pow';
 import { initializeTheme } from './store/theme';
 import ResourceUpdateDialog from './components/ResourceUpdateDialog';
 import ToastViewport from './components/Toast';
+import AnnouncementDialog from './components/AnnouncementDialog';
 import './i18n';
 
 localStorage.removeItem('token');
@@ -51,6 +52,7 @@ void stylesheetsReady().then(() => {
       <ConfirmProvider>
         <RouterProvider router={router} />
         <ResourceUpdateDialog />
+        <AnnouncementDialog />
         <ToastViewport />
       </ConfirmProvider>
     </React.StrictMode>

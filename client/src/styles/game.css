@@ -343,6 +343,14 @@
 .confirm-content > p { margin: 10px 0 20px; color: var(--text-sec); line-height: 1.6; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .confirm-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
+.announcement-popup-dialog { width: min(560px, 100%); }
+.confirm-content > .announcement-popup-content {
+  max-height: min(52dvh, 420px);
+  overflow-y: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.announcement-popup-actions { display: flex; justify-content: flex-end; }
 
 .admin-resource-card { display: grid; justify-items: center; gap: 14px; }
 .admin-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }

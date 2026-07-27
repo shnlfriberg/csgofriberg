@@ -9,6 +9,7 @@ interface Announcement {
   id: number;
   title: string;
   content: string;
+  is_popup: boolean | number;
   created_at: string;
 }
 
@@ -19,6 +20,7 @@ export default function AdminAnnouncements() {
   const [items, setItems] = useState<Announcement[]>([]);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [isPopup, setIsPopup] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -35,9 +37,10 @@ export default function AdminAnnouncements() {
 
   const publish = async () => {
     try {
-      await api.post('/admin/announcements', { title, content });
+      await api.post('/admin/announcements', { title, content, is_popup: isPopup });
       setTitle('');
       setContent('');
+      setIsPopup(false);
       toast.success(t('admin.announcementPublished'));
       await load();
     } catch (err) {
@@ -67,6 +70,10 @@ export default function AdminAnnouncements() {
       <div className="admin-announcement-form">
         <input className="input" placeholder={t('admin.announcementTitle')} value={title} onChange={(e) => setTitle(e.target.value)} />
         <textarea className="input" rows={4} placeholder={t('admin.announcementContent')} value={content} onChange={(e) => setContent(e.target.value)} />
+        <label className="admin-announcement-option">
+          <input type="checkbox" checked={isPopup} onChange={(event) => setIsPopup(event.target.checked)} />
+          <span>{t('admin.popupAnnouncement')}</span>
+        </label>
         <button className="btn btn-green" onClick={() => void publish()} disabled={!title.trim() || !content.trim()}>
           {t('admin.publish')}
         </button>
@@ -76,6 +83,7 @@ export default function AdminAnnouncements() {
           <div className="admin-announcement-row" key={a.id}>
             <span>
               <b>{a.title}</b>{' '}
+              {Boolean(a.is_popup) && <span className="badge">{t('admin.popupAnnouncementBadge')}</span>}{' '}
               <span className="muted">{new Date(a.created_at).toLocaleString(currentLocale())}</span>
             </span>
             <button className="btn btn-red" onClick={() => void remove(a.id)}>{t('admin.deleteAnnouncementConfirm')}</button>
