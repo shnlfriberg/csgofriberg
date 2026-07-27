@@ -1,8 +1,10 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { Route } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuessFeedback, PlayerInfo, RoomState } from '../types';
 import { renderAtRoute } from '../test/render';
+import MultiLobby from './MultiLobby';
 import MultiRoom from './MultiRoom';
 
 const socket = vi.hoisted(() => ({
@@ -167,7 +169,7 @@ describe('MultiRoom replay', () => {
           displayId: 'Opponent',
           stats: {
             single: { games: 0, wins: 0, losses: 0, winRate: 0, avgGuesses: null, bestGuesses: null },
-            multi: { games: 0, wins: 0, losses: 0, winRate: 0, recentAverageWinningGuesses: null, recentMatches: [] },
+            multi: { games: 1, wins: 1, losses: 0, winRate: 1, recentAverageWinningGuesses: 2.8, recentMatches: [] },
           },
         });
       }
@@ -176,8 +178,56 @@ describe('MultiRoom replay', () => {
 
     renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
     const ready = await screen.findByRole('button', { name: '准备' });
+    expect(await screen.findByText('2.8')).toHaveClass('matchmaking-average-low');
     expect(screen.queryByRole('button', { name: '开始对局' })).not.toBeInTheDocument();
     await user.click(ready);
     expect(socket.emit).toHaveBeenCalledWith('room:ready', { ready: true }, expect.any(Function));
+  });
+
+  it('warns before leaving a ready check and shows the returned cooldown in the lobby', async () => {
+    const user = userEvent.setup();
+    const serverNow = Date.now();
+    let left = false;
+    const readyRoom: RoomState = {
+      ...room,
+      status: 'waiting',
+      matchmaking: true,
+      readyCheckEndsAt: serverNow + 30_000,
+      round: 0,
+      roundId: 0,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({ ...player, ready: false, score: 0 })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack(left
+          ? { code: 'NOT_IN_ROOM' }
+          : { room: readyRoom, selfKey: 'g:me', serverNow });
+      }
+      if (event === 'room:leave' && typeof ack === 'function') {
+        left = true;
+        ack({ ok: true, retryAt: serverNow + 10_000, serverNow });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, {
+      route: '/multi/room',
+      path: '/multi/room',
+      extraRoutes: <Route path="/multi" element={<MultiLobby />} />,
+    });
+
+    await user.click(await screen.findByRole('button', { name: '离开房间' }));
+    expect(await screen.findByRole('alertdialog', { name: '退出匹配准备？' })).toHaveTextContent(
+      '退出后可能会受到匹配惩罚。'
+    );
+    expect(socket.emit).not.toHaveBeenCalledWith('room:leave', {}, expect.any(Function));
+
+    await user.click(screen.getByRole('button', { name: '确认退出' }));
+
+    const cooldownButton = await screen.findByRole('button', { name: /冷却 \d+ 秒/ });
+    expect(cooldownButton).toBeDisabled();
+    expect(screen.queryByText(/已退出准备/)).not.toBeInTheDocument();
   });
 });

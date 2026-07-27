@@ -64,6 +64,7 @@ import { getPlayerPerformance } from '../services/playerPerformance';
 import {
   clearMatchmakingCooldown,
   getMatchmakingCooldown,
+  readyExitPenaltyMultiplier,
   recordMatchmakingExit,
 } from '../services/matchmakingCooldown';
 
@@ -1827,6 +1828,18 @@ export function setupSocket(io: Server) {
       }
       const player = room.players.find((p) => p.key === me.key);
       if (player && room.status === 'waiting' && room.matchmaking) {
+        const opponent = room.players.find((candidate) => candidate.key !== me.key);
+        let penaltyMultiplier: 0 | 0.5 | 1 = 1;
+        if (opponent) {
+          try {
+            const performance = await getPlayerPerformance(opponent);
+            penaltyMultiplier = readyExitPenaltyMultiplier(
+              performance.multi.recentAverageWinningGuesses
+            );
+          } catch (err) {
+            logTransientError('[match:ready-exit-performance]', err);
+          }
+        }
         const abandoned = await withRoomLock(room.id, async (locked) => {
           if (locked.status !== 'waiting' || !locked.matchmaking) return 'CHANGED' as const;
           const current = locked.players.find((candidate) => candidate.key === me.key);
@@ -1836,7 +1849,9 @@ export function setupSocket(io: Server) {
         }, () => false);
         if (abandoned === 'STALE_CONNECTION') return ack?.({ code: abandoned });
         if (abandoned && abandoned !== 'CHANGED') {
-          const cooldown = await recordMatchmakingExit(me.key);
+          const cooldown = penaltyMultiplier === 0
+            ? null
+            : await recordMatchmakingExit(me.key, penaltyMultiplier);
           for (const other of abandoned.room.players) {
             if (other.key === me.key) continue;
             io.to(identityChannel(other.key)).emit('match:ready-ended', {
@@ -1849,7 +1864,11 @@ export function setupSocket(io: Server) {
           }
           socket.leave(room.id);
           socket.data.roomId = undefined;
-          return ack?.({ ok: true, retryAt: cooldown.retryAt, serverNow: Date.now() });
+          return ack?.({
+            ok: true,
+            retryAt: cooldown?.retryAt ?? null,
+            serverNow: Date.now(),
+          });
         }
         room = await getRoomForIdentity(me.key, true);
         if (!room) return ack?.({ ok: true });

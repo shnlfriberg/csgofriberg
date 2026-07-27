@@ -15,6 +15,7 @@ import { guestNameFromKey, signToken } from '../middleware/auth';
 import { cancelQueue, getRoom, queueOrTakeOpponent, withRoomLock } from '../services/roomStore';
 import {
   clearMatchmakingCooldown,
+  readyExitPenaltyMultiplier,
   recordMatchmakingExit,
 } from '../services/matchmakingCooldown';
 
@@ -154,24 +155,38 @@ describe('multiplayer socket integration', () => {
     }
   });
 
-  it('increases ready-check cooldowns by a 1.2 multiplier and caps them', async () => {
+  it('uses a 1.5 cooldown multiplier, supports half duration, and caps full penalties', async () => {
     const identity = `g:cooldown-${Date.now()}`;
+    const halfIdentity = `g:cooldown-half-${Date.now()}`;
     try {
+      expect(readyExitPenaltyMultiplier(2.99)).toBe(0);
+      expect(readyExitPenaltyMultiplier(3)).toBe(0.5);
+      expect(readyExitPenaltyMultiplier(4.5)).toBe(0.5);
+      expect(readyExitPenaltyMultiplier(4.51)).toBe(1);
+      expect(readyExitPenaltyMultiplier(null)).toBe(1);
+
       const first = await recordMatchmakingExit(identity);
       expect(first.retryAt - Date.now()).toBeGreaterThanOrEqual(9_500);
       expect(first.retryAt - Date.now()).toBeLessThanOrEqual(10_000);
       const second = await recordMatchmakingExit(identity);
-      expect(second.retryAt - Date.now()).toBeGreaterThanOrEqual(11_500);
-      expect(second.retryAt - Date.now()).toBeLessThanOrEqual(12_000);
+      expect(second.retryAt - Date.now()).toBeGreaterThanOrEqual(14_500);
+      expect(second.retryAt - Date.now()).toBeLessThanOrEqual(15_000);
       const third = await recordMatchmakingExit(identity);
-      expect(third.retryAt - Date.now()).toBeGreaterThanOrEqual(14_500);
-      expect(third.retryAt - Date.now()).toBeLessThanOrEqual(15_000);
+      expect(third.retryAt - Date.now()).toBeGreaterThanOrEqual(22_500);
+      expect(third.retryAt - Date.now()).toBeLessThanOrEqual(23_000);
       let capped = third;
       for (let index = 3; index < 20; index += 1) capped = await recordMatchmakingExit(identity);
       expect(capped.retryAt - Date.now()).toBeGreaterThanOrEqual(119_500);
       expect(capped.retryAt - Date.now()).toBeLessThanOrEqual(120_000);
+
+      const half = await recordMatchmakingExit(halfIdentity, 0.5);
+      expect(half.retryAt - Date.now()).toBeGreaterThanOrEqual(4_500);
+      expect(half.retryAt - Date.now()).toBeLessThanOrEqual(5_000);
     } finally {
-      await clearMatchmakingCooldown(identity);
+      await Promise.all([
+        clearMatchmakingCooldown(identity),
+        clearMatchmakingCooldown(halfIdentity),
+      ]);
     }
   });
 
@@ -424,14 +439,51 @@ describe('multiplayer socket integration', () => {
     }
   });
 
-  it('cancels a ready check on voluntary exit without persisting a match', async () => {
+  it('does not penalize a ready-check exit against an opponent averaging under three guesses', async () => {
     const stamp = Date.now();
     const keyA = `match-leave-a-${stamp}`;
     const keyB = `match-leave-b-${stamp}`;
+    const historyRoomId = `match-leave-history-${stamp}`;
     const token = (key: string) => jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
     const a = await connect(withPowCookie(`csgofriberg_guest=${token(keyA)}`));
     const b = await connect(withPowCookie(`csgofriberg_guest=${token(keyB)}`));
     try {
+      const [target] = await db('players').select('id').limit(1);
+      const [inserted] = await db('match_records').insert({
+        room_id: historyRoomId,
+        db_type: 'easy',
+        bo_type: 1,
+        winner_key: `g:${keyA}`,
+        finish_reason: 'score',
+        replay: JSON.stringify([{
+          round: 1,
+          targetPlayerId: target.id,
+          winnerKey: `g:${keyA}`,
+          reason: 'guessed',
+          guessesByPlayer: {
+            [`g:${keyA}`]: [target.id, target.id],
+            [`g:history-opponent-${stamp}`]: [target.id, target.id, target.id],
+          },
+        }]),
+      }).returning('id');
+      const historyMatchId = typeof inserted === 'object' ? inserted.id : inserted;
+      await db('match_players').insert([
+        {
+          match_id: historyMatchId,
+          player_key: `g:${keyA}`,
+          player_name: guestNameFromKey(keyA),
+          score: 1,
+          is_winner: true,
+        },
+        {
+          match_id: historyMatchId,
+          player_key: `g:history-opponent-${stamp}`,
+          player_name: guestNameFromKey(`history-opponent-${stamp}`),
+          score: 0,
+          is_winner: false,
+        },
+      ]);
+
       expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: true });
       const foundA = onceEvent(a, 'match:found');
       const foundB = onceEvent(b, 'match:found');
@@ -441,15 +493,16 @@ describe('multiplayer socket integration', () => {
       const recordId = (await getRoom(roomId))!.recordId;
       const opponentEnded = onceEvent(a, 'match:ready-ended');
       const left = await emit(b, 'room:leave');
-      expect(left).toMatchObject({ ok: true, retryAt: expect.any(Number), serverNow: expect.any(Number) });
-      expect(left.retryAt - left.serverNow).toBeGreaterThanOrEqual(9_500);
-      expect(left.retryAt - left.serverNow).toBeLessThanOrEqual(10_000);
+      expect(left).toMatchObject({ ok: true, retryAt: null, serverNow: expect.any(Number) });
       expect(await opponentEnded).toMatchObject({ roomId, reason: 'opponent_left', penalized: false });
       expect(await getRoom(roomId)).toBeNull();
       expect(await db('match_records').where({ room_id: recordId }).first()).toBeUndefined();
+      expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: true });
+      await emit(b, 'match:cancel');
     } finally {
       a.disconnect();
       b.disconnect();
+      await db('match_records').where({ room_id: historyRoomId }).del();
     }
   });
 

@@ -10,8 +10,15 @@ export interface MatchmakingCooldown {
   retryAt: number;
 }
 
-function cooldownSeconds(strikes: number): number {
-  return Math.min(120, Math.ceil(10 * Math.pow(1.2, Math.max(0, strikes - 1))));
+function cooldownSeconds(strikes: number, durationMultiplier: number): number {
+  const fullSeconds = Math.min(120, Math.ceil(10 * Math.pow(1.5, Math.max(0, strikes - 1))));
+  return Math.ceil(fullSeconds * durationMultiplier);
+}
+
+export function readyExitPenaltyMultiplier(averageGuesses: number | null): 0 | 0.5 | 1 {
+  if (averageGuesses !== null && averageGuesses < 3) return 0;
+  if (averageGuesses !== null && averageGuesses <= 4.5) return 0.5;
+  return 1;
 }
 
 function pruneLocal(now: number): void {
@@ -48,7 +55,10 @@ export async function getMatchmakingCooldown(identity: string): Promise<Matchmak
     : null;
 }
 
-export async function recordMatchmakingExit(identity: string): Promise<MatchmakingCooldown> {
+export async function recordMatchmakingExit(
+  identity: string,
+  durationMultiplier: 0.5 | 1 = 1
+): Promise<MatchmakingCooldown> {
   const now = Date.now();
   const client = redisState();
   if (!client && config.redisRequired) throw new Error('REDIS_UNAVAILABLE');
@@ -56,7 +66,7 @@ export async function recordMatchmakingExit(identity: string): Promise<Matchmaki
     pruneLocal(now);
     const current = local.get(identity);
     const strikes = current && current.expiresAt > now ? current.strikes + 1 : 1;
-    const retryAt = now + cooldownSeconds(strikes) * 1000;
+    const retryAt = now + cooldownSeconds(strikes, durationMultiplier) * 1000;
     local.delete(identity);
     local.set(identity, { strikes, retryAt, expiresAt: now + WINDOW_MS });
     return { strikes, retryAt };
@@ -64,13 +74,14 @@ export async function recordMatchmakingExit(identity: string): Promise<Matchmaki
   const result = await evalStateScript(
     'matchmaking-cooldown-record-v1',
     `local strikes = tonumber(redis.call('HGET', KEYS[1], 'strikes') or 0) + 1
-     local seconds = math.min(120, math.ceil(10 * (1.2 ^ math.max(0, strikes - 1))))
+     local fullSeconds = math.min(120, math.ceil(10 * (1.5 ^ math.max(0, strikes - 1))))
+     local seconds = math.ceil(fullSeconds * tonumber(ARGV[3]))
      local retryAt = tonumber(ARGV[1]) + seconds * 1000
      redis.call('HSET', KEYS[1], 'strikes', tostring(strikes), 'retryAt', tostring(retryAt))
      redis.call('PEXPIRE', KEYS[1], ARGV[2])
      return { strikes, retryAt }`,
     [redisKey(`matchmaking-cooldown:${identity}`)],
-    [String(now), String(WINDOW_MS)]
+    [String(now), String(WINDOW_MS), String(durationMultiplier)]
   ) as [number | string, number | string];
   return { strikes: Number(result[0]), retryAt: Number(result[1]) };
 }

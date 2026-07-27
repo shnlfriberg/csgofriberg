@@ -74,6 +74,13 @@ function localDeadline(timestamp: unknown, anchor: ServerClockAnchor | null): nu
   return anchor.clientNow + (serverDeadline - anchor.serverNow);
 }
 
+function matchmakingAverageClass(value: number | null | undefined): string {
+  if (value == null) return '';
+  if (value < 3) return ' matchmaking-average-low';
+  if (value <= 4.5) return ' matchmaking-average-medium';
+  return ' matchmaking-average-high';
+}
+
 function applyRoomPatchState(current: RoomState, patch: RoomPatch): RoomState {
   const removedPlayers = new Set(patch.players?.removed ?? []);
   let players = current.players
@@ -588,10 +595,21 @@ export default function MultiRoom() {
     const currentRoom = room;
     if (!currentRoom || leaving) return;
     const isCurrentSpectator = !currentRoom.players.some((player) => player.key === myKey);
+    const isMatchmakingReadyRoom =
+      !isCurrentSpectator &&
+      currentRoom.matchmaking &&
+      currentRoom.status === 'waiting';
     const matchOngoing =
       !isCurrentSpectator &&
       (currentRoom.status === 'playing' || currentRoom.status === 'round_over');
-    if (matchOngoing && !await confirm({
+    if (isMatchmakingReadyRoom) {
+      if (!await confirm({
+        title: t('multi.readyExitTitle'),
+        message: t('multi.readyExitWarning'),
+        confirmLabel: t('multi.readyExitConfirm'),
+        tone: 'warning',
+      })) return;
+    } else if (matchOngoing && !await confirm({
       title: t('multi.leaveTitle'),
       message: t('multi.leaveMessage'),
       confirmLabel: t('multi.leaveConfirm'),
@@ -617,13 +635,20 @@ export default function MultiRoom() {
       toast.error(translate(result.code));
       return;
     }
-    if (result?.retryAt && result?.serverNow) {
-      const seconds = Math.max(1, Math.ceil((Number(result.retryAt) - Number(result.serverNow)) / 1000));
-      toast.error(t('multi.readyExitCooldown', { seconds }));
-    }
+    const retryAt = Number(result?.retryAt);
+    const serverNow = Number(result?.serverNow);
+    const matchmakingCooldownUntil =
+      result?.retryAt != null &&
+      result?.serverNow != null &&
+      Number.isFinite(retryAt) &&
+      Number.isFinite(serverNow)
+        ? Date.now() + Math.max(0, retryAt - serverNow)
+        : null;
     setRoom(null);
     roomRef.current = null;
-    navigate('/multi');
+    navigate('/multi', {
+      state: matchmakingCooldownUntil ? { matchmakingCooldownUntil } : null,
+    });
   };
 
   const surrenderRound = async () => {
@@ -979,7 +1004,9 @@ export default function MultiRoom() {
           {room.matchmaking && opponent && (
             <div className="matchmaking-opponent-preview">
               <span>{t('multi.recentWinningGuessAverage')}</span>
-              <strong>
+              <strong className={matchmakingAverageClass(
+                opponentPreview?.stats.multi.recentAverageWinningGuesses
+              )}>
                 {opponentPreview?.stats.multi.recentAverageWinningGuesses?.toFixed(1) ?? '-'}
               </strong>
               <button

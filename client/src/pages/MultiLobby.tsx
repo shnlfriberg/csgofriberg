@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Globe,
   House,
@@ -72,12 +72,23 @@ export default function MultiLobby() {
   const [creating, setCreating] = useState(false);
   const [matchCooldownDeadline, setMatchCooldownDeadline] = useState<number | null>(null);
   const [matchCooldownSeconds, setMatchCooldownSeconds] = useState(0);
+  const location = useLocation();
   const navigate = useNavigate();
   const confirm = useConfirm();
   const searchingRef = useRef(false);
   const replacingRoomRef = useRef(false);
   const matchOptionsRef = useRef({ dbType: mmDbType, anonymous: mmAnonymous });
   matchOptionsRef.current = { dbType: mmDbType, anonymous: mmAnonymous };
+
+  useEffect(() => {
+    const cooldownUntil = Number(
+      (location.state as { matchmakingCooldownUntil?: unknown } | null)?.matchmakingCooldownUntil
+    );
+    if (!Number.isFinite(cooldownUntil)) return;
+    const remaining = Math.max(0, cooldownUntil - Date.now());
+    if (remaining > 0) setMatchCooldownDeadline(performance.now() + remaining);
+    navigate('/multi', { replace: true, state: null });
+  }, [location.state, navigate]);
 
   useEffect(() => {
     if (!difficulties.length) return;

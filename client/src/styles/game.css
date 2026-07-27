@@ -207,6 +207,9 @@
   font-size: 1.15rem;
   font-family: Consolas, monospace;
 }
+.matchmaking-opponent-preview .matchmaking-average-low { color: var(--danger); }
+.matchmaking-opponent-preview .matchmaking-average-medium { color: var(--warning); }
+.matchmaking-opponent-preview .matchmaking-average-high { color: var(--success); }
 .room-player-row > b {
   min-width: 0;
   overflow: hidden;
