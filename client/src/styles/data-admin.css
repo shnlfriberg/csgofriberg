@@ -220,6 +220,55 @@
 }
 .admin-users-card .admin-players-header { justify-content: center; text-align: center; }
 .admin-users-card .admin-players-title h3 { justify-content: center; }
+.admin-api-tokens-card {
+  width: min(920px, 100%);
+  margin-inline: auto;
+}
+.admin-api-token-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 160px auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.admin-api-token-form .btn { min-height: 42px; white-space: nowrap; }
+.admin-api-token-secret {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-sm);
+  background: var(--card-soft);
+}
+.admin-api-token-secret p { margin: 4px 0 0; }
+.admin-api-token-copy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+.admin-api-token-copy-row .input {
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.admin-api-token-copy-row .btn { white-space: nowrap; }
+.admin-api-token-list { margin-top: 18px; border-top: 1px solid var(--border); }
+.admin-api-token-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.8fr) minmax(260px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 74px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.admin-api-token-identity,
+.admin-api-token-dates { display: grid; min-width: 0; gap: 4px; }
+.admin-api-token-identity strong { overflow-wrap: anywhere; }
+.admin-api-token-identity code { color: var(--text-sec); }
+.admin-api-token-dates { color: var(--text-sec); font-size: 0.86rem; }
+.admin-api-token-row .btn { white-space: nowrap; }
+.admin-api-token-empty { margin: 0; padding: 30px 0; text-align: center; }
 .admin-users-table { margin-top: 14px; }
 .admin-users-table table { min-width: 880px; }
 .admin-users-table table th,

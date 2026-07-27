@@ -254,6 +254,11 @@
   .presence-grid { grid-template-columns: 1fr; gap: 10px; }
   .presence-item { min-height: 58px; padding: 10px 14px; }
   .presence-item strong { font-size: 1.2rem; }
+  .admin-api-token-form { grid-template-columns: minmax(0, 1fr) 140px; }
+  .admin-api-token-form .btn { grid-column: 1 / -1; justify-self: end; }
+  .admin-api-token-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .admin-api-token-dates { grid-column: 1; }
+  .admin-api-token-row .btn { grid-column: 2; grid-row: 1 / span 2; }
   .stats-recent-card { padding-inline: 14px; }
   .stats-replay-desktop-list { display: none; }
   .stats-replay-mobile-list { display: grid; min-width: 0; }
@@ -355,6 +360,12 @@
   .rule-feedback:nth-child(n + 2) { border-top: 1px solid var(--border); }
   .rule-field-grid { grid-template-columns: 1fr; }
   .region-item { grid-template-columns: 1fr; gap: 3px; }
+  .admin-api-token-form,
+  .admin-api-token-copy-row,
+  .admin-api-token-row { grid-template-columns: 1fr; }
+  .admin-api-token-form .btn,
+  .admin-api-token-row .btn { grid-column: 1; grid-row: auto; width: 100%; }
+  .admin-api-token-copy-row .btn { width: 100%; }
   .room-code-toggle { width: 40px; padding-inline: 0; }
   .room-code-toggle span { display: none; }
   .score-bar { gap: 7px; }

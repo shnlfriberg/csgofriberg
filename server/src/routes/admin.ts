@@ -15,15 +15,23 @@ import {
   asyncHandler,
   HttpError,
 } from '../middleware/common';
-import { invalidatePlayerCache } from '../services/playerCache';
 import { invalidateCached } from '../services/queryCache';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { publishResourceVersion } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getPlayer } from '../services/playerCache';
-import { isKnownDifficultyKey } from '../difficulties';
 import type { GuessFeedback, Player } from '../types';
+import {
+  createPlayer,
+  deletePlayer,
+  importPlayers,
+  playerImportSchema,
+  playerSchema,
+  playerUpdateSchema,
+  updatePlayer,
+} from '../services/playerMutations';
+import { createApiToken, listApiTokens, revokeApiToken } from '../services/apiTokens';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -55,60 +63,6 @@ const adminResourceBroadcastLimit = rateLimit({
   key: requestIdentity,
   failClosed: true,
 });
-const playerRoles = ['Rifler', 'AWPer', 'Coach'] as const;
-const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
-const difficultyListSchema = z.array(difficultyKeySchema)
-  .min(1)
-  .max(20)
-  .refine((keys) => new Set(keys).size === keys.length);
-
-const playerSchema = z.object({
-  nickname: z.string().trim().min(1).max(64),
-  nationality: z.string().trim().min(1).max(64),
-  region: z.string().trim().max(32).default(''),
-  team: z.string().trim().max(64).default(''),
-  age: z.number().int().min(10).max(100),
-  role: z.enum(playerRoles).default('Rifler'),
-  major_championships: z.number().int().min(0).default(0),
-  major_appearances: z.number().int().min(0).default(0),
-  is_active: z.boolean().default(true),
-  is_enabled: z.boolean().default(true),
-  difficulties: difficultyListSchema.optional(),
-});
-const importedPlayerSchema = playerSchema.extend({
-  is_enabled: z.boolean().optional(),
-  is_easy: z.boolean().optional(),
-});
-const playerUpdateSchema = playerSchema.partial()
-  .refine((values) => Object.keys(values).length > 0);
-const playerImportSchema = z.object({
-  players: z.array(importedPlayerSchema)
-    .min(1)
-    .max(1000)
-    .refine((players) => new Set(players.map((player) => player.nickname)).size === players.length),
-});
-
-async function assertDifficultyKeys(keys: string[]): Promise<void> {
-  const unique = [...new Set(keys)];
-  if (unique.some((key) => !isKnownDifficultyKey(key))) {
-    throw new HttpError(400, 'INVALID_DIFFICULTY');
-  }
-}
-
-async function replacePlayerDifficulties(
-  executor: typeof db,
-  playerId: number,
-  keys: string[]
-): Promise<void> {
-  const unique = [...new Set(keys)];
-  await executor('player_difficulties').where({ player_id: playerId }).del();
-  if (unique.length) {
-    await executor('player_difficulties').insert(
-      unique.map((key) => ({ player_id: playerId, difficulty_key: key }))
-    );
-  }
-}
-
 const playerListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(50),
@@ -125,6 +79,10 @@ const userGameListQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(5).max(30).default(10),
 });
 const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
+const apiTokenCreateSchema = z.object({
+  name: z.string().trim().min(1).max(64),
+  expiresInDays: z.number().int().min(1).max(365).default(90),
+});
 const userGameReplayParamsSchema = z.object({
   userId: z.coerce.number().int().positive(),
   gameId: z.coerce.number().int().positive(),
@@ -512,21 +470,7 @@ router.post(
   adminWriteLimit,
   validateBody(playerSchema),
   asyncHandler(async (req, res) => {
-    const exists = await db('players').where({ nickname: req.body.nickname }).first();
-    if (exists) throw new HttpError(409, 'NICKNAME_TAKEN');
-    const difficulties = req.body.difficulties ?? ['normal'];
-    await assertDifficultyKeys(difficulties);
-    const { difficulties: _difficulties, ...values } = req.body;
-    const id = await db.transaction(async (trx) => {
-      const [createdId] = await trx('players')
-        .insert(values)
-        .returning('id')
-        .then((rows) => rows.map((r: any) => (typeof r === 'object' ? r.id : r)));
-      await replacePlayerDifficulties(trx as typeof db, Number(createdId), difficulties);
-      return Number(createdId);
-    });
-    await invalidatePlayerCache();
-    res.json({ id });
+    res.json({ id: await createPlayer(req.body) });
   })
 );
 
@@ -537,15 +481,7 @@ router.put(
   validateBody(playerUpdateSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
-    const { difficulties, ...values } = req.body;
-    if (difficulties) await assertDifficultyKeys(difficulties);
-    await db.transaction(async (trx) => {
-      const exists = await trx('players').where({ id }).first('id');
-      if (!exists) throw new HttpError(404, 'PLAYER_NOT_FOUND');
-      if (Object.keys(values).length) await trx('players').where({ id }).update(values);
-      if (difficulties) await replacePlayerDifficulties(trx as typeof db, id, difficulties);
-    });
-    await invalidatePlayerCache();
+    await updatePlayer(id, req.body);
     res.json({ ok: true });
   })
 );
@@ -556,14 +492,7 @@ router.delete(
   validateParams(idParamsSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
-    const player = await db('players').where({ id }).first();
-    if (!player) throw new HttpError(404, 'PLAYER_NOT_FOUND');
-    if (Boolean(player.is_enabled)) throw new HttpError(409, 'PLAYER_MUST_BE_DISABLED');
-    const used = await db('games').where({ target_player_id: id }).first();
-    if (used) throw new HttpError(409, 'PLAYER_HAS_HISTORY');
-    const count = await db('players').where({ id }).del();
-    if (!count) throw new HttpError(404, 'PLAYER_NOT_FOUND');
-    await invalidatePlayerCache();
+    await deletePlayer(id);
     res.json({ ok: true });
   })
 );
@@ -574,67 +503,40 @@ router.post(
   adminImportLimit,
   validateBody(playerImportSchema),
   asyncHandler(async (req, res) => {
-    let created = 0;
-    let updated = 0;
-    await db.transaction(async (trx) => {
-      const nicknames = req.body.players.map((p: { nickname: string }) => p.nickname);
-      const existing = await trx('players')
-        .whereIn('nickname', nicknames)
-        .select('id', 'nickname', 'is_enabled');
-      const existingNames = new Set(existing.map((p: any) => p.nickname));
-      const existingEnabled = new Map(
-        existing.map((p: any) => [p.nickname, Boolean(p.is_enabled)])
-      );
-      updated = req.body.players.filter((p: { nickname: string }) => existingNames.has(p.nickname)).length;
-      created = req.body.players.length - updated;
-      const desiredDifficulties = new Map<string, string[] | null>();
-      const importedPlayers = req.body.players.map((player: any) => {
-        const { difficulties, is_easy, ...values } = player;
-        const desired = difficulties
-          ?? (is_easy !== undefined ? ['normal', ...(is_easy ? ['easy'] : [])] : null)
-          ?? (existingNames.has(player.nickname) ? null : ['normal']);
-        desiredDifficulties.set(player.nickname, desired);
-        return {
-          ...values,
-          is_enabled: player.is_enabled ?? existingEnabled.get(player.nickname) ?? true,
-        };
-      });
-      const difficultyKeys = [...new Set(
-        [...desiredDifficulties.values()].flatMap((keys) => keys ?? [])
-      )];
-      await assertDifficultyKeys(difficultyKeys);
-      const chunkSize = 200;
-      for (let index = 0; index < importedPlayers.length; index += chunkSize) {
-        await trx('players')
-          .insert(importedPlayers.slice(index, index + chunkSize))
-          .onConflict('nickname')
-          .merge();
-      }
-      const savedPlayers = await trx('players').whereIn('nickname', nicknames).select('id', 'nickname');
-      const replacementIds: number[] = [];
-      const replacementMemberships: Array<{ player_id: number; difficulty_key: string }> = [];
-      for (const player of savedPlayers) {
-        const difficulties = desiredDifficulties.get(String(player.nickname));
-        if (difficulties) {
-          const playerId = Number(player.id);
-          replacementIds.push(playerId);
-          replacementMemberships.push(
-            ...[...new Set(difficulties)].map((difficultyKey) => ({
-              player_id: playerId,
-              difficulty_key: difficultyKey,
-            }))
-          );
-        }
-      }
-      if (replacementIds.length) {
-        await trx('player_difficulties').whereIn('player_id', replacementIds).del();
-        for (let index = 0; index < replacementMemberships.length; index += 500) {
-          await trx('player_difficulties').insert(replacementMemberships.slice(index, index + 500));
-        }
-      }
-    });
-    await invalidatePlayerCache();
-    res.json({ created, updated });
+    res.json(await importPlayers(req.body.players));
+  })
+);
+
+router.get(
+  '/api-tokens',
+  adminReadLimit,
+  asyncHandler(async (req, res) => {
+    res.json({ tokens: await listApiTokens(req.user!.id) });
+  })
+);
+
+router.post(
+  '/api-tokens',
+  adminWriteLimit,
+  validateBody(apiTokenCreateSchema),
+  asyncHandler(async (req, res) => {
+    const token = await createApiToken(
+      req.user!.id,
+      req.body.name,
+      req.body.expiresInDays
+    );
+    res.status(201).json(token);
+  })
+);
+
+router.delete(
+  '/api-tokens/:id',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    await revokeApiToken(req.user!.id, id);
+    res.json({ ok: true });
   })
 );
 

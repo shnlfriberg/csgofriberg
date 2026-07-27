@@ -3,6 +3,7 @@ import { db } from './knex';
 
 const REQUIRED_COLUMNS: Record<string, string[]> = {
   users: ['id', 'username', 'password_hash', 'role', 'token_version'],
+  api_tokens: ['id', 'name', 'token_hash', 'prefix', 'created_by_user_id', 'expires_at'],
   app_migrations: ['name', 'applied_at'],
   players: [
     'id',

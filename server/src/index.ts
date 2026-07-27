@@ -18,6 +18,7 @@ import statsRoutes from './routes/stats';
 import leaderboardRoutes from './routes/leaderboard';
 import announcementRoutes from './routes/announcements';
 import adminRoutes from './routes/admin';
+import externalPlayerRoutes, { externalPlayerAuth } from './routes/externalPlayers';
 import { setupSocket } from './socket';
 import {
   closeRedis,
@@ -151,6 +152,13 @@ async function main() {
   app.use('/api', rateLimit({ name: 'api', limit: 600, windowSeconds: 60 }));
   app.use('/api/pow', rejectOversizedBody(16 * 1024), parseJsonOnce('16kb'));
   app.use('/api/pow', powRoutes);
+  app.use('/api/external', externalPlayerAuth);
+  app.use(
+    '/api/external',
+    rejectOversizedBody(config.adminImportBodyLimitBytes),
+    parseJsonOnce(`${config.adminImportBodyLimitBytes}b`)
+  );
+  app.use('/api/external', externalPlayerRoutes);
   app.use('/api', requirePow);
   app.use('/api/admin/players/import', requireAuth, requireAdmin);
   app.use(

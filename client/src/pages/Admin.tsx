@@ -5,11 +5,12 @@ import AdminPlayers from '../components/admin/AdminPlayers';
 import AdminAnnouncements from '../components/admin/AdminAnnouncements';
 import AdminResourceVersion from '../components/admin/AdminResourceVersion';
 import AdminUsers from '../components/admin/AdminUsers';
+import AdminApiTokens from '../components/admin/AdminApiTokens';
 import { getSocket } from '../api/socket';
 import { PresenceStats } from '../types';
 import { useTranslation } from 'react-i18next';
 
-type Tab = 'players' | 'users' | 'announcements' | 'resources';
+type Tab = 'players' | 'users' | 'announcements' | 'apiTokens' | 'resources';
 
 export default function Admin() {
   const { t } = useTranslation();
@@ -59,6 +60,9 @@ export default function Admin() {
         <button className={tab === 'announcements' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('announcements')}>
           {t('admin.announcementsTab')}
         </button>
+        <button className={tab === 'apiTokens' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('apiTokens')}>
+          {t('admin.apiTokensTab')}
+        </button>
         <button className={tab === 'resources' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('resources')}>
           {t('admin.resourcesTab')}
         </button>
@@ -66,6 +70,7 @@ export default function Admin() {
       {tab === 'players' && <AdminPlayers />}
       {tab === 'users' && <AdminUsers />}
       {tab === 'announcements' && <AdminAnnouncements />}
+      {tab === 'apiTokens' && <AdminApiTokens />}
       {tab === 'resources' && <AdminResourceVersion />}
     </Page>
   );

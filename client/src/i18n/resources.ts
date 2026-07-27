@@ -193,7 +193,7 @@ export const resources = {
         message: '检测到新的页面资源，刷新后即可使用最新版本。', later: '稍后', refresh: '立即刷新',
       },
       admin: {
-        title: '管理后台', presence: '实时在线统计', online: '在线人数', multiRooms: '多人房间', singleGames: '单人游戏', playersTab: '选手管理', difficultiesTab: '难度管理', usersTab: '用户管理', announcementsTab: '公告管理', resourcesTab: '资源版本',
+        title: '管理后台', presence: '实时在线统计', online: '在线人数', multiRooms: '多人房间', singleGames: '单人游戏', playersTab: '选手管理', difficultiesTab: '难度管理', usersTab: '用户管理', announcementsTab: '公告管理', apiTokensTab: 'API Token', resourcesTab: '资源版本',
         playersTitle: '选手管理', totalPlayers: '共 {{count}} 名选手', addPlayer: '新增选手', searchPlayers: '搜索昵称、国家、赛区或队伍', pageSize: '每页显示', noMatchPlayers: '没有匹配的选手', noPlayers: '暂无选手',
         pageOf: '第 {{page}} / {{total}} 页', zeroItems: '0 条', importTitle: 'JSON 批量导入', importDescription: '粘贴选手数组，按昵称去重，已存在则更新。使用 difficulties 数组设置一个或多个难度。',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"乌克兰","region":"欧洲","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: '导入',
@@ -206,6 +206,7 @@ export const resources = {
         resourcesTitle: '资源版本', currentVersion: '当前页面版本', broadcastTitle: '广播资源更新？', broadcastMessage: '版本不同的在线用户将立即收到刷新提示，之后连接的用户也会收到该提示。', broadcastConfirm: '确认广播', broadcastSuccess: '当前资源版本已广播', broadcasting: '正在广播...', broadcast: '广播当前版本',
         usersTitle: '用户管理', totalUsers: '共 {{count}} 名注册用户', searchUsers: '搜索用户名或匿名 ID', noMatchUsers: '没有匹配的用户', noUsers: '暂无注册用户', username: '用户名', anonymousId: '匿名 ID', permission: '权限', createdAt: '注册时间', adminRole: '管理员', userRole: '用户', querying: '查询中', viewStats: '查看战绩', gameRecords: '对局记录',
         userStats: '用户战绩', closeUserStats: '关闭用户战绩', gamesTitle: '具体对局', closeGames: '关闭具体对局', gameType: '对局类型', single: '单人', multi: '多人', opponent: '对手', noSingleGames: '没有单人对局记录', noMultiGames: '没有多人对局记录',
+        apiTokensTitle: '外部 API Token', apiTokensCount: '{{count}} 个有效 Token', apiTokenName: 'Token 名称', apiTokenNamePlaceholder: '例如：选手数据同步', apiTokenExpiresIn: '有效天数（1-365）', createApiToken: '生成 Token', creatingApiToken: '生成中...', apiTokenCreated: 'API Token 已生成', newApiToken: '新 API Token', apiTokenShownOnce: '明文仅显示这一次，请妥善保管。', copyApiToken: '复制 Token', apiTokenCopied: '已复制', apiTokenCopyFailed: '复制失败，请手动选择 Token', noApiTokens: '暂无有效 API Token', apiTokenCreatedAt: '创建：{{date}}', apiTokenExpiresAt: '到期：{{date}}', revokeApiToken: '撤销', revokeApiTokenTitle: '撤销 {{name}}？', revokeApiTokenMessage: '使用该 Token 的外部调用会立即失效。', apiTokenRevoked: 'API Token 已撤销',
       },
       errors: {
         VALIDATION_FAILED: '输入格式不正确', INVALID_REQUEST_BODY: '请求数据不完整，请重试', PAYLOAD_TOO_LARGE: '导入数据过大，请拆分后重试',
@@ -215,7 +216,7 @@ export const resources = {
         ALREADY_GUESSED: '已经猜过这名选手了', PLAYER_NOT_FOUND: '选手不存在', PLAYER_HAS_HISTORY: '该选手已有历史对局，无法永久删除；可以停用并移出选手池',
         PLAYER_MUST_BE_DISABLED: '永久删除前必须先停用该选手', NICKNAME_TAKEN: '选手昵称已存在', EMPTY_PLAYER_POOL: '选手库为空，请联系管理员导入数据', DIFFICULTY_UNAVAILABLE: '该难度尚未开放或选手库为空', INVALID_DIFFICULTY: '包含不存在的难度',
         REDIS_UNAVAILABLE: '游戏状态服务暂时不可用，请稍后重试', RATE_LIMITED: '操作过于频繁，请稍后再试', RATE_LIMIT_UNAVAILABLE: '服务繁忙，请稍后重试',
-        AUTH_BUSY: '登录服务繁忙，请稍后重试', IDENTITY_REQUIRED: '身份校验失败，请刷新页面', ALREADY_IN_ROOM: '你已在一个房间中，请先退出',
+        AUTH_BUSY: '登录服务繁忙，请稍后重试', IDENTITY_REQUIRED: '身份校验失败，请刷新页面', API_TOKEN_REQUIRED: '缺少 API Token', API_TOKEN_INVALID: 'API Token 无效或已过期', API_TOKEN_NOT_FOUND: 'API Token 不存在', API_TOKEN_LIMIT_REACHED: '有效 API Token 已达到 20 个上限', ALREADY_IN_ROOM: '你已在一个房间中，请先退出',
         ROOM_NOT_FOUND: '房间不存在', ROOM_STARTED: '对局已开始，无法加入', ROOM_FULL: '房间已满', SPECTATING_DISABLED: '该房间未开放观战',
         ROOM_CAPACITY_REACHED: '当前服务器房间数量已达上限，请稍后重试', NOT_IN_WAITING_ROOM: '当前不在等待中的房间', NOT_IN_ROOM: '你不在任何房间中',
         ROOM_NOT_READY: '房间当前不可开始', ROOM_BUSY: '房间操作繁忙，请稍后重试', NOT_HOST: '只有房主可以开始对局', NEED_TWO_PLAYERS: '需要两名玩家才能开始',
@@ -350,7 +351,7 @@ export const resources = {
       announcements: { title: 'Updates', empty: 'No announcements yet' },
       resourceUpdate: { listenFailed: 'Unable to listen for resource updates. Refresh the page later.', title: 'Update available', laterAria: 'Refresh later', message: 'New page resources are available. Refresh to use the latest version.', later: 'Later', refresh: 'Refresh now' },
       admin: {
-        title: 'Admin Panel', presence: 'Live presence', online: 'Online users', multiRooms: 'Multiplayer rooms', singleGames: 'Solo games', playersTab: 'Players', difficultiesTab: 'Difficulties', usersTab: 'Users', announcementsTab: 'Announcements', resourcesTab: 'Resource version',
+        title: 'Admin Panel', presence: 'Live presence', online: 'Online users', multiRooms: 'Multiplayer rooms', singleGames: 'Solo games', playersTab: 'Players', difficultiesTab: 'Difficulties', usersTab: 'Users', announcementsTab: 'Announcements', apiTokensTab: 'API tokens', resourcesTab: 'Resource version',
         playersTitle: 'Player Management', totalPlayers: '{{count}} players', addPlayer: 'Add player', searchPlayers: 'Search nickname, country, region, or team', pageSize: 'Per page', noMatchPlayers: 'No matching players', noPlayers: 'No players', pageOf: 'Page {{page}} / {{total}}', zeroItems: '0 items',
         importTitle: 'JSON Batch Import', importDescription: 'Paste a player array. Use difficulties to assign one or more difficulty pools.',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"Ukraine","region":"Europe","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: 'Import',
@@ -363,6 +364,7 @@ export const resources = {
         resourcesTitle: 'Resource Version', currentVersion: 'Current page version', broadcastTitle: 'Broadcast resource update?', broadcastMessage: 'Online users on a different version will be prompted to refresh immediately. New connections will also receive the prompt.', broadcastConfirm: 'Broadcast', broadcastSuccess: 'Current resource version broadcast', broadcasting: 'Broadcasting...', broadcast: 'Broadcast current version',
         usersTitle: 'User Management', totalUsers: '{{count}} registered users', searchUsers: 'Search username or anonymous ID', noMatchUsers: 'No matching users', noUsers: 'No registered users', username: 'Username', anonymousId: 'Anonymous ID', permission: 'Role', createdAt: 'Registered', adminRole: 'Admin', userRole: 'User', querying: 'Loading', viewStats: 'View stats', gameRecords: 'Game history',
         userStats: 'User Stats', closeUserStats: 'Close user stats', gamesTitle: 'Game History', closeGames: 'Close game history', gameType: 'Game type', single: 'Solo', multi: 'Multiplayer', opponent: 'Opponent', noSingleGames: 'No solo games', noMultiGames: 'No multiplayer games',
+        apiTokensTitle: 'External API Tokens', apiTokensCount: '{{count}} active tokens', apiTokenName: 'Token name', apiTokenNamePlaceholder: 'For example: player data sync', apiTokenExpiresIn: 'Valid days (1-365)', createApiToken: 'Generate token', creatingApiToken: 'Generating...', apiTokenCreated: 'API token generated', newApiToken: 'New API token', apiTokenShownOnce: 'The secret is shown only once. Store it securely.', copyApiToken: 'Copy token', apiTokenCopied: 'Copied', apiTokenCopyFailed: 'Copy failed. Select and copy the token manually.', noApiTokens: 'No active API tokens', apiTokenCreatedAt: 'Created: {{date}}', apiTokenExpiresAt: 'Expires: {{date}}', revokeApiToken: 'Revoke', revokeApiTokenTitle: 'Revoke {{name}}?', revokeApiTokenMessage: 'External calls using this token will stop working immediately.', apiTokenRevoked: 'API token revoked',
       },
       errors: {
         VALIDATION_FAILED: 'Invalid input', INVALID_REQUEST_BODY: 'The request is incomplete. Please try again.', PAYLOAD_TOO_LARGE: 'The import is too large. Split it and try again.',
@@ -372,7 +374,7 @@ export const resources = {
         ALREADY_GUESSED: 'You already guessed this player.', PLAYER_NOT_FOUND: 'Player not found.', PLAYER_HAS_HISTORY: 'This player has game history and cannot be permanently deleted. Disable and remove them from the pool instead.',
         PLAYER_MUST_BE_DISABLED: 'Disable the player before permanently deleting them.', NICKNAME_TAKEN: 'That player nickname already exists.', EMPTY_PLAYER_POOL: 'The player pool is empty. Ask an administrator to import players.', DIFFICULTY_UNAVAILABLE: 'This difficulty is unavailable or has no players.', INVALID_DIFFICULTY: 'One or more difficulties do not exist.',
         REDIS_UNAVAILABLE: 'The game state service is temporarily unavailable.', RATE_LIMITED: 'Too many requests. Try again later.', RATE_LIMIT_UNAVAILABLE: 'The service is busy. Try again later.',
-        AUTH_BUSY: 'The login service is busy. Try again later.', IDENTITY_REQUIRED: 'Identity verification failed. Refresh the page.', ALREADY_IN_ROOM: 'You are already in a room. Leave it first.',
+        AUTH_BUSY: 'The login service is busy. Try again later.', IDENTITY_REQUIRED: 'Identity verification failed. Refresh the page.', API_TOKEN_REQUIRED: 'API token required.', API_TOKEN_INVALID: 'The API token is invalid or expired.', API_TOKEN_NOT_FOUND: 'API token not found.', API_TOKEN_LIMIT_REACHED: 'The limit of 20 active API tokens has been reached.', ALREADY_IN_ROOM: 'You are already in a room. Leave it first.',
         ROOM_NOT_FOUND: 'Room not found.', ROOM_STARTED: 'The match has already started.', ROOM_FULL: 'The room is full.', SPECTATING_DISABLED: 'Spectating is disabled for this room.',
         ROOM_CAPACITY_REACHED: 'The server has reached its room limit. Try again later.', NOT_IN_WAITING_ROOM: 'You are not in a waiting room.', NOT_IN_ROOM: 'You are not in a room.',
         ROOM_NOT_READY: 'The room cannot start yet.', ROOM_BUSY: 'The room is busy. Try again.', NOT_HOST: 'Only the host can start the match.', NEED_TWO_PLAYERS: 'Two players are required.',
@@ -505,7 +507,7 @@ export const resources = {
       announcements: { title: '更新情報', empty: 'お知らせはまだありません' },
       resourceUpdate: { listenFailed: '更新情報を受信できません。後でページを更新してください。', title: '更新があります', laterAria: '後で更新', message: '新しいページリソースがあります。更新すると最新版を利用できます。', later: '後で', refresh: '今すぐ更新' },
       admin: {
-        title: '管理画面', presence: 'リアルタイム接続状況', online: 'オンライン人数', multiRooms: 'マルチルーム', singleGames: 'ソロゲーム', playersTab: '選手管理', difficultiesTab: '難易度管理', usersTab: 'ユーザー管理', announcementsTab: 'お知らせ管理', resourcesTab: 'リソースバージョン',
+        title: '管理画面', presence: 'リアルタイム接続状況', online: 'オンライン人数', multiRooms: 'マルチルーム', singleGames: 'ソロゲーム', playersTab: '選手管理', difficultiesTab: '難易度管理', usersTab: 'ユーザー管理', announcementsTab: 'お知らせ管理', apiTokensTab: 'API トークン', resourcesTab: 'リソースバージョン',
         playersTitle: '選手管理', totalPlayers: '選手 {{count}} 名', addPlayer: '選手を追加', searchPlayers: 'ニックネーム、国、地域、チームを検索', pageSize: '1 ページ', noMatchPlayers: '一致する選手がいません', noPlayers: '選手がいません', pageOf: '{{page}} / {{total}} ページ', zeroItems: '0 件',
         importTitle: 'JSON 一括インポート', importDescription: '選手配列を貼り付けます。difficulties 配列で複数の難易度を設定できます。',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"ウクライナ","region":"ヨーロッパ","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: 'インポート',
@@ -518,6 +520,7 @@ export const resources = {
         resourcesTitle: 'リソースバージョン', currentVersion: '現在のページバージョン', broadcastTitle: 'リソース更新を通知しますか？', broadcastMessage: '異なるバージョンのオンラインユーザーに更新案内が表示され、以後の接続にも通知されます。', broadcastConfirm: '通知する', broadcastSuccess: '現在のリソースバージョンを通知しました', broadcasting: '通知中...', broadcast: '現在のバージョンを通知',
         usersTitle: 'ユーザー管理', totalUsers: '登録ユーザー {{count}} 名', searchUsers: 'ユーザー名または匿名 ID を検索', noMatchUsers: '一致するユーザーがいません', noUsers: '登録ユーザーがいません', username: 'ユーザー名', anonymousId: '匿名 ID', permission: '権限', createdAt: '登録日時', adminRole: '管理者', userRole: 'ユーザー', querying: '取得中', viewStats: '戦績を見る', gameRecords: '対局履歴',
         userStats: 'ユーザー戦績', closeUserStats: 'ユーザー戦績を閉じる', gamesTitle: '対局履歴', closeGames: '対局履歴を閉じる', gameType: '対局種別', single: 'ソロ', multi: 'マルチ', opponent: '対戦相手', noSingleGames: 'ソロ対局がありません', noMultiGames: 'マルチ対局がありません',
+        apiTokensTitle: '外部 API トークン', apiTokensCount: '有効なトークン {{count}} 件', apiTokenName: 'トークン名', apiTokenNamePlaceholder: '例：選手データ同期', apiTokenExpiresIn: '有効日数（1-365）', createApiToken: 'トークンを生成', creatingApiToken: '生成中...', apiTokenCreated: 'API トークンを生成しました', newApiToken: '新しい API トークン', apiTokenShownOnce: 'シークレットは一度だけ表示されます。安全に保管してください。', copyApiToken: 'トークンをコピー', apiTokenCopied: 'コピーしました', apiTokenCopyFailed: 'コピーできませんでした。トークンを手動で選択してください。', noApiTokens: '有効な API トークンはありません', apiTokenCreatedAt: '作成：{{date}}', apiTokenExpiresAt: '期限：{{date}}', revokeApiToken: '無効化', revokeApiTokenTitle: '{{name}} を無効化しますか？', revokeApiTokenMessage: 'このトークンを使用する外部呼び出しは直ちに無効になります。', apiTokenRevoked: 'API トークンを無効化しました',
       },
       errors: {
         VALIDATION_FAILED: '入力形式が正しくありません', INVALID_REQUEST_BODY: 'リクエストデータが不足しています。もう一度お試しください。', PAYLOAD_TOO_LARGE: 'インポートデータが大きすぎます。分割して再試行してください。',
@@ -528,7 +531,7 @@ export const resources = {
         PLAYER_MUST_BE_DISABLED: '完全削除する前に選手を無効化してください。', NICKNAME_TAKEN: 'この選手名は既に存在します。', EMPTY_PLAYER_POOL: '選手プールが空です。管理者にインポートを依頼してください。',
         DIFFICULTY_UNAVAILABLE: 'この難易度は現在利用できないか、選手プールが空です。', INVALID_DIFFICULTY: '存在しない難易度が含まれています。',
         REDIS_UNAVAILABLE: 'ゲーム状態サービスを一時的に利用できません。', RATE_LIMITED: '操作が多すぎます。後でもう一度お試しください。', RATE_LIMIT_UNAVAILABLE: 'サービスが混雑しています。後でもう一度お試しください。',
-        AUTH_BUSY: 'ログインサービスが混雑しています。', IDENTITY_REQUIRED: '本人確認に失敗しました。ページを更新してください。', ALREADY_IN_ROOM: 'すでにルームに参加しています。先に退出してください。',
+        AUTH_BUSY: 'ログインサービスが混雑しています。', IDENTITY_REQUIRED: '本人確認に失敗しました。ページを更新してください。', API_TOKEN_REQUIRED: 'API トークンが必要です。', API_TOKEN_INVALID: 'API トークンが無効または期限切れです。', API_TOKEN_NOT_FOUND: 'API トークンが見つかりません。', API_TOKEN_LIMIT_REACHED: '有効な API トークンは最大 20 件です。', ALREADY_IN_ROOM: 'すでにルームに参加しています。先に退出してください。',
         ROOM_NOT_FOUND: 'ルームが見つかりません。', ROOM_STARTED: '対局はすでに始まっています。', ROOM_FULL: 'ルームは満員です。', SPECTATING_DISABLED: 'このルームは観戦できません。',
         ROOM_CAPACITY_REACHED: 'サーバーのルーム数が上限に達しました。後でもう一度お試しください。', NOT_IN_WAITING_ROOM: '待機中のルームにいません。', NOT_IN_ROOM: 'ルームに参加していません。',
         ROOM_NOT_READY: 'ルームはまだ開始できません。', ROOM_BUSY: 'ルームを処理中です。もう一度お試しください。', NOT_HOST: 'ホストのみ対局を開始できます。', NEED_TWO_PLAYERS: '2 人のプレイヤーが必要です。',

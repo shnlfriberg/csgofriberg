@@ -58,6 +58,8 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasColumn('match_records', 'forfeited_key')).toBe(true);
     expect(await instance.schema.hasColumn('games', 'first_guess_player_id')).toBe(true);
     expect(await instance.schema.hasColumn('users', 'display_id')).toBe(true);
+    expect(await instance.schema.hasTable('api_tokens')).toBe(true);
+    expect(await instance.schema.hasColumn('api_tokens', 'token_hash')).toBe(true);
     const player = await instance('players').where({ nickname: 'legacy' }).first();
     expect(player.age).toBe(new Date().getFullYear() - 1990);
     expect((await instance('players').columnInfo('age')).nullable).toBe(false);

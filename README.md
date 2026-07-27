@@ -44,7 +44,7 @@
 - 🌏 **多语言** —— 简体中文 / English / 日本語;前后端交互仅传递错误码,文案统一在前端翻译
 - 🎨 **双主题** —— Blast 暗色 / 日间浅色,首次访问跟随系统偏好
 - 🛡 **PoW 人机验证** —— 公开接口由 WASM 工作量证明保护(Rust 编译,仓库内置预编译产物)
-- 🛠 **管理后台** —— 选手增删改、JSON 批量导入、公告管理
+- 🛠 **管理后台** —— 选手增删改、JSON 批量导入、外部 API Token、公告管理
 
 ## 技术栈
 
@@ -128,6 +128,34 @@ Docker Compose 部署、自动数据库迁移、管理员创建、更新和回�
 ## 选手数据
 
 选手数据集独立维护在 [**shnlfriberg/csgo-major-db**](https://github.com/shnlfriberg/csgo-major-db):646 名 CS Major 选手的 `players.json`,可直接通过管理后台批量导入,每次提交自动校验格式合法性。数据纠错与新增选手请到该仓库[提交 issue](https://github.com/shnlfriberg/csgo-major-db/issues/new/choose)。
+
+### 外部选手更新 API
+
+管理员可在管理后台的 **API Token** 页生成最长 365 天有效的 Bearer Token。明文只在创建时返回一次，服务端仅保存 SHA-256 哈希；每位管理员最多保留 20 个有效 Token，撤销后立即失效。
+
+外部 API 不需要浏览器 PoW，但保留全局限流与独立的失效关闭限流。请求统一携带：
+
+```http
+Authorization: Bearer csgf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Content-Type: application/json
+```
+
+可用端点：
+
+- `POST /api/external/players`：新增单个选手，body 与管理后台新增选手格式相同。
+- `PUT /api/external/players/:id`：部分更新选手，只传需要修改的字段。
+- `POST /api/external/players/import`：按昵称批量 upsert，body 为 `{ "players": [...] }`，单次最多 1000 名。
+
+示例：
+
+```bash
+curl -X PUT 'https://example.com/api/external/players/123' \
+  -H 'Authorization: Bearer csgf_your_token' \
+  -H 'Content-Type: application/json' \
+  -d '{"team":"NAVI","age":27,"difficulties":["normal","easy"]}'
+```
+
+外部 API 不提供永久删除；同步源可将 `is_enabled` 设为 `false`，使选手立即退出目标池与猜测列表，同时保留历史对局。
 
 ## 项目结构
 

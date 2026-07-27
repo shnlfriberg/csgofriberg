@@ -122,6 +122,26 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     `create index${usersIndexConcurrently} if not exists "users_display_id_idx" on "users" ("display_id")`
   );
 
+  if (!(await instance.schema.hasTable('api_tokens'))) {
+    await instance.schema.createTable('api_tokens', (t) => {
+      t.increments('id').primary();
+      t.string('name', 64).notNullable();
+      t.string('token_hash', 64).notNullable().unique();
+      t.string('prefix', 16).notNullable();
+      t.integer('created_by_user_id')
+        .notNullable()
+        .references('id')
+        .inTable('users')
+        .onDelete('CASCADE');
+      t.timestamp('expires_at').notNullable();
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+  }
+  const apiTokensIndexConcurrently = instance.client.config.client === 'pg' ? ' concurrently' : '';
+  await instance.raw(
+    `create index${apiTokensIndexConcurrently} if not exists "api_tokens_owner_created_idx" on "api_tokens" ("created_by_user_id", "created_at")`
+  );
+
   if (!(await instance.schema.hasTable('app_migrations'))) {
     await instance.schema.createTable('app_migrations', (t) => {
       t.string('name', 128).primary();
