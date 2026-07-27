@@ -127,7 +127,12 @@
     padding-inline: 2px;
     font-size: var(--fs-3xs);
   }
-  .leaderboard-self-summary { flex-wrap: wrap; }
+  .leaderboard-self-summary {
+    grid-template-columns: max-content minmax(4.5rem, max-content) minmax(0, 1fr);
+  }
+  .leaderboard-controls { align-items: stretch; flex-direction: column; }
+  .leaderboard-mode-tabs,
+  .leaderboard-difficulty-select { flex: none; width: 100%; }
   .leaderboard-mode-tabs button { padding-inline: 5px; font-size: var(--fs-xs); }
 
   .home-hero { padding: 34px 18px 28px; border-radius: 18px; }

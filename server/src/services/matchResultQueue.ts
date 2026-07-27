@@ -3,6 +3,7 @@ import { db } from '../db/knex';
 import { duplicateRedisClient, redis, redisKey } from '../redis';
 import { invalidateCached } from './queryCache';
 import { logTransientError } from './transientLog';
+import { leaderboardCacheKey } from './leaderboardCache';
 
 export interface MatchResultPayload {
   recordId: string;
@@ -73,7 +74,7 @@ async function persist(payload: MatchResultPayload): Promise<void> {
   });
   if (insertedMatch) {
     await invalidateCached(
-      'leaderboard:multi',
+      leaderboardCacheKey('multi', payload.dbType),
       ...payload.participants.flatMap((player) => [
         `stats:personal:${player.key}`,
         `room-player-performance:${player.key}`,

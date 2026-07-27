@@ -171,7 +171,7 @@ export const resources = {
       },
       leaderboard: {
         title: '排行榜', player: '玩家', wins: '胜场', total: '总场次', winRate: '胜率', avgGuesses: '平均猜测', self: '我',
-        myRank: '我的排名', unranked: '暂无排名', typeLabel: '排行榜类型', beginner: '单人入门版', easy: '单人简单版', normal: '单人完整版', multi: '多人对局',
+        myRank: '我的排名', unranked: '暂无排名', modeLabel: '模式', difficultyLabel: '难度', single: '单人', multi: '多人', selection: '{{mode}} · {{difficulty}}',
         empty: '还没有{{type}}排行记录',
       },
       stats: {
@@ -335,7 +335,7 @@ export const resources = {
       },
       leaderboard: {
         title: 'Leaderboard', player: 'Player', wins: 'Wins', total: 'Games', winRate: 'Win rate', avgGuesses: 'Avg. guesses', self: 'You', myRank: 'My rank',
-        unranked: 'Unranked', typeLabel: 'Leaderboard type', beginner: 'Solo Beginner', easy: 'Solo Easy', normal: 'Solo Full', multi: 'Multiplayer', empty: 'No {{type}} leaderboard records yet',
+        unranked: 'Unranked', modeLabel: 'Mode', difficultyLabel: 'Difficulty', single: 'Solo', multi: 'Multiplayer', selection: '{{mode}} · {{difficulty}}', empty: 'No {{type}} leaderboard records yet',
       },
       stats: {
         loadFailed: 'Failed to load statistics',
@@ -494,7 +494,7 @@ export const resources = {
       },
       leaderboard: {
         title: 'ランキング', player: 'プレイヤー', wins: '勝利数', total: '試合数', winRate: '勝率', avgGuesses: '平均予想数', self: '自分', myRank: '自分の順位',
-        unranked: '順位なし', typeLabel: 'ランキング種別', beginner: 'ソロ・入門', easy: 'ソロ・イージー', normal: 'ソロ・フル', multi: 'マルチプレイ', empty: '{{type}}のランキング記録はまだありません',
+        unranked: '順位なし', modeLabel: 'モード', difficultyLabel: '難易度', single: 'ソロ', multi: 'マルチプレイ', selection: '{{mode}} · {{difficulty}}', empty: '{{type}}のランキング記録はまだありません',
       },
       stats: {
         loadFailed: '統計データの読み込みに失敗しました',

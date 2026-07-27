@@ -227,7 +227,7 @@
 .admin-api-token-form {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) 160px auto;
-  align-items: end;
+  align-items: flex-end;
   gap: 12px;
   margin-top: 16px;
 }
@@ -353,11 +353,13 @@
   line-height: 1;
 }
 .leaderboard-self-summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(5.5rem, max-content) minmax(7rem, max-content);
   align-items: baseline;
   justify-content: center;
   gap: 10px;
   width: min(1160px, 100%);
+  min-height: 48px;
   margin: 0 auto 14px;
   padding: 12px 16px;
   border: 1px solid var(--border);
@@ -365,12 +367,30 @@
   background: var(--card-soft);
   color: var(--text-sec);
 }
-.leaderboard-self-summary strong { color: var(--text); font-size: 1.05rem; }
-.leaderboard-mode-tabs {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+.leaderboard-self-summary-label { text-align: right; }
+.leaderboard-self-summary strong { color: var(--text); font-size: 1.05rem; text-align: center; }
+.leaderboard-self-summary-name { min-width: 0; overflow-wrap: anywhere; }
+.leaderboard-self-placeholder {
+  display: inline-block;
+  height: 0.85em;
+  border-radius: var(--radius-sm);
+  background: var(--border);
+}
+.leaderboard-self-placeholder.rank { width: 3.5rem; }
+.leaderboard-self-placeholder.name { width: 6.5rem; }
+.leaderboard-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
   width: min(620px, 100%);
   margin: 0 auto 14px;
+}
+.leaderboard-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  flex: 1 1 320px;
+  margin: 0;
   padding: 3px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -392,6 +412,15 @@
   color: var(--text);
   box-shadow: var(--shadow-sm);
 }
+.leaderboard-difficulty-select {
+  display: grid;
+  flex: 0 1 220px;
+  gap: 5px;
+  color: var(--text-sec);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+}
+.leaderboard-difficulty-select .input { width: 100%; min-height: 42px; }
 .admin-import-card {
   width: min(1160px, 100%);
   margin-inline: auto;

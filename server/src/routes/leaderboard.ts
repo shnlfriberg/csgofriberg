@@ -7,30 +7,34 @@ import { rateLimit } from '../middleware/rateLimit';
 import { config } from '../config';
 import { optionalAuth, userNameFromUsername } from '../middleware/auth';
 import { isDifficultyAvailable } from '../services/playerCache';
+import { leaderboardCacheKey } from '../services/leaderboardCache';
 
 const router = Router();
 router.use(optionalAuth);
+const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
 const leaderboardQuery = z.object({
-  type: z.string().trim().regex(/^(multi|[a-z0-9][a-z0-9_-]{0,31})$/).default('beginner'),
+  mode: z.enum(['single', 'multi']).default('single'),
+  difficulty: difficultyKeySchema.default('beginner'),
 });
 
-/** 排行榜: 各单人难度和多人分别按胜场排序。 */
+/** 排行榜: 单人和多人均按难度分组，再按胜场排序。 */
 router.get(
   '/',
   rateLimit({ name: 'leaderboard', limit: 20, windowSeconds: 60, failClosed: true }),
   validateQuery(leaderboardQuery),
   asyncHandler(async (req, res) => {
     if (!config.showLeaderboard) throw new HttpError(404, 'FEATURE_DISABLED');
-    const { type } = req.query as unknown as z.infer<typeof leaderboardQuery>;
-    if (type !== 'multi' && !isDifficultyAvailable(type)) {
+    const { mode, difficulty } = req.query as unknown as z.infer<typeof leaderboardQuery>;
+    if (!isDifficultyAvailable(difficulty)) {
       throw new HttpError(400, 'DIFFICULTY_UNAVAILABLE');
     }
-    const board = await cached(`leaderboard:${type}`, 30, async () => {
-      const rows = type === 'multi'
+    const board = await cached(leaderboardCacheKey(mode, difficulty), 30, async () => {
+      const rows = mode === 'multi'
         ? await db('match_players as mp')
           .join('users as u', 'u.id', 'mp.user_id')
           .join('match_records as m', 'm.id', 'mp.match_id')
           .where('u.leaderboard_hidden', false)
+          .where('m.db_type', difficulty)
           .groupBy('u.id', 'u.username')
           .select('u.id', 'u.username')
           .count({ total: 'mp.id' })
@@ -38,7 +42,7 @@ router.get(
         : await db('games as g')
           .join('users as u', 'u.id', 'g.user_id')
           .where('u.leaderboard_hidden', false)
-          .where('g.mode', type)
+          .where('g.mode', difficulty)
           .whereNot('g.status', 'playing')
           .groupBy('u.id', 'u.username')
           .select('u.id', 'u.username')
@@ -55,7 +59,7 @@ router.get(
           total: Number(row.total),
           wins: Number(row.wins ?? 0),
           winRate: Number(row.total) ? Number(row.wins ?? 0) / Number(row.total) : 0,
-          avgGuesses: type === 'multi' || row.avgGuesses == null ? null : Number(row.avgGuesses),
+          avgGuesses: mode === 'multi' || row.avgGuesses == null ? null : Number(row.avgGuesses),
         }))
         .sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.total - a.total || a.id - b.id);
     });
@@ -64,7 +68,8 @@ router.get(
       ? board.findIndex((row) => row.id === req.user!.id)
       : -1;
     res.json({
-      type,
+      mode,
+      difficulty,
       items: board.slice(0, 50),
       currentUser: req.user
         ? {

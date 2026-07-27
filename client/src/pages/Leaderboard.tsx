@@ -18,10 +18,11 @@ interface BoardRow {
   avgGuesses: number | null;
 }
 
-type LeaderboardType = string;
+type LeaderboardMode = 'single' | 'multi';
 
 interface LeaderboardResponse {
-  type: LeaderboardType;
+  mode: LeaderboardMode;
+  difficulty: string;
   items: BoardRow[];
   currentUser: { displayId: string; rank: number | null } | null;
 }
@@ -29,25 +30,25 @@ interface LeaderboardResponse {
 export default function Leaderboard() {
   const { t } = useTranslation();
   const difficulties = AVAILABLE_DIFFICULTIES;
-  const [type, setType] = useState<LeaderboardType>(AVAILABLE_DIFFICULTIES[0]?.key ?? 'multi');
+  const [mode, setMode] = useState<LeaderboardMode>('single');
+  const [difficulty, setDifficulty] = useState(AVAILABLE_DIFFICULTIES[0]?.key ?? 'beginner');
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [currentUser, setCurrentUser] = useState<LeaderboardResponse['currentUser']>(null);
   const [loading, setLoading] = useState(true);
   const requestId = useRef(0);
   const currentUserId = useAuth((state) => state.user?.id ?? null);
-  const leaderboardTypes = [...difficulties.map((item) => item.key), 'multi'];
 
   useEffect(() => {
-    if (difficulties.length && type !== 'multi' && !difficulties.some((item) => item.key === type)) {
-      setType(difficulties[0].key);
+    if (difficulties.length && !difficulties.some((item) => item.key === difficulty)) {
+      setDifficulty(difficulties[0].key);
     }
-  }, [difficulties, type]);
+  }, [difficulties, difficulty]);
 
   useEffect(() => {
     const currentRequest = ++requestId.current;
     setLoading(true);
     api
-      .get<LeaderboardResponse>('/leaderboard', { params: { type } })
+      .get<LeaderboardResponse>('/leaderboard', { params: { mode, difficulty } })
       .then((res) => {
         if (currentRequest !== requestId.current) return;
         setRows(res.data.items);
@@ -59,12 +60,22 @@ export default function Leaderboard() {
       .finally(() => {
         if (currentRequest === requestId.current) setLoading(false);
       });
-  }, [type]);
+  }, [mode, difficulty]);
 
-  const chooseType = (next: LeaderboardType) => {
-    setType(next);
+  const resetBoard = () => {
+    setLoading(true);
     setRows([]);
     setCurrentUser(null);
+  };
+
+  const chooseMode = (next: LeaderboardMode) => {
+    setMode(next);
+    resetBoard();
+  };
+
+  const chooseDifficulty = (next: string) => {
+    setDifficulty(next);
+    resetBoard();
   };
 
   const columns: Column<BoardRow>[] = [
@@ -82,43 +93,76 @@ export default function Leaderboard() {
     { key: 'wins', title: t('leaderboard.wins') },
     { key: 'total', title: t('leaderboard.total') },
     { key: 'winRate', title: t('leaderboard.winRate'), render: (r) => `${(r.winRate * 100).toFixed(1)}%` },
-    ...(type === 'multi' ? [] : [{
+    ...(mode === 'multi' ? [] : [{
       key: 'avgGuesses',
       title: t('leaderboard.avgGuesses'),
       render: (r: BoardRow) => (r.avgGuesses != null ? r.avgGuesses.toFixed(2) : '-'),
     }]),
   ];
 
+  const selectionLabel = t('leaderboard.selection', {
+    mode: t(`leaderboard.${mode}`),
+    difficulty: difficultyLabel(t, difficulty),
+  });
+
   return (
     <Page title={t('leaderboard.title')} icon={<Trophy size={17} />}>
-      {currentUser && (
-        <div className="leaderboard-self-summary">
-          <span>{t('leaderboard.myRank')}</span>
-          <strong>{currentUser.rank == null ? t('leaderboard.unranked') : `#${currentUser.rank}`}</strong>
-          <span>{currentUser.displayId}</span>
+      {currentUserId != null && (
+        <div
+          className="leaderboard-self-summary"
+          aria-label={t('leaderboard.myRank')}
+          aria-busy={loading}
+        >
+          <span className="leaderboard-self-summary-label">{t('leaderboard.myRank')}</span>
+          <strong>
+            {loading
+              ? <span className="leaderboard-self-placeholder rank" aria-hidden="true" />
+              : currentUser?.rank == null ? t('leaderboard.unranked') : `#${currentUser.rank}`}
+          </strong>
+          <span className="leaderboard-self-summary-name">
+            {loading
+              ? <span className="leaderboard-self-placeholder name" aria-hidden="true" />
+              : currentUser?.displayId ?? '\u00a0'}
+          </span>
         </div>
       )}
-      <div className="leaderboard-mode-tabs" role="tablist" aria-label={t('leaderboard.typeLabel')}>
-        {leaderboardTypes.map((option) => (
-          <button
-            type="button"
-            role="tab"
-            aria-selected={type === option}
-            className={type === option ? 'active' : ''}
-            key={option}
-            onClick={() => chooseType(option)}
+      <div className="leaderboard-controls">
+        <div className="leaderboard-mode-tabs" role="tablist" aria-label={t('leaderboard.modeLabel')}>
+          {(['single', 'multi'] as const).map((option) => (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={mode === option}
+              className={mode === option ? 'active' : ''}
+              key={option}
+              onClick={() => chooseMode(option)}
+            >
+              {t(`leaderboard.${option}`)}
+            </button>
+          ))}
+        </div>
+        <label className="leaderboard-difficulty-select">
+          <span>{t('leaderboard.difficultyLabel')}</span>
+          <select
+            className="input"
+            value={difficulty}
+            onChange={(event) => chooseDifficulty(event.target.value)}
           >
-            {option === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, option)}
-          </button>
-        ))}
+            {difficulties.map((option) => (
+              <option key={option.key} value={option.key}>
+                {difficultyLabel(t, option.key)}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
-      <div className={`card leaderboard-card leaderboard-card-${type}`}>
+      <div className={`card leaderboard-card leaderboard-card-${mode}`}>
         <DataTable
           columns={columns}
           rows={rows}
           rowKey={(r) => r.id}
           loading={loading}
-          empty={t('leaderboard.empty', { type: type === 'multi' ? t('leaderboard.multi') : difficultyLabel(t, type) })}
+          empty={t('leaderboard.empty', { type: selectionLabel })}
         />
       </div>
     </Page>

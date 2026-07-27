@@ -16,6 +16,7 @@ import { validateBody, asyncHandler, HttpError } from '../middleware/common';
 import { User } from '../types';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { invalidateCached } from '../services/queryCache';
+import { leaderboardCacheKey } from '../services/leaderboardCache';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from '../services/password';
 import { DIFFICULTY_LEVELS } from '../difficulties';
 
@@ -158,8 +159,7 @@ router.post(
       .update({ user_id: req.user!.id, guest_key: null });
     clearGuestCookie(res);
     await invalidateCached(
-      ...DIFFICULTY_LEVELS.map((difficulty) => `leaderboard:${difficulty.key}`),
-      'leaderboard:multi',
+      ...DIFFICULTY_LEVELS.map((difficulty) => leaderboardCacheKey('single', difficulty.key)),
       `stats:personal:g:${guestKey}`,
       `stats:personal:u:${req.user!.id}`,
       `room-player-performance:g:${guestKey}`,

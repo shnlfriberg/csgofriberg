@@ -43,6 +43,16 @@ describe('desktop/mobile layout contracts', () => {
     expect(responsive).toMatch(
       /\.leaderboard-card-multi\s+table\s+th:nth-child\(1\)\s*\{\s*width:\s*8%/
     );
+    const dataAdmin = readCss('./data-admin.css');
+    expect(dataAdmin).toMatch(
+      /\.leaderboard-mode-tabs\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s
+    );
+    expect(dataAdmin).toMatch(
+      /\.leaderboard-self-summary\s*\{[^}]*grid-template-columns:[^}]*minmax\(5\.5rem,[^}]*minmax\(7rem,[^}]*min-height:\s*48px/s
+    );
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.leaderboard-controls\s*\{[^}]*flex-direction:\s*column/
+    );
   });
 
   it('keeps wide low-zoom layouts at the 1920px design scale', () => {
