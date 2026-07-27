@@ -11,10 +11,10 @@ import { isDifficultyAvailable } from '../services/playerCache';
 const router = Router();
 router.use(optionalAuth);
 const leaderboardQuery = z.object({
-  type: z.string().trim().regex(/^(multi|[a-z0-9][a-z0-9_-]{0,31})$/).default('easy'),
+  type: z.string().trim().regex(/^(multi|[a-z0-9][a-z0-9_-]{0,31})$/).default('beginner'),
 });
 
-/** 排行榜: 简单单人、完整单人和多人分别按胜场排序。 */
+/** 排行榜: 各单人难度和多人分别按胜场排序。 */
 router.get(
   '/',
   rateLimit({ name: 'leaderboard', limit: 20, windowSeconds: 60, failClosed: true }),

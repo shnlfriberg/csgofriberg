@@ -149,6 +149,19 @@ describe('multiplayer socket integration', () => {
     }
   });
 
+  it('creates multiplayer rooms with the beginner difficulty', async () => {
+    const key = `beginner-room-${Date.now()}`;
+    const token = jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const socket = await connect(withPowCookie(`csgofriberg_guest=${token}`));
+    try {
+      const created = await emit(socket, 'room:create', { dbType: 'beginner', boType: 1 });
+      expect(created.room).toMatchObject({ dbType: 'beginner', boType: 1 });
+      createdRoomIds.push(created.room.id);
+    } finally {
+      socket.disconnect();
+    }
+  });
+
   it('only exposes room player stats to opponents and room spectators', async () => {
     const stamp = Date.now();
     const keyA = `stats-room-a-${stamp}`;

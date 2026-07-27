@@ -1,3 +1,4 @@
+import type { Knex } from 'knex';
 import { db } from './knex';
 import { backfillLegacyPlayerDifficulties, ensureSchema } from './schema';
 import playersData from './seeds/players.json';
@@ -6,6 +7,7 @@ import easyPlayerData from './seeds/easy-players.json';
 
 const MAJOR_CHAMPIONSHIPS_MIGRATION = '20260719-major-championships-backfill';
 const EASY_PLAYERS_MIGRATION = '20260719-easy-players-backfill';
+const BEGINNER_PLAYERS_MIGRATION = '20260727-beginner-players-v2-backfill';
 const normalizeNickname = (value: string) => value.toLocaleLowerCase('en-US').replace(/[_-]/g, '');
 
 export async function seedPlayersIfEmpty(): Promise<void> {
@@ -83,10 +85,43 @@ async function backfillEasyPlayers(): Promise<void> {
   });
 }
 
+export async function backfillBeginnerPlayers(instance: Knex = db): Promise<void> {
+  await instance.transaction(async (trx) => {
+    const applied = await trx('app_migrations').where({ name: BEGINNER_PLAYERS_MIGRATION }).first();
+    if (applied) return;
+    const easyNicknames = new Set(
+      (easyPlayerData as { nickname: string }[]).map((player) => normalizeNickname(player.nickname))
+    );
+    const beginnerNicknames = new Set(
+      (championshipData as { nickname: string; major_championships: number }[])
+        .filter((player) => player.major_championships > 0)
+        .map((player) => normalizeNickname(player.nickname))
+        .filter((nickname) => easyNicknames.has(nickname))
+    );
+    const ids = (await trx('players').select('id', 'nickname'))
+      .filter((player) => beginnerNicknames.has(normalizeNickname(String(player.nickname))))
+      .map((player) => player.id);
+    for (let index = 0; index < ids.length; index += 500) {
+      await trx('player_difficulties')
+        .insert(ids.slice(index, index + 500).map((id) => ({
+          player_id: id,
+          difficulty_key: 'beginner',
+        })))
+        .onConflict(['player_id', 'difficulty_key'])
+        .ignore();
+    }
+    await trx('app_migrations')
+      .insert({ name: BEGINNER_PLAYERS_MIGRATION })
+      .onConflict('name')
+      .ignore();
+  });
+}
+
 export async function initDb(): Promise<void> {
   await ensureSchema();
   await seedPlayersIfEmpty();
   await backfillMajorChampionships();
   await backfillEasyPlayers();
   await backfillLegacyPlayerDifficulties();
+  await backfillBeginnerPlayers();
 }

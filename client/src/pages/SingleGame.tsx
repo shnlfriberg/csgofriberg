@@ -11,7 +11,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
-import { difficultyIcon, difficultyLabel } from '../utils/difficulty';
+import { difficultyDescription, difficultyIcon, difficultyLabel } from '../utils/difficulty';
 import { setStoredSingleDifficulty } from '../store/singleDifficulty';
 
 function exitGame(gameId: string): Promise<unknown> {
@@ -20,7 +20,7 @@ function exitGame(gameId: string): Promise<unknown> {
 
 export default function SingleGame() {
   const { t } = useTranslation();
-  const { mode = 'easy' } = useParams();
+  const { mode = 'beginner' } = useParams();
   const navigate = useNavigate();
   const confirm = useConfirm();
   const isValidMode = AVAILABLE_DIFFICULTIES.some((d) => d.key === mode);
@@ -300,7 +300,9 @@ export default function SingleGame() {
         <div className="game-empty">
           <Target size={32} strokeWidth={1.5} />
           <p>{t('game.startHint')}</p>
-          <p className="game-empty-sub">{mode === 'easy' ? t('game.easyHint') : t('game.normalHint')}</p>
+          <p className="game-empty-sub">
+            {difficultyDescription(t, mode) || t('game.normalHint')}
+          </p>
           <div className="guess-legend" aria-label={t('rules.feedbackLabel')}>
             <span><i className="legend-correct" />{t('rules.greenTitle')}</span>
             <span><i className="legend-close" />{t('rules.yellowTitle')}</span>

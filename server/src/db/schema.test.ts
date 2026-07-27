@@ -1,6 +1,7 @@
 import knex from 'knex';
 import { afterEach, describe, expect, it } from 'vitest';
 import { backfillLegacyPlayerDifficulties, ensureSchema } from './schema';
+import { backfillBeginnerPlayers } from './init';
 import { userNameFromUsername } from '../services/identityDisplay';
 
 const instances: ReturnType<typeof knex>[] = [];
@@ -118,5 +119,41 @@ describe('player schema migration', () => {
 
     expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
     expect((await instance('announcements').where({ title: 'legacy' }).first()).is_popup).toBe(0);
+  });
+
+  it('backfills beginner membership only for easy Major champions', async () => {
+    const instance = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+    });
+    instances.push(instance);
+    await ensureSchema(instance);
+    const players = await instance('players').insert([
+      {
+        nickname: 's1mple',
+        nationality: '测试',
+        age: 25,
+        major_championships: 0,
+        is_easy: true,
+      },
+      {
+        nickname: 'beginner-non-champion',
+        nationality: '测试',
+        age: 25,
+        major_championships: 0,
+        is_easy: true,
+      },
+    ]).returning(['id', 'nickname']);
+
+    await backfillBeginnerPlayers(instance);
+
+    const memberships = await instance('player_difficulties')
+      .where({ difficulty_key: 'beginner' })
+      .pluck('player_id');
+    const champion = players.find((player) => player.nickname === 's1mple')!;
+    expect(memberships).toEqual([champion.id]);
+    expect(await instance('difficulty_levels').where({ key: 'beginner' }).first())
+      .toMatchObject({ sort_order: 5, is_enabled: 1 });
   });
 });

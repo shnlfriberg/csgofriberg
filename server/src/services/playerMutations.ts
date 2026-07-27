@@ -130,7 +130,13 @@ export async function importPlayers(
     const importedPlayers = players.map((player) => {
       const { difficulties, is_easy, ...values } = player;
       const desired = difficulties
-        ?? (is_easy !== undefined ? ['normal', ...(is_easy ? ['easy'] : [])] : null)
+        ?? (is_easy !== undefined
+          ? [
+            'normal',
+            ...(is_easy ? ['easy'] : []),
+            ...(is_easy && player.major_championships > 0 ? ['beginner'] : []),
+          ]
+          : null)
         ?? (existingNames.has(player.nickname) ? null : ['normal']);
       desiredDifficulties.set(player.nickname, desired);
       return {

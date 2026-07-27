@@ -56,6 +56,16 @@ describe('leaderboard', () => {
     })));
     await db('games').insert([
       {
+        session_id: `leaderboard-${stamp}-beginner-win`,
+        user_id: userIds[0],
+        target_player_id: Number(target.id),
+        mode: 'beginner',
+        guesses: '[]',
+        status: 'won',
+        guess_count: 1,
+        finished_at: db.fn.now(),
+      },
+      {
         session_id: `leaderboard-${stamp}-easy-extra`,
         user_id: userIds[0],
         target_player_id: Number(target.id),
@@ -125,9 +135,15 @@ describe('leaderboard', () => {
       { match_id: matchIds[3], user_id: userIds[0], player_key: `u:${userIds[0]}`, player_name: '', score: 1, is_winner: true },
       { match_id: matchIds[3], player_key: `g:leaderboard-${stamp}-3`, player_name: '', score: 0, is_winner: false },
     ]);
-    await invalidateCached('leaderboard:easy', 'leaderboard:normal', 'leaderboard:multi');
+    await invalidateCached('leaderboard:beginner', 'leaderboard:easy', 'leaderboard:normal', 'leaderboard:multi');
 
     try {
+      const beginnerResponse = await fetch(`${baseUrl}/api/leaderboard?type=beginner`);
+      const beginnerData = await beginnerResponse.json();
+      expect(beginnerResponse.status).toBe(200);
+      expect(beginnerData.type).toBe('beginner');
+      expect(beginnerData.items[0]).toMatchObject({ id: userIds[0], wins: 1, total: 1 });
+
       const response = await fetch(`${baseUrl}/api/leaderboard?type=easy`);
       const data = await response.json();
       expect(response.status).toBe(200);
@@ -186,7 +202,7 @@ describe('leaderboard', () => {
       await db('match_records').whereIn('id', matchIds).del();
       await db('games').whereIn('user_id', userIds).del();
       await db('users').whereIn('id', userIds).del();
-      await invalidateCached('leaderboard:easy', 'leaderboard:normal', 'leaderboard:multi');
+      await invalidateCached('leaderboard:beginner', 'leaderboard:easy', 'leaderboard:normal', 'leaderboard:multi');
     }
   });
 });

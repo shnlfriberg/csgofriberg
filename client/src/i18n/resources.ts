@@ -13,6 +13,7 @@ export const resources = {
         unknown: '未知',
         skipToContent: '跳转到主要内容',
         retry: '重试',
+        beginner: '入门版',
         easy: '简单版',
         normal: '完整版',
         active: '现役',
@@ -31,8 +32,10 @@ export const resources = {
         language: '语言',
       },
       difficulty: {
+        beginner: '入门版',
         easy: '简单版',
         normal: '完整版',
+        beginnerDescription: '最大众选手池 · 熟悉规则',
         easyDescription: '知名选手池 · 快速上手',
         normalDescription: '完整数据库 · 终极挑战',
       },
@@ -168,7 +171,7 @@ export const resources = {
       },
       leaderboard: {
         title: '排行榜', player: '玩家', wins: '胜场', total: '总场次', winRate: '胜率', avgGuesses: '平均猜测', self: '我',
-        myRank: '我的排名', unranked: '暂无排名', typeLabel: '排行榜类型', easy: '单人简单版', normal: '单人完整版', multi: '多人对局',
+        myRank: '我的排名', unranked: '暂无排名', typeLabel: '排行榜类型', beginner: '单人入门版', easy: '单人简单版', normal: '单人完整版', multi: '多人对局',
         empty: '还没有{{type}}排行记录',
       },
       stats: {
@@ -232,15 +235,17 @@ export const resources = {
   en: {
     translation: {
       difficulty: {
+        beginner: 'Beginner',
         easy: 'Easy',
         normal: 'Full',
+        beginnerDescription: 'Most recognizable players · Learn the rules',
         easyDescription: 'Famous player pool · Quick start',
         normalDescription: 'Full database · Ultimate challenge',
       },
       common: {
         brand: '弗一把', guest: 'Guest', home: 'Home', close: 'Close', cancel: 'Cancel', confirm: 'Confirm', loading: 'Loading...', noData: 'No data', unknown: 'Unknown',
         skipToContent: 'Skip to main content', retry: 'Retry',
-        easy: 'Easy', normal: 'Full', active: 'Active', retired: 'Retired', win: 'Win', loss: 'Loss', draw: 'Draw', me: 'Me',
+        beginner: 'Beginner', easy: 'Easy', normal: 'Full', active: 'Active', retired: 'Retired', win: 'Win', loss: 'Loss', draw: 'Draw', me: 'Me',
         previousPage: 'Previous page', nextPage: 'Next page', page: 'Page {{page}}', lightTheme: 'Light', darkTheme: 'Dark',
         switchLight: 'Switch to light theme', switchDark: 'Switch to dark theme', language: 'Language',
       },
@@ -330,7 +335,7 @@ export const resources = {
       },
       leaderboard: {
         title: 'Leaderboard', player: 'Player', wins: 'Wins', total: 'Games', winRate: 'Win rate', avgGuesses: 'Avg. guesses', self: 'You', myRank: 'My rank',
-        unranked: 'Unranked', typeLabel: 'Leaderboard type', easy: 'Solo Easy', normal: 'Solo Full', multi: 'Multiplayer', empty: 'No {{type}} leaderboard records yet',
+        unranked: 'Unranked', typeLabel: 'Leaderboard type', beginner: 'Solo Beginner', easy: 'Solo Easy', normal: 'Solo Full', multi: 'Multiplayer', empty: 'No {{type}} leaderboard records yet',
       },
       stats: {
         loadFailed: 'Failed to load statistics',
@@ -390,15 +395,17 @@ export const resources = {
   ja: {
     translation: {
       difficulty: {
+        beginner: '入門',
         easy: 'イージー',
         normal: 'フル',
+        beginnerDescription: '最も有名な選手プール · ルールに慣れる',
         easyDescription: '有名選手プール · すぐ遊べる',
         normalDescription: '完全データベース · 高難度',
       },
       common: {
         brand: '弗一把', guest: 'ゲスト', home: 'メインメニュー', close: '閉じる', cancel: 'キャンセル', confirm: '確認', loading: '読み込み中...', noData: 'データがありません', unknown: '不明',
         skipToContent: '本文へスキップ', retry: '再試行',
-        easy: 'イージー', normal: 'フル', active: '現役', retired: '引退', win: '勝利', loss: '敗北', draw: '引き分け', me: '自分',
+        beginner: '入門', easy: 'イージー', normal: 'フル', active: '現役', retired: '引退', win: '勝利', loss: '敗北', draw: '引き分け', me: '自分',
         previousPage: '前のページ', nextPage: '次のページ', page: '{{page}} ページ', lightTheme: 'ライト', darkTheme: 'ダーク',
         switchLight: 'ライトテーマに切り替え', switchDark: 'ダークテーマに切り替え', language: '言語',
       },
@@ -487,7 +494,7 @@ export const resources = {
       },
       leaderboard: {
         title: 'ランキング', player: 'プレイヤー', wins: '勝利数', total: '試合数', winRate: '勝率', avgGuesses: '平均予想数', self: '自分', myRank: '自分の順位',
-        unranked: '順位なし', typeLabel: 'ランキング種別', easy: 'ソロ・イージー', normal: 'ソロ・フル', multi: 'マルチプレイ', empty: '{{type}}のランキング記録はまだありません',
+        unranked: '順位なし', typeLabel: 'ランキング種別', beginner: 'ソロ・入門', easy: 'ソロ・イージー', normal: 'ソロ・フル', multi: 'マルチプレイ', empty: '{{type}}のランキング記録はまだありません',
       },
       stats: {
         loadFailed: '統計データの読み込みに失敗しました',

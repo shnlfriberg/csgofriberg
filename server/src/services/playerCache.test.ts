@@ -4,7 +4,9 @@ import { db } from '../db/knex';
 import { ensureSchema } from '../db/schema';
 import {
   getPublicPlayerList,
+  isDifficultyAvailable,
   invalidatePlayerCache,
+  pickCachedTarget,
   refreshPlayerCache,
 } from './playerCache';
 
@@ -80,5 +82,29 @@ describe('player cache invalidation', () => {
     await redis()!.incr(redisKey('players:revision:v2'));
 
     expect((await getPublicPlayerList()).players).not.toContainEqual({ id, nickname });
+  });
+
+  it('serves targets from the beginner difficulty pool', async () => {
+    const nickname = `cache-test-beginner-${Date.now()}`;
+    const [row] = await db('players').insert({
+      nickname,
+      nationality: '测试',
+      region: '测试',
+      team: '测试',
+      age: 26,
+      role: 'Rifler',
+      major_championships: 1,
+      major_appearances: 1,
+      is_easy: true,
+      is_active: true,
+      is_enabled: true,
+    }).returning('id');
+    const id = typeof row === 'object' ? row.id : row;
+    await db('player_difficulties').insert({ player_id: id, difficulty_key: 'beginner' });
+
+    await refreshPlayerCache();
+
+    expect(isDifficultyAvailable('beginner')).toBe(true);
+    expect(pickCachedTarget('beginner')?.difficulties).toContain('beginner');
   });
 });

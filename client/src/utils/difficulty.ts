@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
 import type { LucideIcon } from 'lucide-react';
-import { Flame, Gamepad2 } from 'lucide-react';
+import { Flame, Gamepad2, GraduationCap } from 'lucide-react';
 
 export function difficultyLabel(t: TFunction, key: string): string {
   return t(`difficulty.${key}`, { defaultValue: key });
@@ -11,6 +11,7 @@ export function difficultyDescription(t: TFunction, key: string): string {
 }
 
 const DIFFICULTY_ICONS: Record<string, LucideIcon> = {
+  beginner: GraduationCap,
   easy: Gamepad2,
   normal: Flame,
 };
@@ -20,6 +21,7 @@ export function difficultyIcon(key: string): LucideIcon {
 }
 
 const DIFFICULTY_COLORS: Record<string, string> = {
+  beginner: 'var(--primary)',
   easy: 'var(--success)',
   normal: 'var(--accent)',
 };

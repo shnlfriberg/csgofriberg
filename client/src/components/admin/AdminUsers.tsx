@@ -39,7 +39,7 @@ interface UserStatsView {
 interface SingleUserGame {
   type: 'single';
   id: number;
-  mode: 'easy' | 'normal';
+  mode: string;
   status: string;
   guessCount: number;
   answer: string;
@@ -49,7 +49,7 @@ interface SingleUserGame {
 interface MultiUserGame {
   type: 'multi';
   id: number;
-  mode: 'easy' | 'normal';
+  mode: string;
   boType: number;
   result: 'won' | 'lost' | 'draw';
   me: { score: number };
