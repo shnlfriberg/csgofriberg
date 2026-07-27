@@ -17,6 +17,7 @@ import {
   loadSingleGame,
   saveSingleGame,
 } from '../services/singleGameStore';
+import { shouldPersistSingleSettlement } from '../services/singleSettlementLimit';
 
 const router = Router();
 router.use(optionalAuth);
@@ -60,23 +61,27 @@ async function loadOwnedGame(id: string, identityKey: string): Promise<SingleGam
 }
 
 async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promise<void> {
-  await db('games')
-    .insert({
-      session_id: game.id,
-      user_id: game.userId,
-      guest_key: game.guestKey,
-      target_player_id: game.targetPlayerId,
-      mode: game.mode,
-      guesses: JSON.stringify(game.guesses.map((guess) => guess.playerId)),
-      first_guess_player_id: game.guesses[0]?.playerId ?? null,
-      status,
-      guess_count: game.guesses.length,
-      created_at: new Date(game.createdAt),
-      finished_at: db.fn.now(),
-    })
-    .onConflict('session_id')
-    .ignore();
+  const shouldPersist = await shouldPersistSingleSettlement(game.identityKey, game.id);
+  if (shouldPersist) {
+    await db('games')
+      .insert({
+        session_id: game.id,
+        user_id: game.userId,
+        guest_key: game.guestKey,
+        target_player_id: game.targetPlayerId,
+        mode: game.mode,
+        guesses: JSON.stringify(game.guesses.map((guess) => guess.playerId)),
+        first_guess_player_id: game.guesses[0]?.playerId ?? null,
+        status,
+        guess_count: game.guesses.length,
+        created_at: new Date(game.createdAt),
+        finished_at: db.fn.now(),
+      })
+      .onConflict('session_id')
+      .ignore();
+  }
   await deleteSingleGame(game);
+  if (!shouldPersist) return;
   const personalStatsKey = game.userId != null
     ? `stats:personal:u:${game.userId}`
     : `stats:personal:g:${game.guestKey}`;
