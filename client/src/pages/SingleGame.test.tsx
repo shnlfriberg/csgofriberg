@@ -160,6 +160,28 @@ describe('SingleGame UX', () => {
     expect(await screen.findByRole('dialog')).toHaveTextContent('friberg');
   });
 
+  it('keeps an unrecorded settlement warning visible in the answer dialog', async () => {
+    post
+      .mockResolvedValueOnce({ data: { gameId: 'g1', guesses: [], maxGuesses: 8 } } as never)
+      .mockResolvedValueOnce({
+        data: {
+          status: 'lost',
+          recorded: false,
+          answer: { nickname: 'friberg', team: 'NIP', nationality: '瑞典' },
+        },
+      } as never);
+    renderGame('easy');
+    await waitForReadyInput();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: '查看答案' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: '查看答案' }));
+
+    const result = await screen.findByRole('dialog');
+    expect(result).toHaveTextContent('friberg');
+    expect(result).toHaveTextContent('结算频率超过限制，本局不会计入个人战绩和排行榜。');
+  });
+
   it('shows leaving busy state before navigating home', async () => {
     post.mockResolvedValueOnce({ data: { gameId: 'g1', guesses: [], maxGuesses: 8 } } as never);
     renderGame('easy');

@@ -60,7 +60,7 @@ async function loadOwnedGame(id: string, identityKey: string): Promise<SingleGam
   return game;
 }
 
-async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promise<void> {
+async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promise<boolean> {
   const shouldPersist = await shouldPersistSingleSettlement(game.identityKey, game.id);
   if (shouldPersist) {
     await db('games')
@@ -81,7 +81,7 @@ async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promis
       .ignore();
   }
   await deleteSingleGame(game);
-  if (!shouldPersist) return;
+  if (!shouldPersist) return false;
   const personalStatsKey = game.userId != null
     ? `stats:personal:u:${game.userId}`
     : `stats:personal:g:${game.guestKey}`;
@@ -92,6 +92,7 @@ async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promis
     personalStatsKey,
     `room-player-performance:${identityKey}`
   );
+  return true;
 }
 
 router.post(
@@ -159,8 +160,10 @@ router.post(
       game.guesses.push(feedback);
       const finished = feedback.correct || game.guesses.length >= MAX_GUESSES;
       const status = feedback.correct ? 'won' : finished ? 'lost' : 'playing';
-      if (finished) await settleGame(game, feedback.correct ? 'won' : 'lost');
-      else await saveSingleGame(game);
+      const recorded = finished
+        ? await settleGame(game, feedback.correct ? 'won' : 'lost')
+        : undefined;
+      if (!finished) await saveSingleGame(game);
 
       return {
         feedback,
@@ -168,6 +171,7 @@ router.post(
         guessCount: game.guesses.length,
         maxGuesses: MAX_GUESSES,
         answer: finished ? answerView(target) : undefined,
+        recorded,
       };
     });
     res.json(response);
@@ -192,8 +196,8 @@ router.post(
       const game = await loadOwnedGame(gameId, owner.identityKey);
       const target = getPlayer(game.targetPlayerId);
       if (!target) throw new HttpError(500, 'INTERNAL_ERROR');
-      await settleGame(game, 'lost');
-      return { status: 'lost', answer: answerView(target) };
+      const recorded = await settleGame(game, 'lost');
+      return { status: 'lost', answer: answerView(target), recorded };
     });
     res.json(response);
   })

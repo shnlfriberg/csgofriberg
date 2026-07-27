@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { RotateCcw, Lightbulb, Target, X, Home } from 'lucide-react';
+import { CircleAlert, RotateCcw, Lightbulb, Target, X, Home } from 'lucide-react';
 import Page from '../components/Page';
 import GuessBoard from '../components/GuessBoard';
 import GuessInputBar from '../components/GuessInputBar';
@@ -30,6 +30,7 @@ export default function SingleGame() {
   const [guesses, setGuesses] = useState<GuessFeedback[]>([]);
   const [status, setStatus] = useState<'playing' | 'won' | 'lost'>('playing');
   const [answer, setAnswer] = useState<AnswerInfo | null>(null);
+  const [settlementRecorded, setSettlementRecorded] = useState<boolean | null>(null);
   const [showOverlay, setShowOverlay] = useState(false);
   const [inputFocused, setInputFocused] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -57,6 +58,7 @@ export default function SingleGame() {
     setStartError(null);
     setStarting(true);
     setAnswer(null);
+    setSettlementRecorded(null);
     setShowOverlay(false);
     setStatus('playing');
     try {
@@ -140,6 +142,7 @@ export default function SingleGame() {
       setGuesses((g) => [...g, res.data.feedback]);
       setStatus(res.data.status);
       if (res.data.answer) {
+        setSettlementRecorded(res.data.recorded !== false);
         setAnswer(res.data.answer);
         setShowOverlay(true);
       }
@@ -162,6 +165,7 @@ export default function SingleGame() {
       const res = await api.post(`/game/${gameId}/giveup`);
       setStatus('lost');
       if (res.data.answer) {
+        setSettlementRecorded(res.data.recorded !== false);
         setAnswer(res.data.answer);
         setShowOverlay(true);
       }
@@ -318,9 +322,17 @@ export default function SingleGame() {
           tone={status === 'won' ? 'win' : 'lose'}
           onClose={busy ? undefined : () => setShowOverlay(false)}
           extra={
-            <p className="muted">
-              {status === 'won' ? t('game.usedGuesses', { count: guesses.length }) : t('game.missed')}
-            </p>
+            <>
+              <p className="muted">
+                {status === 'won' ? t('game.usedGuesses', { count: guesses.length }) : t('game.missed')}
+              </p>
+              {settlementRecorded === false && (
+                <div className="single-settlement-not-recorded" role="status">
+                  <CircleAlert size={17} aria-hidden="true" />
+                  <span>{t('game.settlementNotRecorded')}</span>
+                </div>
+              )}
+            </>
           }
           actions={
             <>

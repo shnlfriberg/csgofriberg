@@ -154,6 +154,19 @@
   font-style: normal;
 }
 .guess-progress i.used { border-color: var(--primary); background: var(--primary); }
+.single-settlement-not-recorded {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, var(--border));
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  color: var(--text);
+  text-align: left;
+}
+.single-settlement-not-recorded svg { flex: 0 0 auto; color: var(--warning); margin-top: 1px; }
 
 .room-player-row {
   display: flex;

@@ -69,6 +69,7 @@ describe('single-player settlement soft limit', () => {
         expect(settled.data).toMatchObject({
           status: 'lost',
           answer: { id: expect.any(Number), nickname: expect.any(String) },
+          recorded: index < 4,
         });
       }
 
