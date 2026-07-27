@@ -36,7 +36,14 @@ const replay: MultiReplay = {
 
 const stats: PlayerPerformanceStats = {
   single: { games: 8, wins: 5, losses: 3, winRate: 0.625, avgGuesses: 3.2, bestGuesses: 1 },
-  multi: { games: 12, wins: 7, losses: 5, winRate: 7 / 12 },
+  multi: {
+    games: 12,
+    wins: 7,
+    losses: 5,
+    winRate: 7 / 12,
+    recentAverageWinningGuesses: null,
+    recentMatches: [],
+  },
 };
 
 describe('ReplayDialog', () => {

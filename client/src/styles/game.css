@@ -180,6 +180,20 @@
 .room-waiting-card .room-ready-actions .btn {
   min-width: min(160px, 100%);
 }
+.matchmaking-opponent-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.matchmaking-opponent-preview strong {
+  font-size: 1.15rem;
+  font-family: Consolas, monospace;
+}
 .room-player-row > b {
   min-width: 0;
   overflow: hidden;

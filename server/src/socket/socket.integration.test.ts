@@ -13,6 +13,10 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { guestNameFromKey, signToken } from '../middleware/auth';
 import { cancelQueue, getRoom, queueOrTakeOpponent, withRoomLock } from '../services/roomStore';
+import {
+  clearMatchmakingCooldown,
+  recordMatchmakingExit,
+} from '../services/matchmakingCooldown';
 
 let server: http.Server;
 let io: Server;
@@ -67,6 +71,7 @@ function onceEvent(socket: ClientSocket, event: string, timeoutMs = 2_000): Prom
 describe('multiplayer socket integration', () => {
   beforeAll(async () => {
     config.disconnectForfeitMs = 300;
+    config.matchReadyTimeoutMs = 600;
     await initDb();
     await initRedis();
     await setRecoveryWindow(0);
@@ -149,6 +154,27 @@ describe('multiplayer socket integration', () => {
     }
   });
 
+  it('increases ready-check cooldowns by a 1.2 multiplier and caps them', async () => {
+    const identity = `g:cooldown-${Date.now()}`;
+    try {
+      const first = await recordMatchmakingExit(identity);
+      expect(first.retryAt - Date.now()).toBeGreaterThanOrEqual(9_500);
+      expect(first.retryAt - Date.now()).toBeLessThanOrEqual(10_000);
+      const second = await recordMatchmakingExit(identity);
+      expect(second.retryAt - Date.now()).toBeGreaterThanOrEqual(11_500);
+      expect(second.retryAt - Date.now()).toBeLessThanOrEqual(12_000);
+      const third = await recordMatchmakingExit(identity);
+      expect(third.retryAt - Date.now()).toBeGreaterThanOrEqual(14_500);
+      expect(third.retryAt - Date.now()).toBeLessThanOrEqual(15_000);
+      let capped = third;
+      for (let index = 3; index < 20; index += 1) capped = await recordMatchmakingExit(identity);
+      expect(capped.retryAt - Date.now()).toBeGreaterThanOrEqual(119_500);
+      expect(capped.retryAt - Date.now()).toBeLessThanOrEqual(120_000);
+    } finally {
+      await clearMatchmakingCooldown(identity);
+    }
+  });
+
   it('creates multiplayer rooms with the beginner difficulty', async () => {
     const key = `beginner-room-${Date.now()}`;
     const token = jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
@@ -205,6 +231,16 @@ describe('multiplayer socket integration', () => {
         },
       ]);
       for (const [index, won] of [true, false].entries()) {
+        const replay = [{
+          round: 1,
+          targetPlayerId: target.id,
+          winnerKey: won ? `g:${keyB}` : `g:${keyA}`,
+          reason: 'guessed',
+          guessesByPlayer: {
+            [`g:${keyA}`]: [target.id, target.id],
+            [`g:${keyB}`]: won ? [target.id] : [target.id, target.id, target.id],
+          },
+        }];
         const [inserted] = await db('match_records')
           .insert({
             room_id: `${historyPrefix}-multi-${index}`,
@@ -212,16 +248,26 @@ describe('multiplayer socket integration', () => {
             bo_type: 3,
             winner_key: won ? `g:${keyB}` : `g:${keyA}`,
             finish_reason: 'score',
+            replay: JSON.stringify(replay),
           })
           .returning('id');
         const matchId = typeof inserted === 'object' ? inserted.id : inserted;
-        await db('match_players').insert({
-          match_id: matchId,
-          player_key: `g:${keyB}`,
-          player_name: guestNameFromKey(keyB),
-          score: won ? 2 : 1,
-          is_winner: won,
-        });
+        await db('match_players').insert([
+          {
+            match_id: matchId,
+            player_key: `g:${keyB}`,
+            player_name: guestNameFromKey(keyB),
+            score: won ? 2 : 1,
+            is_winner: won,
+          },
+          {
+            match_id: matchId,
+            player_key: `g:${keyA}`,
+            player_name: guestNameFromKey(keyA),
+            score: won ? 1 : 2,
+            is_winner: !won,
+          },
+        ]);
       }
 
       const created = await emit(a, 'room:create', {
@@ -246,7 +292,20 @@ describe('multiplayer socket integration', () => {
             avgGuesses: 2,
             bestGuesses: 2,
           },
-          multi: { games: 2, wins: 1, losses: 1, winRate: 0.5 },
+          multi: {
+            games: 2,
+            wins: 1,
+            losses: 1,
+            winRate: 0.5,
+            recentAverageWinningGuesses: 1,
+            recentMatches: expect.arrayContaining([
+              expect.objectContaining({
+                result: expect.stringMatching(/won|lost/),
+                opponentDisplayId: guestNameFromKey(keyA),
+                rounds: [expect.objectContaining({ meGuesses: expect.any(Number) })],
+              }),
+            ]),
+          },
         },
       });
       expect(await emit(a, 'room:player-stats', { playerKey: `g:${keyA}` }))
@@ -270,46 +329,45 @@ describe('multiplayer socket integration', () => {
     }
   });
 
-  it('waits five seconds after matchmaking before starting the first round', async () => {
+  it('starts a matched room only after both players are ready', async () => {
     const stamp = Date.now();
-    const keyA = `match-delay-a-${stamp}`;
-    const keyB = `match-delay-b-${stamp}`;
+    const keyA = `match-ready-a-${stamp}`;
+    const keyB = `match-ready-b-${stamp}`;
     const tokenA = jwt.sign({ key: keyA, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
     const tokenB = jwt.sign({ key: keyB, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
     const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
     const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
-    let replacement: ClientSocket | null = null;
     try {
       expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true }))
         .toEqual({ queued: true });
       const foundA = onceEvent(a, 'match:found');
       const foundB = onceEvent(b, 'match:found');
-      const roundA = onceEvent(a, 'round:start', 8_000);
-      const roundB = onceEvent(b, 'round:start', 8_000);
-      const matchedAt = Date.now();
       expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true }))
         .toEqual({ queued: false });
 
       const [matchA, matchB] = await Promise.all([foundA, foundB]);
-      expect(matchA.startsAt).toBe(matchB.startsAt);
-      expect(matchA.startsInMs).toBeGreaterThanOrEqual(4_500);
-      expect(matchA.startsInMs).toBeLessThanOrEqual(5_000);
-      expect(matchA.startsAt - matchedAt).toBeGreaterThanOrEqual(4_500);
-      expect(matchA.startsAt - matchedAt).toBeLessThanOrEqual(5_500);
+      expect(matchA.room.id).toBe(matchB.room.id);
+      expect(matchA.room).toMatchObject({
+        status: 'waiting',
+        matchmaking: true,
+        round: 0,
+        players: [{ ready: false }, { ready: false }],
+      });
+      expect(matchA.room.readyCheckEndsAt - matchA.serverNow).toBeGreaterThan(0);
+      expect(matchA.room.readyCheckEndsAt - matchA.serverNow).toBeLessThanOrEqual(600);
 
       const synced = await emit(a, 'room:sync');
       createdRoomIds.push(synced.room.id);
-      expect(synced.serverNow).toEqual(expect.any(Number));
-      expect(synced.room.matchStartsAt - synced.serverNow).toBeGreaterThanOrEqual(4_000);
-      expect(synced.room.matchStartsAt - synced.serverNow).toBeLessThanOrEqual(5_000);
-      expect(synced.room).toMatchObject({
-        status: 'waiting',
-        round: 0,
-        matchStartsAt: matchA.startsAt,
-      });
+      let startedEarly = false;
+      a.once('round:start', () => { startedEarly = true; });
+      expect(await emit(a, 'room:ready', { ready: true })).toEqual({ ok: true });
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      expect(startedEarly).toBe(false);
 
+      const roundA = onceEvent(a, 'round:start');
+      const roundB = onceEvent(b, 'round:start');
+      expect(await emit(b, 'room:ready', { ready: true })).toEqual({ ok: true });
       const [startedA, startedB] = await Promise.all([roundA, roundB]);
-      expect(Date.now() - matchedAt).toBeGreaterThanOrEqual(4_500);
       expect(startedA.serverNow).toEqual(expect.any(Number));
       expect(startedA.room).toMatchObject({ status: 'playing', round: 1, matchStartsAt: null });
       expect(startedB.room.id).toBe(startedA.room.id);
@@ -322,17 +380,78 @@ describe('multiplayer socket integration', () => {
         room.matchResult = { winnerKey: null, reason: 'test', forfeitedKey: null };
         return { room };
       });
-      a.disconnect();
-      replacement = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
-      expect((await emit(replacement, 'room:sync')).room.status).toBe('finished');
-      expect(await emit(replacement, 'room:leave')).toEqual({ ok: true });
-      expect(await emit(replacement, 'room:sync')).toEqual({ code: 'NOT_IN_ROOM' });
+      expect(await emit(a, 'room:leave')).toEqual({ ok: true });
     } finally {
       a.disconnect();
       b.disconnect();
-      replacement?.disconnect();
     }
-  }, 10_000);
+  });
+
+  it('destroys an expired ready check and penalizes only unready players', async () => {
+    const stamp = Date.now();
+    const keyA = `match-timeout-a-${stamp}`;
+    const keyB = `match-timeout-b-${stamp}`;
+    const token = (key: string) => jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const a = await connect(withPowCookie(`csgofriberg_guest=${token(keyA)}`));
+    const b = await connect(withPowCookie(`csgofriberg_guest=${token(keyB)}`));
+    try {
+      expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: true });
+      const foundA = onceEvent(a, 'match:found');
+      const foundB = onceEvent(b, 'match:found');
+      expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: false });
+      const [matched] = await Promise.all([foundA, foundB]);
+      const roomId = matched.room.id;
+      const recordId = (await getRoom(roomId))!.recordId;
+      expect(await emit(a, 'room:ready', { ready: true })).toEqual({ ok: true });
+
+      const endedA = onceEvent(a, 'match:ready-ended', 2_000);
+      const endedB = onceEvent(b, 'match:ready-ended', 2_000);
+      const [resultA, resultB] = await Promise.all([endedA, endedB]);
+      expect(resultA).toMatchObject({ roomId, reason: 'timeout', penalized: false, retryAt: null });
+      expect(resultB).toMatchObject({ roomId, reason: 'timeout', penalized: true });
+      expect(await getRoom(roomId)).toBeNull();
+      expect(await db('match_records').where({ room_id: recordId }).first()).toBeUndefined();
+
+      expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true })).toMatchObject({
+        code: 'MATCHMAKING_COOLDOWN',
+        retryAt: resultB.retryAt,
+      });
+      expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: true });
+      await emit(a, 'match:cancel');
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
+  it('cancels a ready check on voluntary exit without persisting a match', async () => {
+    const stamp = Date.now();
+    const keyA = `match-leave-a-${stamp}`;
+    const keyB = `match-leave-b-${stamp}`;
+    const token = (key: string) => jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const a = await connect(withPowCookie(`csgofriberg_guest=${token(keyA)}`));
+    const b = await connect(withPowCookie(`csgofriberg_guest=${token(keyB)}`));
+    try {
+      expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: true });
+      const foundA = onceEvent(a, 'match:found');
+      const foundB = onceEvent(b, 'match:found');
+      expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: false });
+      const [matched] = await Promise.all([foundA, foundB]);
+      const roomId = matched.room.id;
+      const recordId = (await getRoom(roomId))!.recordId;
+      const opponentEnded = onceEvent(a, 'match:ready-ended');
+      const left = await emit(b, 'room:leave');
+      expect(left).toMatchObject({ ok: true, retryAt: expect.any(Number), serverNow: expect.any(Number) });
+      expect(left.retryAt - left.serverNow).toBeGreaterThanOrEqual(9_500);
+      expect(left.retryAt - left.serverNow).toBeLessThanOrEqual(10_000);
+      expect(await opponentEnded).toMatchObject({ roomId, reason: 'opponent_left', penalized: false });
+      expect(await getRoom(roomId)).toBeNull();
+      expect(await db('match_records').where({ room_id: recordId }).first()).toBeUndefined();
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
 
   afterAll(async () => {
     const client = redis();

@@ -638,7 +638,7 @@
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
-.player-stats-dialog { width: min(38.75rem, 100%); }
+.player-stats-dialog { width: min(46rem, 100%); }
 .player-stats-backdrop { z-index: 230; }
 .player-stats-dialog-body { padding: 0; }
 .player-stats-body {
@@ -649,6 +649,11 @@
 }
 .player-stats-body section { min-width: 0; padding: 1.5rem; }
 .player-stats-body section + section { border-left: 1px solid var(--border); }
+.player-stats-body .player-stats-recent {
+  grid-column: 1 / -1;
+  border-top: 1px solid var(--border);
+  border-left: 0;
+}
 .player-stats-body h3 { margin: 0 0 14px; font-size: 1rem; }
 .player-stats-list { display: grid; gap: 0; margin: 0; }
 .player-stats-list div {
@@ -662,6 +667,15 @@
 .player-stats-list div:last-child { border-bottom: 0; }
 .player-stats-list dt { color: var(--text-sec); }
 .player-stats-list dd { margin: 0; font-weight: 700; text-align: right; }
+.player-stats-recent-list { display: grid; gap: 14px; }
+.player-stats-recent-list article { padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.player-stats-recent-list article:last-child { padding-bottom: 0; border-bottom: 0; }
+.player-stats-recent-heading { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.player-stats-recent-heading strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-stats-recent-heading b { margin-left: auto; font-family: Consolas, monospace; }
+.player-stats-recent-list p { margin: 6px 0 9px; }
+.player-stats-rounds { display: flex; flex-wrap: wrap; gap: 6px; }
+.player-stats-rounds span { padding: 4px 7px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.78rem; }
 .score-bar-player-left { justify-content: flex-end; text-align: right; }
 .score-bar-player-right { justify-content: flex-start; text-align: left; }
 .score-bar .score {

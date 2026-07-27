@@ -65,6 +65,8 @@ export interface StoredRoom {
   ownerIp: string;
   hostKey: string;
   status: RoomStatus;
+  matchmaking: boolean;
+  readyCheckEndsAt: number | null;
   dbType: DbType;
   boType: BoType;
   rematchAllowed: boolean;
@@ -150,6 +152,8 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   if (!Array.isArray(room.spectators)) room.spectators = [];
   if (typeof room.allowSpectators !== 'boolean') room.allowSpectators = false;
   if (typeof room.anonymous !== 'boolean') room.anonymous = false;
+  if (typeof room.matchmaking !== 'boolean') room.matchmaking = false;
+  room.readyCheckEndsAt ??= null;
   if (typeof room.rematchAllowed !== 'boolean') room.rematchAllowed = false;
   room.rematchInviterKey ??= null;
   room.eventResults ??= {};
@@ -699,7 +703,12 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
   }
   const members = [...room.players, ...room.spectators];
   const schedules: { score: number; value: string }[] = [];
-  if (room.status === 'starting' && room.nextRoundAt) {
+  if (room.status === 'waiting' && room.matchmaking && room.readyCheckEndsAt) {
+    schedules.push({
+      score: room.readyCheckEndsAt,
+      value: `ready|${room.id}|0`,
+    });
+  } else if (room.status === 'starting' && room.nextRoundAt) {
     schedules.push({
       score: room.nextRoundAt,
       value: `start|${room.id}|0`,

@@ -161,7 +161,9 @@ router.post(
       ...DIFFICULTY_LEVELS.map((difficulty) => `leaderboard:${difficulty.key}`),
       'leaderboard:multi',
       `stats:personal:g:${guestKey}`,
-      `stats:personal:u:${req.user!.id}`
+      `stats:personal:u:${req.user!.id}`,
+      `room-player-performance:g:${guestKey}`,
+      `room-player-performance:u:${req.user!.id}`
     );
     res.json({ claimed });
   })

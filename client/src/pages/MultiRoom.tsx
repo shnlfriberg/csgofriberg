@@ -217,8 +217,10 @@ export default function MultiRoom() {
   const [cooldownClock, setCooldownClock] = useState(() => performance.now());
   const [roundDeadline, setRoundDeadline] = useState<number | null>(null);
   const [nextRoundDeadline, setNextRoundDeadline] = useState<number | null>(null);
+  const [readyDeadline, setReadyDeadline] = useState<number | null>(null);
   const [statsLoadingKey, setStatsLoadingKey] = useState('');
   const [playerStats, setPlayerStats] = useState<PlayerStatsView | null>(null);
+  const [opponentPreview, setOpponentPreview] = useState<PlayerStatsView | null>(null);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const roomRef = useRef<RoomState | null>(null);
@@ -250,6 +252,9 @@ export default function MultiRoom() {
       : null);
     setNextRoundDeadline(state.status === 'round_over'
       ? localDeadline(state.roundResult?.nextRoundAt, anchor) ?? fallbackDeadline
+      : null);
+    setReadyDeadline(state.status === 'waiting' && state.matchmaking
+      ? localDeadline(state.readyCheckEndsAt, anchor)
       : null);
     roomRef.current = state;
     setRoom(state);
@@ -311,6 +316,28 @@ export default function MultiRoom() {
       setRematchNotice('');
       applyRoomSnapshot(p.room, false, p.serverNow);
     };
+    const onReadyEnded = (p: {
+      roomId: string;
+      reason: 'timeout' | 'opponent_left';
+      penalized: boolean;
+      retryAt: number | null;
+      serverNow?: number;
+    }) => {
+      if (roomRef.current?.id !== p.roomId) return;
+      roomRef.current = null;
+      setRoom(null);
+      if (p.reason === 'opponent_left') {
+        toast.error(t('multi.readyOpponentLeft'));
+      } else if (p.penalized) {
+        const seconds = p.retryAt && p.serverNow
+          ? Math.max(1, Math.ceil((p.retryAt - p.serverNow) / 1000))
+          : 10;
+        toast.error(t('multi.readyTimedOutPenalized', { seconds }));
+      } else {
+        toast.error(t('multi.readyTimedOutOpponent'));
+      }
+      navigate('/multi');
+    };
     const onRematchUpdate = (p: {
       roomId: string;
       stateVersion: number;
@@ -329,6 +356,8 @@ export default function MultiRoom() {
           ? {
               ...current,
               status: 'waiting',
+              matchmaking: false,
+              readyCheckEndsAt: null,
               round: 0,
               roundId: 0,
               roundEndsAt: null,
@@ -425,6 +454,7 @@ export default function MultiRoom() {
     socket.on('round:start', onRoundStart);
     socket.on('round:over', onRoundOver);
     socket.on('match:over', onMatchOver);
+    socket.on('match:ready-ended', onReadyEnded);
     socket.on('match:rematch:update', onRematchUpdate);
     socket.on('player:offline', onOffline);
     socket.on('room:error', onRoomError);
@@ -465,6 +495,7 @@ export default function MultiRoom() {
       socket.off('round:start', onRoundStart);
       socket.off('round:over', onRoundOver);
       socket.off('match:over', onMatchOver);
+      socket.off('match:ready-ended', onReadyEnded);
       socket.off('match:rematch:update', onRematchUpdate);
       socket.off('player:offline', onOffline);
       socket.off('room:error', onRoomError);
@@ -586,6 +617,10 @@ export default function MultiRoom() {
       toast.error(translate(result.code));
       return;
     }
+    if (result?.retryAt && result?.serverNow) {
+      const seconds = Math.max(1, Math.ceil((Number(result.retryAt) - Number(result.serverNow)) / 1000));
+      toast.error(t('multi.readyExitCooldown', { seconds }));
+    }
     setRoom(null);
     roomRef.current = null;
     navigate('/multi');
@@ -661,6 +696,10 @@ export default function MultiRoom() {
 
   const viewPlayerStats = (player: RoomPlayer) => {
     if (statsLoadingKey) return;
+    if (opponentPreview?.displayId === player.name) {
+      setPlayerStats(opponentPreview);
+      return;
+    }
     setStatsLoadingKey(player.key);
     const socket = getSocket();
     let settled = false;
@@ -704,6 +743,21 @@ export default function MultiRoom() {
       </button>
     );
   };
+
+  useEffect(() => {
+    if (!room?.matchmaking || room.status !== 'waiting' || !opponent) {
+      setOpponentPreview(null);
+      return;
+    }
+    let cancelled = false;
+    getSocket().emit('room:player-stats', { playerKey: opponent.key }, (res: any) => {
+      if (cancelled || res?.code || !res?.stats || res.playerKey !== opponent.key) return;
+      setOpponentPreview({ displayId: res.displayId, stats: res.stats });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [room?.id, room?.matchmaking, room?.status, opponent?.key]);
 
   useEffect(() => {
     if (!inputFocused || !me || !window.matchMedia('(max-width: 640px)').matches) return;
@@ -804,6 +858,7 @@ export default function MultiRoom() {
           {room.status === 'waiting'
             ? t('multi.waitingStatus', { database: difficultyLabel(t, room.dbType), wins: room.winsNeeded })
             : t('multi.playingStatus', { round: room.round, wins: room.winsNeeded })}
+          {room.status === 'waiting' && room.matchmaking && <Countdown deadline={readyDeadline} />}
           {playing && <Countdown deadline={roundDeadline} onExpire={() => setRoundExpired(true)} />}
           {isSpectator && (
             <span className="badge">
@@ -898,6 +953,7 @@ export default function MultiRoom() {
             >
               <b>{p.name}</b>
               {p.key === room.hostKey && <Crown size={15} color="var(--warning)" />}
+              {statsButton(p)}
               {!p.connected && (
                 <span className="badge red">
                   <WifiOff size={12} />
@@ -920,9 +976,34 @@ export default function MultiRoom() {
           {room.players.length < 2 && (
             <p className="muted">{t('multi.waitingOpponent')}</p>
           )}
+          {room.matchmaking && opponent && (
+            <div className="matchmaking-opponent-preview">
+              <span>{t('multi.recentWinningGuessAverage')}</span>
+              <strong>
+                {opponentPreview?.stats.multi.recentAverageWinningGuesses?.toFixed(1) ?? '-'}
+              </strong>
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                disabled={!opponentPreview}
+                onClick={() => opponentPreview && setPlayerStats(opponentPreview)}
+              >
+                <CircleAlert size={15} />
+                {t('multi.viewRecentMatches')}
+              </button>
+            </div>
+          )}
           {!isSpectator && (
             <div className="room-ready-actions">
-              {isHost ? (
+              {room.matchmaking ? (
+                <button
+                  className="btn btn-success"
+                  onClick={() => emit('room:ready', { ready: !me?.ready })}
+                >
+                  <Check size={16} />
+                  {me?.ready ? t('multi.cancelReady') : t('multi.readyAction')}
+                </button>
+              ) : isHost ? (
                 <button
                   className="btn btn-success"
                   onClick={() => emit('game:start')}

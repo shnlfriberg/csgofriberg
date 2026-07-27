@@ -54,6 +54,7 @@ export const config = {
       ? configuredAdminImportBodyLimitBytes
       : 2 * 1024 * 1024,
   disconnectForfeitMs: Math.max(100, Number(process.env.DISCONNECT_FORFEIT_MS || 30_000)),
+  matchReadyTimeoutMs: 30_000,
   powDifficulty: Number(process.env.POW_DIFFICULTY || 17),
   powChallengeTtlSeconds: Number(process.env.POW_CHALLENGE_TTL_SECONDS || 120),
   powTokenTtlSeconds: Number(process.env.POW_TOKEN_TTL_SECONDS || 600),

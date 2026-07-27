@@ -173,7 +173,26 @@ describe('stats and replay', () => {
             avgGuesses: null,
             bestGuesses: null,
           },
-          multi: { games: 1, wins: 0, losses: 1, winRate: 0 },
+          multi: {
+            games: 1,
+            wins: 0,
+            losses: 1,
+            winRate: 0,
+            recentAverageWinningGuesses: null,
+            recentMatches: [expect.objectContaining({
+              id: matchId,
+              result: 'lost',
+              score: { me: 0, opponent: 1 },
+              boType: 1,
+              dbType: 'easy',
+              rounds: [expect.objectContaining({
+                round: 1,
+                winner: 'opponent',
+                meGuesses: 1,
+                opponentGuesses: 1,
+              })],
+            })],
+          },
         },
       });
 

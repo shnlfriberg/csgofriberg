@@ -82,6 +82,22 @@ export interface PlayerPerformanceStats {
     wins: number;
     losses: number;
     winRate: number;
+    recentAverageWinningGuesses: number | null;
+    recentMatches: Array<{
+      id: number;
+      result: 'won' | 'lost' | 'draw';
+      score: { me: number; opponent: number };
+      boType: number;
+      dbType: string;
+      opponentDisplayId: string;
+      finishedAt: string;
+      rounds: Array<{
+        round: number;
+        winner: 'me' | 'opponent' | null;
+        meGuesses: number;
+        opponentGuesses: number;
+      }>;
+    }>;
   };
 }
 
@@ -109,6 +125,8 @@ export interface RoomState {
   id: string;
   hostKey: string;
   status: 'waiting' | 'playing' | 'round_over' | 'finished';
+  matchmaking: boolean;
+  readyCheckEndsAt: number | null;
   dbType: string;
   boType: number;
   rematchAllowed: boolean;

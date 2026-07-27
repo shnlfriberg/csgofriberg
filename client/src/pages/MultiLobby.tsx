@@ -18,36 +18,12 @@ import { translate } from '../i18n/messages';
 import { RoomState } from '../types';
 import { useConfirm } from '../components/ConfirmDialog';
 import { toast } from '../components/Toast';
-import ModalPortal from '../components/ModalPortal';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
 import { difficultyLabel } from '../utils/difficulty';
 
 type DbType = string;
 const BO_OPTIONS = [1, 3, 5, 7];
-
-function localMatchDeadline(input: {
-  startsAt?: unknown;
-  startsInMs?: unknown;
-  serverNow?: unknown;
-}): number | null {
-  const startsInMs = Number(input.startsInMs);
-  if (Number.isFinite(startsInMs) && startsInMs >= 0) {
-    return performance.now() + startsInMs;
-  }
-
-  const startsAt = Number(input.startsAt);
-  const serverNow = Number(input.serverNow);
-  if (
-    Number.isFinite(startsAt) &&
-    Number.isFinite(serverNow) &&
-    startsAt > serverNow
-  ) {
-    return performance.now() + (startsAt - serverNow);
-  }
-
-  return null;
-}
 
 function OptionGroup<T extends string | number>({
   label,
@@ -78,30 +54,6 @@ function OptionGroup<T extends string | number>({
   );
 }
 
-function MatchFoundDialog({ countdown }: { countdown: number }) {
-  const { t } = useTranslation();
-  useEffect(() => {
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.body.style.overflow = oldOverflow;
-    };
-  }, []);
-
-  return (
-    <ModalPortal>
-      <div className="overlay" role="presentation">
-        <div className="overlay-card match-found-dialog" role="dialog" aria-modal="true" aria-labelledby="match-found-title">
-          <Check size={34} color="var(--success)" aria-hidden="true" />
-          <h2 id="match-found-title">{t('multi.found')}</h2>
-          <p className="match-found-countdown" aria-live="polite">{countdown}</p>
-          <p className="muted">{t('multi.enterAfter')}</p>
-        </div>
-      </div>
-    </ModalPortal>
-  );
-}
-
 export default function MultiLobby() {
   const { t } = useTranslation();
   const difficulties = AVAILABLE_DIFFICULTIES;
@@ -118,8 +70,8 @@ export default function MultiLobby() {
   const [copied, setCopied] = useState(false);
   const [searching, setSearching] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [matchDeadline, setMatchDeadline] = useState<number | null>(null);
-  const [matchCountdown, setMatchCountdown] = useState(0);
+  const [matchCooldownDeadline, setMatchCooldownDeadline] = useState<number | null>(null);
+  const [matchCooldownSeconds, setMatchCooldownSeconds] = useState(0);
   const navigate = useNavigate();
   const confirm = useConfirm();
   const searchingRef = useRef(false);
@@ -135,34 +87,38 @@ export default function MultiLobby() {
   }, [difficulties, dbType, mmDbType]);
 
   useEffect(() => {
-    if (!matchDeadline) {
-      setMatchCountdown(0);
+    if (!matchCooldownDeadline) {
+      setMatchCooldownSeconds(0);
       return;
     }
     const tick = () => {
-      const left = Math.max(0, Math.ceil((matchDeadline - performance.now()) / 1000));
-      setMatchCountdown(left);
-      if (left <= 0) {
-        setMatchDeadline(null);
-        navigate('/multi/room');
-      }
+      const left = Math.max(0, Math.ceil((matchCooldownDeadline - performance.now()) / 1000));
+      setMatchCooldownSeconds(left);
+      if (left <= 0) setMatchCooldownDeadline(null);
     };
     tick();
-    const timer = window.setInterval(tick, 200);
+    const timer = window.setInterval(tick, 250);
     return () => window.clearInterval(timer);
-  }, [matchDeadline, navigate]);
+  }, [matchCooldownDeadline]);
+
+  const applyMatchCooldown = (res: any): boolean => {
+    if (res?.code !== 'MATCHMAKING_COOLDOWN') return false;
+    const retryAt = Number(res.retryAt);
+    const serverNow = Number(res.serverNow);
+    const remaining = Number.isFinite(retryAt) && Number.isFinite(serverNow)
+      ? Math.max(0, retryAt - serverNow)
+      : 10_000;
+    setMatchCooldownDeadline(performance.now() + remaining);
+    toast.error(t('multi.matchmakingCooldown', { seconds: Math.max(1, Math.ceil(remaining / 1000)) }));
+    return true;
+  };
 
   useEffect(() => {
     const socket = getSocket();
-    const onMatchFound = (payload: { startsAt?: number; startsInMs?: number } = {}) => {
+    const onMatchFound = () => {
       searchingRef.current = false;
       setSearching(false);
-      const deadline = localMatchDeadline(payload);
-      if (deadline) {
-        setMatchDeadline(deadline);
-      } else {
-        navigate('/multi/room');
-      }
+      navigate('/multi/room');
     };
     const restoreSearch = () => {
       if (!searchingRef.current) return;
@@ -170,21 +126,13 @@ export default function MultiLobby() {
         if (res?.room) {
           searchingRef.current = false;
           setSearching(false);
-          const deadline = localMatchDeadline({
-            startsAt: res.room.matchStartsAt,
-            serverNow: res.serverNow,
-          });
-          if (deadline) {
-            setMatchDeadline(deadline);
-          } else {
-            navigate('/multi/room');
-          }
+          navigate('/multi/room');
           return;
         }
         if (!res?.code) return;
         searchingRef.current = false;
         setSearching(false);
-        toast.error(translate(res.code));
+        if (!applyMatchCooldown(res)) toast.error(translate(res.code));
       });
     };
     socket.on('match:found', onMatchFound);
@@ -199,12 +147,8 @@ export default function MultiLobby() {
           });
           return;
         }
-        const deadline = localMatchDeadline({
-          startsAt: res.room.matchStartsAt,
-          serverNow: res.serverNow,
-        });
-        if (deadline) {
-          setMatchDeadline(deadline);
+        if (res.room.matchmaking && res.room.status === 'waiting') {
+          navigate('/multi/room');
           return;
         }
         setCurrentRoom(res.room);
@@ -217,7 +161,7 @@ export default function MultiLobby() {
       // 离开大厅时取消排队
       if (searchingRef.current) socket.emit('match:cancel', {});
     };
-  }, [navigate]);
+  }, [navigate, t]);
 
   /** 结束比赛/退出观战:对局中离开即判负,需二次确认 */
   const endCurrent = async () => {
@@ -338,21 +282,13 @@ export default function MultiLobby() {
       if (res?.room) {
         setSearching(false);
         searchingRef.current = false;
-        const deadline = localMatchDeadline({
-          startsAt: res.room.matchStartsAt,
-          serverNow: res.serverNow,
-        });
-        if (deadline) {
-          setMatchDeadline(deadline);
-        } else {
-          navigate('/multi/room');
-        }
+        navigate('/multi/room');
         return;
       }
       if (res?.code) {
         setSearching(false);
         searchingRef.current = false;
-        toast.error(translate(res.code));
+        if (!applyMatchCooldown(res)) toast.error(translate(res.code));
         return;
       }
       if (res?.queued) {
@@ -501,9 +437,11 @@ export default function MultiLobby() {
               </div>
             ) : (
               <div style={{ textAlign: 'center', marginTop: 14 }}>
-                <button className="btn btn-accent btn-lg" onClick={startMatch}>
+                <button className="btn btn-accent btn-lg" onClick={startMatch} disabled={matchCooldownSeconds > 0}>
                   <Dices size={16} />
-                  {t('multi.startMatch')}
+                  {matchCooldownSeconds > 0
+                    ? t('multi.matchmakingCooldownButton', { seconds: matchCooldownSeconds })
+                    : t('multi.startMatch')}
                 </button>
               </div>
             )}
@@ -546,7 +484,6 @@ export default function MultiLobby() {
           </div>
         </div>
       )}
-      {matchDeadline && <MatchFoundDialog countdown={matchCountdown} />}
     </Page>
   );
 }

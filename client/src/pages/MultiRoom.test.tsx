@@ -50,6 +50,8 @@ const room: RoomState = {
   id: 'ABCDE',
   hostKey: 'g:me',
   status: 'finished',
+  matchmaking: false,
+  readyCheckEndsAt: null,
   dbType: 'easy',
   boType: 3,
   rematchAllowed: false,
@@ -139,5 +141,43 @@ describe('MultiRoom replay', () => {
     expect(screen.getByText('第 2 / 2 轮')).toBeInTheDocument();
     expect(screen.getByText('Opponent Round 2')).toBeInTheDocument();
     expect(screen.queryByText('Opponent Round 1')).not.toBeInTheDocument();
+  });
+
+  it('lets the matchmaking host ready up instead of showing a host start button', async () => {
+    const user = userEvent.setup();
+    const readyRoom: RoomState = {
+      ...room,
+      status: 'waiting',
+      matchmaking: true,
+      readyCheckEndsAt: Date.now() + 30_000,
+      round: 0,
+      roundId: 0,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({ ...player, ready: false, score: 0 })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: readyRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+      if (event === 'room:player-stats' && typeof ack === 'function') {
+        ack({
+          playerKey: 'g:opponent',
+          displayId: 'Opponent',
+          stats: {
+            single: { games: 0, wins: 0, losses: 0, winRate: 0, avgGuesses: null, bestGuesses: null },
+            multi: { games: 0, wins: 0, losses: 0, winRate: 0, recentAverageWinningGuesses: null, recentMatches: [] },
+          },
+        });
+      }
+      if (event === 'room:ready' && typeof ack === 'function') ack({ ok: true });
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    const ready = await screen.findByRole('button', { name: '准备' });
+    expect(screen.queryByRole('button', { name: '开始对局' })).not.toBeInTheDocument();
+    await user.click(ready);
+    expect(socket.emit).toHaveBeenCalledWith('room:ready', { ready: true }, expect.any(Function));
   });
 });

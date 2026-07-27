@@ -18,6 +18,8 @@ function makeRoom(id: string): StoredRoom {
     ownerIp: '127.0.0.1',
     hostKey: 'u:1',
     status: 'waiting',
+    matchmaking: false,
+    readyCheckEndsAt: null,
     dbType: 'normal',
     boType: 3,
     rematchAllowed: true,

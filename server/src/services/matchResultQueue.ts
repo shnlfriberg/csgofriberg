@@ -74,7 +74,10 @@ async function persist(payload: MatchResultPayload): Promise<void> {
   if (insertedMatch) {
     await invalidateCached(
       'leaderboard:multi',
-      ...payload.participants.map((player) => `stats:personal:${player.key}`)
+      ...payload.participants.flatMap((player) => [
+        `stats:personal:${player.key}`,
+        `room-player-performance:${player.key}`,
+      ])
     );
   }
 }

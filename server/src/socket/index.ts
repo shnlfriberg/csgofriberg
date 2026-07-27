@@ -61,9 +61,13 @@ import { config } from '../config';
 import { logTransientError, logTransientWarning } from '../services/transientLog';
 import { getResourceVersionNotice } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
+import {
+  clearMatchmakingCooldown,
+  getMatchmakingCooldown,
+  recordMatchmakingExit,
+} from '../services/matchmakingCooldown';
 
 const NEXT_ROUND_DELAY_MS = 6_000;
-const MATCH_START_DELAY_MS = 5_000;
 const ROUND_TIME_MS = 120_000;
 const MULTI_GUESS_INTERVAL_MS = 1_000;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
@@ -282,6 +286,8 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     id: room.id,
     hostKey: room.hostKey,
     status: room.status === 'starting' ? 'waiting' : room.status,
+    matchmaking: room.matchmaking,
+    readyCheckEndsAt: room.readyCheckEndsAt,
     dbType: room.dbType,
     boType: room.boType,
     rematchAllowed: room.rematchAllowed,
@@ -487,6 +493,7 @@ async function persistMatch(
     })),
     rounds: room.replayRounds,
   });
+  await Promise.allSettled(room.players.map((player) => clearMatchmakingCooldown(player.key)));
   await acknowledgeSchedule(`persist|${room.id}|0`);
 }
 
@@ -527,6 +534,8 @@ function resetForRematch(room: StoredRoom): void {
   const now = Date.now();
   room.recordId = randomUUID();
   room.status = 'waiting';
+  room.matchmaking = false;
+  room.readyCheckEndsAt = null;
   room.round = 0;
   room.targetPlayerId = null;
   room.roundEndsAt = null;
@@ -596,6 +605,7 @@ async function startRound(io: Server, roomId: string) {
     const target = pickCachedTarget(room.dbType);
     if (!target) return { error: 'EMPTY_PLAYER_POOL' as const };
     room.status = 'playing';
+    room.readyCheckEndsAt = null;
     room.round += 1;
     room.targetPlayerId = target.id;
     room.roundEndsAt = Date.now() + ROUND_TIME_MS;
@@ -756,6 +766,9 @@ async function processDisconnectedPlayer(
       disconnected.disconnectDeadline > Date.now()
     ) return null;
 
+    if (room.status === 'waiting' && room.matchmaking) {
+      return { kind: 'ready' as const, retryAt: room.readyCheckEndsAt ?? Date.now() };
+    }
     if (room.status === 'waiting') {
       room.players = room.players.filter((player) => player.key !== disconnectedKey);
       if (room.players.length && room.hostKey === disconnectedKey) {
@@ -793,6 +806,7 @@ async function processDisconnectedPlayer(
   }, (value) => Boolean(value && (value.kind === 'waiting' || value.kind === 'finished')));
 
   if (!result) return null;
+  if (result.kind === 'ready') return result.retryAt;
   if (result.kind === 'retry') return result.retryAt;
   if (result.kind === 'waiting') {
     await clearIdentityRoom(disconnectedKey, roomId);
@@ -822,6 +836,37 @@ async function processDisconnectedPlayer(
   return null;
 }
 
+async function processReadyCheck(io: Server, roomId: string): Promise<number | null> {
+  const result = await withRoomLock(roomId, async (room) => {
+    if (room.status !== 'waiting' || !room.matchmaking || !room.readyCheckEndsAt) return null;
+    if (room.readyCheckEndsAt > Date.now()) {
+      return { kind: 'retry' as const, retryAt: room.readyCheckEndsAt };
+    }
+    const penalizedKeys = room.players
+      .filter((player) => !player.ready || !player.connected)
+      .map((player) => player.key);
+    await deleteRoom(room);
+    return { kind: 'expired' as const, room, penalizedKeys };
+  }, () => false);
+  if (!result) return null;
+  if (result.kind === 'retry') return result.retryAt;
+
+  const penalties = new Map<string, Awaited<ReturnType<typeof recordMatchmakingExit>>>();
+  await Promise.all(result.penalizedKeys.map(async (key) => {
+    penalties.set(key, await recordMatchmakingExit(key));
+  }));
+  for (const player of result.room.players) {
+    io.to(identityChannel(player.key)).emit('match:ready-ended', {
+      roomId: result.room.id,
+      reason: 'timeout',
+      penalized: penalties.has(player.key),
+      retryAt: penalties.get(player.key)?.retryAt ?? null,
+      serverNow: Date.now(),
+    });
+  }
+  return null;
+}
+
 async function processSchedule(io: Server, item: string): Promise<number | null> {
   const [kind, roomId, discriminator] = item.split('|');
   const room = await getRoom(roomId);
@@ -832,6 +877,8 @@ async function processSchedule(io: Server, item: string): Promise<number | null>
     await startRound(io, roomId);
   } else if (kind === 'next' && room.status === 'round_over' && room.round === Number(discriminator)) {
     await startRound(io, roomId);
+  } else if (kind === 'ready') {
+    return processReadyCheck(io, roomId);
   } else if (kind === 'disconnect') {
     const maintenanceUntil = await getMaintenanceUntil();
     if (maintenanceUntil > Date.now()) return maintenanceUntil;
@@ -1363,6 +1410,8 @@ export function setupSocket(io: Server) {
         ownerIp: String(socket.data.ip),
         hostKey: me.key,
         status: 'waiting',
+        matchmaking: false,
+        readyCheckEndsAt: null,
         dbType,
         boType,
         rematchAllowed: true,
@@ -1558,13 +1607,26 @@ export function setupSocket(io: Server) {
       if (room.status !== 'waiting') return ack?.({ code: 'NOT_IN_WAITING_ROOM' });
       const changed = await withRoomLock(room.id, (locked) => {
         if (locked.status !== 'waiting') return false;
+        if (locked.matchmaking && locked.readyCheckEndsAt && locked.readyCheckEndsAt <= Date.now()) {
+          return 'READY_CHECK_EXPIRED' as const;
+        }
         const player = locked.players.find((p) => p.key === me.key);
         if (!player) return false;
         if (player.socketId !== socket.id) return 'STALE_CONNECTION' as const;
         player.ready = payload.ready ?? !player.ready;
-        return { room: locked };
+        const startNow = locked.matchmaking && locked.players.length === 2 &&
+          locked.players.every((candidate) => candidate.ready && candidate.connected);
+        if (startNow) locked.status = 'starting';
+        return {
+          room: locked,
+          startNow,
+        };
       }, (value) => typeof value === 'object');
       if (changed === 'STALE_CONNECTION') return ack?.({ code: changed });
+      if (changed === 'READY_CHECK_EXPIRED') {
+        await processReadyCheck(io, room.id);
+        return ack?.({ code: changed });
+      }
       if (!changed) return ack?.({ code: 'NOT_IN_WAITING_ROOM' });
       const changedPlayer = changed.room.players.find((player) => player.key === me.key);
       emitRoomPatch(io, changed.room, {
@@ -1574,6 +1636,10 @@ export function setupSocket(io: Server) {
             : [],
         },
       });
+      if (changed.startNow) {
+        const started = await startRound(io, changed.room.id);
+        if (!started) return ack?.({ code: 'ROOM_NOT_READY' });
+      }
       ack?.({ ok: true });
     }, roomReadyPayloadSchema);
 
@@ -1725,7 +1791,7 @@ export function setupSocket(io: Server) {
 
     safeOn(socket, 'room:leave', async (_payload, ack) => {
       await restorePromise;
-      const room = await getRoomForIdentity(me.key, true);
+      let room = await getRoomForIdentity(me.key, true);
       if (!room) return ack?.({ ok: true });
       if (room.status === 'finished') {
         const left = await withRoomLock(room.id, (locked) => {
@@ -1760,7 +1826,36 @@ export function setupSocket(io: Server) {
         return ack?.({ ok: true });
       }
       const player = room.players.find((p) => p.key === me.key);
-      if (player && (room.status === 'playing' || room.status === 'round_over' || room.status === 'starting')) {
+      if (player && room.status === 'waiting' && room.matchmaking) {
+        const abandoned = await withRoomLock(room.id, async (locked) => {
+          if (locked.status !== 'waiting' || !locked.matchmaking) return 'CHANGED' as const;
+          const current = locked.players.find((candidate) => candidate.key === me.key);
+          if (!current || current.socketId !== socket.id) return 'STALE_CONNECTION' as const;
+          await deleteRoom(locked);
+          return { room: locked };
+        }, () => false);
+        if (abandoned === 'STALE_CONNECTION') return ack?.({ code: abandoned });
+        if (abandoned && abandoned !== 'CHANGED') {
+          const cooldown = await recordMatchmakingExit(me.key);
+          for (const other of abandoned.room.players) {
+            if (other.key === me.key) continue;
+            io.to(identityChannel(other.key)).emit('match:ready-ended', {
+              roomId: abandoned.room.id,
+              reason: 'opponent_left',
+              penalized: false,
+              retryAt: null,
+              serverNow: Date.now(),
+            });
+          }
+          socket.leave(room.id);
+          socket.data.roomId = undefined;
+          return ack?.({ ok: true, retryAt: cooldown.retryAt, serverNow: Date.now() });
+        }
+        room = await getRoomForIdentity(me.key, true);
+        if (!room) return ack?.({ ok: true });
+      }
+      const currentPlayer = room.players.find((p) => p.key === me.key);
+      if (currentPlayer && (room.status === 'playing' || room.status === 'round_over' || room.status === 'starting')) {
         const opponent = room.players.find((p) => p.key !== me.key);
         const finished = await finishMatch(io, room.id, opponent?.key ?? null, 'opponent_left', {
           key: me.key,
@@ -1815,6 +1910,12 @@ export function setupSocket(io: Server) {
         room: publicRoom(currentRoom, me.key),
         serverNow: Date.now(),
       });
+      const cooldown = await getMatchmakingCooldown(me.key);
+      if (cooldown) return ack?.({
+        code: 'MATCHMAKING_COOLDOWN',
+        retryAt: cooldown.retryAt,
+        serverNow: Date.now(),
+      });
       await cancelQueue(me.key);
       const dbType: DbType = payload.dbType;
       if (!isDifficultyAvailable(dbType)) return ack?.({ code: 'DIFFICULTY_UNAVAILABLE' });
@@ -1850,7 +1951,9 @@ export function setupSocket(io: Server) {
         recordId: randomUUID(),
         ownerIp: String(socket.data.ip),
         hostKey: opponent.key,
-        status: 'starting',
+        status: 'waiting',
+        matchmaking: true,
+        readyCheckEndsAt: now + config.matchReadyTimeoutMs,
         dbType,
         boType: 3,
         rematchAllowed: false,
@@ -1858,11 +1961,11 @@ export function setupSocket(io: Server) {
         allowSpectators: false,
         anonymous: Boolean(queuedMe.anonymous || opponent.anonymous),
         round: 0,
-        players: [makePlayer(opponent, opponent.socketId, true), makePlayer(me, socket.id, true)],
+        players: [makePlayer(opponent, opponent.socketId, false), makePlayer(me, socket.id, false)],
         spectators: [],
         targetPlayerId: null,
         roundEndsAt: null,
-        nextRoundAt: now + MATCH_START_DELAY_MS,
+        nextRoundAt: null,
         eventResults: {},
         roundResult: null,
         matchResult: null,
@@ -1902,7 +2005,7 @@ export function setupSocket(io: Server) {
       ]);
       if (!opponentAlive || !currentAlive) {
         await withRoomLock(room.id, (locked) => {
-          const deadline = Date.now() + config.disconnectForfeitMs;
+          const deadline = locked.readyCheckEndsAt ?? Date.now() + config.disconnectForfeitMs;
           for (const player of locked.players) {
             const alive = player.key === me.key ? currentAlive : opponentAlive;
             if (!alive) {
@@ -1918,13 +2021,12 @@ export function setupSocket(io: Server) {
       socket.join(room.id);
       socket.data.roomId = room.id;
       ack?.({ queued: false });
-      const startsAt = savedRoom.nextRoundAt ?? Date.now() + MATCH_START_DELAY_MS;
-      emitRoomViews(io, savedRoom, 'match:found', () => ({
-        startsAt,
-        startsInMs: Math.max(0, startsAt - Date.now()),
+      emitRoomViews(io, savedRoom, 'match:found', (viewerKey) => ({
+        room: publicRoom(savedRoom, viewerKey),
+        serverNow: Date.now(),
       }));
-      setLocalTimer(`start:${savedRoom.id}`, Math.max(0, startsAt - Date.now()) + 10, () => {
-        return startRound(io, savedRoom.id);
+      setLocalTimer(`ready:${savedRoom.id}`, config.matchReadyTimeoutMs + 10, () => {
+        return handleScheduledItem(io, `ready|${savedRoom.id}|0`);
       });
     }, matchStartPayloadSchema);
 
@@ -1974,7 +2076,9 @@ export function setupSocket(io: Server) {
             return { finished: true as const, cancelledInvite, room: locked };
           }
           player.connected = false;
-          player.disconnectDeadline = Date.now() + config.disconnectForfeitMs;
+          player.disconnectDeadline = locked.status === 'waiting' && locked.matchmaking
+            ? locked.readyCheckEndsAt
+            : Date.now() + config.disconnectForfeitMs;
           return { deadline: player.disconnectDeadline, room: locked };
         }, (value) => Boolean(value));
         if (!result) return;
@@ -2001,11 +2105,12 @@ export function setupSocket(io: Server) {
         emitRoomPatch(io, result.room, {
           players: { updated: [{ key: me.key, connected: false }] },
         });
+        const disconnectDeadline = result.deadline ?? Date.now();
         io.to(room.id).emit('player:offline', {
           key: me.key,
-          graceMs: config.disconnectForfeitMs,
+          graceMs: Math.max(0, disconnectDeadline - Date.now()),
         });
-        setLocalTimer(`disconnect:${room.id}:${me.key}`, config.disconnectForfeitMs, () => {
+        setLocalTimer(`disconnect:${room.id}:${me.key}`, Math.max(0, disconnectDeadline - Date.now()), () => {
           return handleScheduledItem(io, `disconnect|${room.id}|${me.key}`);
         });
       });
