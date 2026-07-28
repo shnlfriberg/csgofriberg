@@ -572,6 +572,10 @@ const specialThanksSchema = z.object({
   name: z.string().trim().min(1).max(80),
   note: z.string().trim().max(200).default(''),
 });
+const specialThanksOrderSchema = z.object({
+  ids: z.array(z.coerce.number().int().positive()).min(1).max(10)
+    .refine((ids) => new Set(ids).size === ids.length),
+});
 
 router.post(
   '/special-thanks',
@@ -590,8 +594,14 @@ router.post(
       }
       const [{ count }] = await db('special_thanks').count<{ count: number | string }[]>({ count: '*' });
       if (Number(count) >= 10) throw new HttpError(409, 'SPECIAL_THANKS_LIMIT_REACHED');
+      const [{ maxOrder }] = await db('special_thanks')
+        .max<{ maxOrder: number | string | null }[]>({ maxOrder: 'sort_order' });
       const [insertedId] = await db('special_thanks')
-        .insert({ name: req.body.name, note: req.body.note })
+        .insert({
+          name: req.body.name,
+          note: req.body.note,
+          sort_order: maxOrder == null ? 0 : Number(maxOrder) + 1,
+        })
         .returning('id');
       return {
         id: Number(typeof insertedId === 'object' ? insertedId.id : insertedId),
@@ -602,6 +612,58 @@ router.post(
     });
     if (result.created) await invalidateCached('special-thanks');
     res.status(result.created ? 201 : 200).json(result);
+  })
+);
+
+router.patch(
+  '/special-thanks/:id',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  validateBody(specialThanksSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const item = await withKeyLock('special-thanks-write', async () => {
+      const current = await db('special_thanks').where({ id }).first('id');
+      if (!current) throw new HttpError(404, 'NOT_FOUND');
+      const duplicate = await db('special_thanks')
+        .where({ name: req.body.name })
+        .whereNot({ id })
+        .first('id');
+      if (duplicate) throw new HttpError(409, 'SPECIAL_THANKS_NAME_TAKEN');
+      await db('special_thanks').where({ id }).update({
+        name: req.body.name,
+        note: req.body.note,
+      });
+      return { id, name: req.body.name, note: req.body.note };
+    });
+    await invalidateCached('special-thanks');
+    res.json(item);
+  })
+);
+
+router.put(
+  '/special-thanks/order',
+  adminWriteLimit,
+  validateBody(specialThanksOrderSchema),
+  asyncHandler(async (req, res) => {
+    const { ids } = req.body as z.infer<typeof specialThanksOrderSchema>;
+    await withKeyLock('special-thanks-write', async () => {
+      const storedIds = (await db('special_thanks').pluck('id')).map(Number).sort((a, b) => a - b);
+      const submittedIds = [...ids].sort((a, b) => a - b);
+      if (
+        storedIds.length !== submittedIds.length ||
+        storedIds.some((id, index) => id !== submittedIds[index])
+      ) {
+        throw new HttpError(409, 'SPECIAL_THANKS_ORDER_STALE');
+      }
+      await db.transaction(async (trx) => {
+        for (const [sortOrder, id] of ids.entries()) {
+          await trx('special_thanks').where({ id }).update({ sort_order: sortOrder });
+        }
+      });
+    });
+    await invalidateCached('special-thanks');
+    res.json({ ok: true });
   })
 );
 

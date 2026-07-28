@@ -66,6 +66,7 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasTable('special_thanks')).toBe(true);
     expect(await instance.schema.hasColumn('special_thanks', 'name')).toBe(true);
     expect(await instance.schema.hasColumn('special_thanks', 'note')).toBe(true);
+    expect(await instance.schema.hasColumn('special_thanks', 'sort_order')).toBe(true);
     const player = await instance('players').where({ nickname: 'legacy' }).first();
     expect(player.age).toBe(new Date().getFullYear() - 1990);
     expect((await instance('players').columnInfo('age')).nullable).toBe(false);
@@ -123,6 +124,30 @@ describe('player schema migration', () => {
 
     expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
     expect((await instance('announcements').where({ title: 'legacy' }).first()).is_popup).toBe(0);
+  });
+
+  it('adds notes and stable ordering to an existing special thanks table', async () => {
+    const instance = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+    });
+    instances.push(instance);
+    await instance.schema.createTable('special_thanks', (table) => {
+      table.increments('id').primary();
+      table.string('name', 80).notNullable().unique();
+      table.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+    await instance('special_thanks').insert([{ name: 'First' }, { name: 'Second' }]);
+
+    await ensureSchema(instance);
+
+    expect(await instance.schema.hasColumn('special_thanks', 'note')).toBe(true);
+    expect(await instance.schema.hasColumn('special_thanks', 'sort_order')).toBe(true);
+    expect(await instance('special_thanks').select('name', 'note', 'sort_order').orderBy('sort_order')).toEqual([
+      { name: 'First', note: '', sort_order: 0 },
+      { name: 'Second', note: '', sort_order: 1 },
+    ]);
   });
 
   it('backfills beginner membership only for easy Major champions', async () => {

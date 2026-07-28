@@ -13,7 +13,7 @@ router.get(
     const items = await cached('special-thanks', 300, () =>
       db('special_thanks')
         .select('id', 'name', 'note')
-        .orderBy('id', 'asc')
+        .orderBy([{ column: 'sort_order', order: 'asc' }, { column: 'id', order: 'asc' }])
         .limit(10)
     );
     res.json({ items });

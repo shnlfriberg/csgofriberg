@@ -85,6 +85,8 @@ describe('popup announcements', () => {
     const stamp = Date.now();
     const username = `thanks-admin-${stamp}`;
     const name = `Contributor ${stamp}`;
+    const updatedName = `Contributor Updated ${stamp}`;
+    const secondName = `Contributor Second ${stamp}`;
     const limitPrefix = `Limit ${stamp}`;
     const [admin] = await db('users').insert({
       username,
@@ -117,10 +119,42 @@ describe('popup announcements', () => {
         created: false,
       });
 
+      const second = await request('/api/admin/special-thanks', {
+        method: 'POST',
+        headers: { Cookie: cookie },
+        body: JSON.stringify({ name: secondName, note: 'Second contributor' }),
+      });
+      expect(second.response.status).toBe(201);
+
+      const updated = await request(`/api/admin/special-thanks/${created.data.id}`, {
+        method: 'PATCH',
+        headers: { Cookie: cookie },
+        body: JSON.stringify({ name: updatedName, note: 'Updated contribution' }),
+      });
+      expect(updated.response.status).toBe(200);
+      expect(updated.data).toEqual({
+        id: created.data.id,
+        name: updatedName,
+        note: 'Updated contribution',
+      });
+
+      const beforeOrder = await request('/api/special-thanks');
+      const otherIds = beforeOrder.data.items
+        .map((item: any) => Number(item.id))
+        .filter((id: number) => ![Number(created.data.id), Number(second.data.id)].includes(id));
+      const reorderedIds = [Number(second.data.id), Number(created.data.id), ...otherIds];
+      const reordered = await request('/api/admin/special-thanks/order', {
+        method: 'PUT',
+        headers: { Cookie: cookie },
+        body: JSON.stringify({ ids: reorderedIds }),
+      });
+      expect(reordered.response.status).toBe(200);
+
       const list = await request('/api/special-thanks');
       expect(list.response.status).toBe(200);
-      expect(list.data.items.filter((item: any) => item.name === name)).toEqual([
-        { id: created.data.id, name, note: 'Helped verify player data' },
+      expect(list.data.items.slice(0, 2)).toEqual([
+        { id: second.data.id, name: secondName, note: 'Second contributor' },
+        { id: created.data.id, name: updatedName, note: 'Updated contribution' },
       ]);
 
       const invalid = await request('/api/admin/special-thanks', {
@@ -135,8 +169,12 @@ describe('popup announcements', () => {
         headers: { Cookie: cookie },
       });
       expect(removed.response.status).toBe(200);
+      await request(`/api/admin/special-thanks/${second.data.id}`, {
+        method: 'DELETE',
+        headers: { Cookie: cookie },
+      });
       expect((await request('/api/special-thanks')).data.items).not.toContainEqual(
-        expect.objectContaining({ name })
+        expect.objectContaining({ name: updatedName })
       );
 
       const [{ count }] = await db('special_thanks').count<{ count: number | string }[]>({ count: '*' });
@@ -155,7 +193,7 @@ describe('popup announcements', () => {
       expect(limited.data).toEqual({ code: 'SPECIAL_THANKS_LIMIT_REACHED' });
     } finally {
       await db('special_thanks')
-        .where({ name })
+        .whereIn('name', [name, updatedName, secondName])
         .orWhere('name', 'like', `${limitPrefix}%`)
         .del();
       await invalidateCached('special-thanks');
