@@ -1,34 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { HeartHandshake, X } from 'lucide-react';
-import { api } from '../api/client';
 import { useTranslation } from 'react-i18next';
+import { SPECIAL_THANKS } from '../config/specialThanks';
 import ModalPortal from './ModalPortal';
-
-interface SpecialThanksItem {
-  id: number;
-  name: string;
-  note: string;
-}
 
 export default function HomeSpecialThanks() {
   const { t } = useTranslation();
-  const [items, setItems] = useState<SpecialThanksItem[]>([]);
   const [open, setOpen] = useState(false);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const titleId = useId();
-
-  useEffect(() => {
-    let cancelled = false;
-    api.get<{ items: SpecialThanksItem[] }>('/special-thanks')
-      .then((response) => {
-        if (!cancelled) setItems(response.data.items);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -48,7 +29,7 @@ export default function HomeSpecialThanks() {
     };
   }, [open]);
 
-  if (!items.length) return null;
+  if (!SPECIAL_THANKS.length) return null;
 
   return (
     <>
@@ -91,10 +72,20 @@ export default function HomeSpecialThanks() {
                 </button>
               </header>
               <ul className="thanks-dialog-list">
-                {items.map((item) => (
-                  <li key={item.id}>
-                    <strong>{item.name}</strong>
-                    {item.note && <p>{item.note}</p>}
+                {SPECIAL_THANKS.map((item) => (
+                  <li key={item.name}>
+                    <a
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-umami-event={item.analyticsEvent}
+                    >
+                      <img className="thanks-dialog-avatar" src={item.image} alt={item.name} />
+                      <div className="thanks-dialog-copy">
+                        <strong>{item.name}</strong>
+                        {item.note && <p>{item.note}</p>}
+                      </div>
+                    </a>
                   </li>
                 ))}
               </ul>

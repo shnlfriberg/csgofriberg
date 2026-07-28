@@ -29,7 +29,6 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
   ],
   match_players: ['id', 'match_id', 'player_key', 'is_winner'],
   announcements: ['id', 'title', 'content', 'is_popup'],
-  special_thanks: ['id', 'name', 'note', 'sort_order', 'created_at'],
 };
 
 /** Applications only verify the migrated schema; DDL remains owned by the migrate service. */

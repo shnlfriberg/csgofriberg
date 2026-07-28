@@ -110,6 +110,8 @@ html:not([data-theme='blast']) .header-bar .title::before {
   margin-right: 4px;
 }
 
+html:not([data-theme='blast']) .home-page .header-bar .title::before { content: none; }
+
 html:not([data-theme='blast']) .status-bar {
   background: rgba(255, 255, 255, 0.78);
   border-bottom-color: rgba(32, 17, 24, 0.1);

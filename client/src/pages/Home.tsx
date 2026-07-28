@@ -106,7 +106,11 @@ export default function Home() {
         {t('common.skipToContent')}
       </a>
       <div className="header-bar">
-        <span className="title">{t('common.brand')}</span>
+        <div className="home-brand">
+          <span className="home-brand-slashes" aria-hidden="true">//</span>
+          <img className="home-brand-logo" src="/image/wjq.jpg" alt="" />
+          <span className="title">{t('common.brand')}</span>
+        </div>
         <span className="btns">
           <LanguageSelect />
           <ThemeToggle />
@@ -150,6 +154,15 @@ export default function Home() {
           <span className="hero-kicker">CS MAJOR // PLAYER GUESSING</span>
           <h1>{t('common.brand')}</h1>
           <p className="hero-subtitle">{t('home.subtitle')}</p>
+          <a
+            className="home-sponsor-link"
+            href="https://www.douyu.com/6979222"
+            target="_blank"
+            rel="noopener noreferrer"
+            data-umami-event="home-wanjiqi-sponsor"
+          >
+            {t('home.titleSponsor')}
+          </a>
           <GameRules />
           {initialized && !user && (
             <p className="muted" style={{ marginTop: 6 }}>

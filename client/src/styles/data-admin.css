@@ -437,31 +437,6 @@
   margin-inline: auto;
 }
 .admin-announcements-card > h3 { justify-content: center; text-align: center; }
-.admin-thanks-card { width: min(760px, 100%); margin-inline: auto; }
-.admin-thanks-card > h3 { justify-content: center; text-align: center; }
-.admin-thanks-form {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr) auto;
-  gap: 10px;
-}
-.admin-thanks-form .btn { min-height: 42px; white-space: nowrap; }
-.admin-thanks-form-actions { display: flex; align-items: stretch; gap: 8px; }
-.admin-thanks-form-actions .btn { min-width: 42px; }
-.admin-thanks-list { margin-top: 14px; border-top: 1px solid var(--border); }
-.admin-thanks-list > .muted { margin: 0; padding: 26px 0; text-align: center; }
-.admin-thanks-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  min-height: 52px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border);
-}
-.admin-thanks-row > span { display: grid; min-width: 0; gap: 4px; overflow-wrap: anywhere; }
-.admin-thanks-row small { color: var(--text-sec); line-height: 1.45; }
-.admin-thanks-row-actions { display: flex; flex-shrink: 0; gap: 6px; }
-.admin-thanks-row-actions .btn { width: 34px; height: 34px; padding: 0; }
 .admin-announcement-form { display: flex; flex-direction: column; gap: 8px; }
 .admin-announcement-form > .btn { width: fit-content; align-self: center; margin-top: 4px; }
 .admin-announcement-option {

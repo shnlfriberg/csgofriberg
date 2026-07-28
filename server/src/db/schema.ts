@@ -436,29 +436,4 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     });
   }
 
-  if (!(await instance.schema.hasTable('special_thanks'))) {
-    await instance.schema.createTable('special_thanks', (t) => {
-      t.increments('id').primary();
-      t.string('name', 80).notNullable().unique();
-      t.string('note', 200).notNullable().defaultTo('');
-      t.integer('sort_order').notNullable().defaultTo(0);
-      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
-    });
-  }
-  if (!(await instance.schema.hasColumn('special_thanks', 'note'))) {
-    await instance.schema.alterTable('special_thanks', (t) => {
-      t.string('note', 200).notNullable().defaultTo('');
-    });
-  }
-  if (!(await instance.schema.hasColumn('special_thanks', 'sort_order'))) {
-    await instance.schema.alterTable('special_thanks', (t) => {
-      t.integer('sort_order').notNullable().defaultTo(0);
-    });
-    const existing = await instance('special_thanks').select('id').orderBy('id');
-    await instance.transaction(async (trx) => {
-      for (const [index, item] of existing.entries()) {
-        await trx('special_thanks').where({ id: item.id }).update({ sort_order: index });
-      }
-    });
-  }
 }

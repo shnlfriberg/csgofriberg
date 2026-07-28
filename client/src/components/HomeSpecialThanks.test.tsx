@@ -1,41 +1,30 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { api } from '../api/client';
+import { beforeEach, describe, expect, it } from 'vitest';
 import i18n from '../i18n';
 import { renderWithProviders } from '../test/render';
 import HomeSpecialThanks from './HomeSpecialThanks';
 
-vi.mock('../api/client', () => ({
-  api: { get: vi.fn() },
-}));
-
 describe('HomeSpecialThanks', () => {
   beforeEach(async () => {
-    vi.clearAllMocks();
     await i18n.changeLanguage('zh');
   });
 
-  it('renders the public thanks list only after entries load', async () => {
+  it('renders the special thanks configured in client code', async () => {
     const user = userEvent.setup();
-    vi.mocked(api.get).mockResolvedValue({
-      data: {
-        items: [
-          { id: 1, name: 'Major Contributor', note: 'Verified historical data' },
-          { id: 2, name: '社区玩家', note: '持续反馈游戏体验' },
-        ],
-      },
-    } as never);
 
     renderWithProviders(<HomeSpecialThanks />);
 
-    expect(screen.queryByRole('button', { name: '特别感谢' })).not.toBeInTheDocument();
-    await user.click(await screen.findByRole('button', { name: '特别感谢' }));
-    expect(await screen.findByRole('heading', { name: '特别感谢' })).toBeInTheDocument();
-    expect(screen.getByText('Major Contributor')).toBeInTheDocument();
-    expect(screen.getByText('Verified historical data')).toBeInTheDocument();
-    expect(screen.getByText('社区玩家')).toBeInTheDocument();
-    expect(screen.getByText('持续反馈游戏体验')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '特别感谢' }));
+    expect(screen.getByRole('heading', { name: '特别感谢' })).toBeInTheDocument();
+    expect(screen.getByText('玩机器丶Machine')).toBeInTheDocument();
+    expect(screen.getByText('对网站的冠名赞助')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: '玩机器丶Machine' })).toHaveAttribute('src', '/image/wjq.jpg');
+    expect(screen.getByRole('link', { name: /玩机器丶Machine/ })).toHaveAttribute('href', 'https://www.douyu.com/6979222');
+    expect(screen.getByText('Ciallo Networks | AS202355')).toBeInTheDocument();
+    expect(screen.getByText('提供了网站的服务器')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Ciallo Networks | AS202355' })).toHaveAttribute('src', '/image/ciallonetwork.jpg');
+    expect(screen.getByRole('link', { name: /Ciallo Networks \| AS202355/ })).toHaveAttribute('href', 'https://ciallo.ee/');
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

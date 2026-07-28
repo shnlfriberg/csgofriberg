@@ -143,6 +143,8 @@ body::before {
   margin-right: 4px;
 }
 
+.home-page .header-bar .title::before { content: none; }
+
 .status-bar {
   background: rgba(35, 16, 29, 0.94);
   border-bottom-color: rgba(255, 255, 255, 0.09);

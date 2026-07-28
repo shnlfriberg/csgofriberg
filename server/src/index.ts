@@ -17,7 +17,6 @@ import gameRoutes from './routes/game';
 import statsRoutes from './routes/stats';
 import leaderboardRoutes from './routes/leaderboard';
 import announcementRoutes from './routes/announcements';
-import specialThanksRoutes from './routes/specialThanks';
 import adminRoutes from './routes/admin';
 import externalPlayerRoutes, { externalPlayerAuth } from './routes/externalPlayers';
 import { setupSocket } from './socket';
@@ -175,7 +174,6 @@ async function main() {
   app.use('/api/stats', statsRoutes);
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/announcements', announcementRoutes);
-  app.use('/api/special-thanks', specialThanksRoutes);
   app.use('/api/admin', adminRoutes);
 
   // 生产环境托管前端构建产物
