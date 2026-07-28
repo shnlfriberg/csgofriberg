@@ -52,7 +52,7 @@ interface MatchOver {
   answer: AnswerInfo | null;
 }
 
-const MULTI_GUESS_INTERVAL_MS = 1_000;
+const MULTI_GUESS_INTERVAL_MS = 1_500;
 const ROUND_TIME_MS = 120_000;
 const NEXT_ROUND_DELAY_MS = 6_000;
 

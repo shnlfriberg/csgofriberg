@@ -560,7 +560,7 @@ describe('multiplayer socket integration', () => {
       ]);
       expect(results.every((result) => result.feedback === undefined)).toBe(true);
       results.filter((result) => !result.code).forEach((result) => {
-        expect(result.cooldownMs).toBe(1_000);
+        expect(result.cooldownMs).toBe(1_500);
       });
       const finalRoom = await getRoom(created.room.id);
       expect(finalRoom).not.toBeNull();
@@ -964,7 +964,7 @@ describe('multiplayer socket integration', () => {
       });
       expect(coolingDown.code).toBe('GUESS_COOLDOWN');
       expect(coolingDown.retryAfterMs).toBeGreaterThan(0);
-      expect(coolingDown.retryAfterMs).toBeLessThanOrEqual(1_000);
+      expect(coolingDown.retryAfterMs).toBeLessThanOrEqual(1_500);
       await new Promise((resolve) => setTimeout(resolve, coolingDown.retryAfterMs + 25));
 
       const secondAppliedPromise = onceEvent(a, 'game:guess:applied');
