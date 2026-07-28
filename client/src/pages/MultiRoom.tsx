@@ -163,6 +163,24 @@ function Countdown({ deadline, onExpire }: { deadline: number | null; onExpire?:
   );
 }
 
+function GuessCooldownStatus({ until }: { until: number }) {
+  const { t } = useTranslation();
+  const [remaining, setRemaining] = useState(() => Math.max(0, until - performance.now()));
+  useEffect(() => {
+    const initial = Math.max(0, until - performance.now());
+    setRemaining(initial);
+    if (initial <= 0) return;
+    const timer = window.setInterval(() => {
+      const next = Math.max(0, until - performance.now());
+      setRemaining(next);
+      if (next <= 0) window.clearInterval(timer);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [until]);
+  if (remaining <= 0) return null;
+  return <>{t('multi.cooldown', { seconds: (remaining / 1000).toFixed(1) })}</>;
+}
+
 function PlayerBoard({
   player,
   room,
@@ -221,7 +239,6 @@ export default function MultiRoom() {
   const [rematchNotice, setRematchNotice] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const [guessCooldownUntil, setGuessCooldownUntil] = useState(0);
-  const [cooldownClock, setCooldownClock] = useState(() => performance.now());
   const [roundDeadline, setRoundDeadline] = useState<number | null>(null);
   const [nextRoundDeadline, setNextRoundDeadline] = useState<number | null>(null);
   const [readyDeadline, setReadyDeadline] = useState<number | null>(null);
@@ -515,18 +532,6 @@ export default function MultiRoom() {
     };
   }, [applyRoomSnapshot, navigate, syncRoom, t]);
 
-  useEffect(() => {
-    if (!guessCooldownUntil) return;
-    const tick = () => {
-      const now = performance.now();
-      setCooldownClock(now);
-      if (now >= guessCooldownUntil) setGuessCooldownUntil(0);
-    };
-    tick();
-    const timer = window.setInterval(tick, 100);
-    return () => window.clearInterval(timer);
-  }, [guessCooldownUntil]);
-
   const emit = (event: string, payload: unknown = {}) => {
     getSocket().emit(event, payload, (res: any) => {
       if (res?.code) toast.error(translate(res.code));
@@ -539,7 +544,6 @@ export default function MultiRoom() {
     if (!current || current.status !== 'playing' || roundExpired) return resolve(false);
     const remaining = guessCooldownUntil - performance.now();
     if (remaining > 0) {
-      setCooldownClock(performance.now());
       return resolve(false);
     }
     const socket = getSocket();
@@ -714,11 +718,6 @@ export default function MultiRoom() {
     setMatchOverVisible(false);
     setReplayRoundIndex(0);
   };
-  const guessCooldownRemaining = Math.max(
-    0,
-    guessCooldownUntil - Math.max(cooldownClock, performance.now())
-  );
-
   const viewPlayerStats = (player: RoomPlayer) => {
     if (statsLoadingKey) return;
     if (opponentPreview?.displayId === player.name) {
@@ -905,9 +904,7 @@ export default function MultiRoom() {
           <GuessInputBar
             onPick={(p) => submitGuess(p.id)}
             onFocusChange={setInputFocused}
-            statusText={guessCooldownRemaining > 0
-              ? t('multi.cooldown', { seconds: (guessCooldownRemaining / 1000).toFixed(1) })
-              : ''}
+            statusText={<GuessCooldownStatus until={guessCooldownUntil} />}
             disabled={roundExpired || me.guessCount >= room.maxGuesses}
           />
         ) : undefined

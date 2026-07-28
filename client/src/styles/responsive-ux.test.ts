@@ -33,6 +33,8 @@ describe('desktop/mobile layout contracts', () => {
     );
     expect(home).toMatch(/\.thanks-dialog\s*\{[^}]*max-height:\s*calc\(100dvh - 40px\)/s);
     expect(home).toMatch(/\.home-sponsor-link\s*\{[^}]*font-size:\s*0\.72rem/s);
+    const game = readCss('./game.css');
+    expect(game).not.toMatch(/\.input-dock\s*\{[^}]*backdrop-filter/s);
   });
 
   it('hides chrome for mobile keyboards and stacks multiplayer boards only when space is genuinely narrow', () => {

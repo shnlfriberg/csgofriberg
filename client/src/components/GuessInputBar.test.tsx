@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import GuessInputBar from './GuessInputBar';
 import { renderWithProviders } from '../test/render';
+import { getPlayerList } from '../api/playerList';
 
 const players = [
   { id: 1, nickname: 's1mple' },
@@ -108,6 +109,19 @@ describe('GuessInputBar', () => {
     expect(input).toHaveValue('s1');
     expect(screen.getByText('s1mple')).toBeInTheDocument();
     expect(input).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('does not revalidate the player list on every input change', async () => {
+    renderWithProviders(<GuessInputBar onPick={vi.fn()} />);
+    await waitFor(() => expect(getPlayerList).toHaveBeenCalled());
+    const input = screen.getByPlaceholderText('输入选手昵称...');
+    fireEvent.focus(input);
+    const callsAfterFocus = vi.mocked(getPlayerList).mock.calls.length;
+
+    fireEvent.change(input, { target: { value: 's' } });
+    fireEvent.change(input, { target: { value: 's1' } });
+
+    expect(getPlayerList).toHaveBeenCalledTimes(callsAfterFocus);
   });
 
   it('cycles completion with Tab and reverses with Shift+Tab', async () => {

@@ -1,4 +1,5 @@
 import { ArrowUp, ArrowDown } from 'lucide-react';
+import { memo } from 'react';
 import {
   AttributeFeedback,
   HiddenAttributeFeedback,
@@ -51,7 +52,7 @@ function Cell({
 }
 
 /** 猜测反馈表:原版 game-table 布局,每行一次猜测的逐属性对比 */
-export default function GuessBoard({ guesses }: { guesses: MultiplayerGuessFeedback[] }) {
+function GuessBoard({ guesses }: { guesses: MultiplayerGuessFeedback[] }) {
   const { t } = useTranslation();
   const columns = [
     t('guess.columns.nickname'),
@@ -99,3 +100,5 @@ export default function GuessBoard({ guesses }: { guesses: MultiplayerGuessFeedb
     </div>
   );
 }
+
+export default memo(GuessBoard);

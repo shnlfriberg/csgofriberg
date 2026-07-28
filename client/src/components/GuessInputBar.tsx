@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { FormEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from 'react';
 import { getPlayerList, searchPlayerList, subscribePlayerList } from '../api/playerList';
 import { errMsg } from '../api/client';
 import { toast } from './Toast';
@@ -12,7 +12,7 @@ interface Suggestion {
 interface Props {
   onPick: (player: Suggestion) => boolean | void | Promise<boolean | void>;
   onFocusChange?: (focused: boolean) => void;
-  statusText?: string;
+  statusText?: ReactNode;
   disabled?: boolean;
   placeholder?: string;
   buttonText?: string;
@@ -173,7 +173,6 @@ export default function GuessInputBar({
             textRef.current = query;
             setText(query);
             applyQuery(query);
-            if (players.current.length) void getPlayerList().catch(() => undefined);
           }}
           onFocus={() => {
             focused.current = true;
