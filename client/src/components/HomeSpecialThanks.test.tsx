@@ -21,10 +21,10 @@ describe('HomeSpecialThanks', () => {
     expect(screen.getByText('对网站的冠名赞助')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '玩机器丶Machine' })).toHaveAttribute('src', '/image/wjq.jpg');
     expect(screen.getByRole('link', { name: /玩机器丶Machine/ })).toHaveAttribute('href', 'https://www.douyu.com/6979222');
-    expect(screen.getByText('Ciallo Networks | AS202355')).toBeInTheDocument();
+    expect(screen.getByText('OuseTonae | AS202355 Ciallo Networks LTD')).toBeInTheDocument();
     expect(screen.getByText('提供了网站的服务器')).toBeInTheDocument();
-    expect(screen.getByRole('img', { name: 'Ciallo Networks | AS202355' })).toHaveAttribute('src', '/image/ciallonetwork.jpg');
-    expect(screen.getByRole('link', { name: /Ciallo Networks \| AS202355/ })).toHaveAttribute('href', 'https://ciallo.ee/');
+    expect(screen.getByRole('img', { name: 'OuseTonae | AS202355 Ciallo Networks LTD' })).toHaveAttribute('src', '/image/OuseTonae.jpg');
+    expect(screen.getByRole('link', { name: /OuseTonae \| AS202355 Ciallo Networks LTD/ })).toHaveAttribute('href', 'https://ciallo.ee/');
 
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();

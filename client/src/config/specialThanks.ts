@@ -15,9 +15,9 @@ export const SPECIAL_THANKS: SpecialThanksItem[] = [
     analyticsEvent: 'home-special-thanks-wanjiqi',
   },
   {
-    name: 'Ciallo Networks | AS202355',
+    name: 'OuseTonae | AS202355 Ciallo Networks LTD',
     note: '提供了网站的服务器',
-    image: '/image/ciallonetwork.jpg',
+    image: '/image/OuseTonae.jpg',
     href: 'https://ciallo.ee/',
     analyticsEvent: 'home-special-thanks-ciallo',
   },
