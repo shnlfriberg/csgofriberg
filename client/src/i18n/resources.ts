@@ -59,7 +59,7 @@ export const resources = {
         leaderboard: '排行榜',
         announcements: '更新公告',
         bilibili: 'B站：怂皇的一天',
-        github: 'GitHub',
+        github: 'GitHub', specialThanks: '特别感谢', closeSpecialThanks: '关闭特别感谢',
       },
       rules: {
         trigger: '游戏规则',
@@ -196,7 +196,7 @@ export const resources = {
         message: '检测到新的页面资源，刷新后即可使用最新版本。', later: '稍后', refresh: '立即刷新',
       },
       admin: {
-        title: '管理后台', presence: '实时在线统计', online: '在线人数', multiRooms: '多人房间', singleGames: '单人游戏', playersTab: '选手管理', difficultiesTab: '难度管理', usersTab: '用户管理', announcementsTab: '公告管理', apiTokensTab: 'API Token', resourcesTab: '资源版本',
+        title: '管理后台', presence: '实时在线统计', online: '在线人数', multiRooms: '多人房间', singleGames: '单人游戏', playersTab: '选手管理', difficultiesTab: '难度管理', usersTab: '用户管理', announcementsTab: '公告管理', thanksTab: '特别感谢', apiTokensTab: 'API Token', resourcesTab: '资源版本',
         playersTitle: '选手管理', totalPlayers: '共 {{count}} 名选手', addPlayer: '新增选手', searchPlayers: '搜索昵称、国家、赛区或队伍', pageSize: '每页显示', noMatchPlayers: '没有匹配的选手', noPlayers: '暂无选手',
         pageOf: '第 {{page}} / {{total}} 页', zeroItems: '0 条', importTitle: 'JSON 批量导入', importDescription: '粘贴选手数组，按昵称去重，已存在则更新。使用 difficulties 数组设置一个或多个难度。',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"乌克兰","region":"欧洲","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: '导入',
@@ -206,6 +206,7 @@ export const resources = {
         yes: '是', no: '否', available: '可用', disabled: '已停用', edit: '编辑', disable: '停用', enable: '启用', delete: '永久删除', disableFirst: '请先停用，再永久删除', noDifficultySelected: '请选择难度',
         saveFailed: '保存失败，请稍后重试', editPlayer: '修改选手：{{player}}', formDescription: '完整填写选手属性，带星号的字段为必填项。', playerNickname: '选手昵称 *', nationalityRequired: '国家或地区 *', regionPlaceholder: '欧洲、独联体、北美等', currentTeam: '当前队伍', ageRequired: '年龄 *', playerRole: '选手位置', majorAppearances: 'Major 参赛次数', easyPool: '加入简单版选手池', activePlayer: '现役选手', enabledPlayer: '允许进入选手池和猜测列表', saving: '保存中...', saveChanges: '保存修改',
         announcementsTitle: '公告管理', announcementPublished: '公告已发布', deleteAnnouncementTitle: '删除公告？', deleteAnnouncementMessage: '删除后公告将立即从所有用户页面移除，此操作无法撤销。', deleteAnnouncementConfirm: '删除公告', announcementDeleted: '公告已删除', announcementTitle: '公告标题', announcementContent: '公告内容', popupAnnouncement: '作为需确认的弹窗公告', popupAnnouncementBadge: '弹窗', publish: '发布公告',
+        thanksTitle: '特别感谢名单', thanksNamePlaceholder: '输入需要感谢的名字', thanksNotePlaceholder: '填写感谢备注（可选）', addThanks: '添加到名单', thanksAdding: '添加中...', thanksAdded: '已加入感谢名单', thanksAlreadyListed: '该名字已在感谢名单中', noThanks: '暂无感谢名单', deleteThanksTitle: '将 {{name}} 移出感谢名单？', deleteThanksMessage: '移除后首页将不再显示该名字。', deleteThanksConfirm: '移除', thanksDeleted: '已从感谢名单移除',
         resourcesTitle: '资源版本', currentVersion: '当前页面版本', broadcastTitle: '广播资源更新？', broadcastMessage: '版本不同的在线用户将立即收到刷新提示，之后连接的用户也会收到该提示。', broadcastConfirm: '确认广播', broadcastSuccess: '当前资源版本已广播', broadcasting: '正在广播...', broadcast: '广播当前版本',
         usersTitle: '用户管理', totalUsers: '共 {{count}} 名注册用户', searchUsers: '搜索用户名或匿名 ID', noMatchUsers: '没有匹配的用户', noUsers: '暂无注册用户', username: '用户名', anonymousId: '匿名 ID', permission: '权限', createdAt: '注册时间', adminRole: '管理员', userRole: '用户', querying: '查询中', viewStats: '查看战绩', gameRecords: '对局记录', leaderboardStatus: '排行榜', leaderboardVisible: '显示中', leaderboardHidden: '已隐藏', hideFromLeaderboard: '隐藏', showOnLeaderboard: '恢复显示', hideUserFromLeaderboard: '从排行榜隐藏 {{user}}', showUserOnLeaderboard: '恢复 {{user}} 的排行榜显示', leaderboardHiddenSuccess: '该用户已从排行榜隐藏', leaderboardVisibleSuccess: '该用户已恢复排行榜显示',
         userStats: '用户战绩', closeUserStats: '关闭用户战绩', gamesTitle: '具体对局', closeGames: '关闭具体对局', gameType: '对局类型', single: '单人', multi: '多人', opponent: '对手', noSingleGames: '没有单人对局记录', noMultiGames: '没有多人对局记录',
@@ -214,7 +215,7 @@ export const resources = {
       errors: {
         VALIDATION_FAILED: '输入格式不正确', INVALID_REQUEST_BODY: '请求数据不完整，请重试', PAYLOAD_TOO_LARGE: '导入数据过大，请拆分后重试',
         INTERNAL_ERROR: '服务器开小差了，请稍后再试', AUTH_REQUIRED: '请先登录', AUTH_EXPIRED: '登录状态已过期，请重新登录',
-        FORBIDDEN: '没有权限执行此操作', USERNAME_TAKEN: '用户名已被注册', USER_NOT_FOUND: '用户不存在', INVALID_CREDENTIALS: '用户名或密码错误',
+        FORBIDDEN: '没有权限执行此操作', USERNAME_TAKEN: '用户名已被注册', USER_NOT_FOUND: '用户不存在', INVALID_CREDENTIALS: '用户名或密码错误', SPECIAL_THANKS_LIMIT_REACHED: '感谢名单已达 10 人上限',
         NOT_FOUND: '内容不存在', GUEST_KEY_REQUIRED: '访客标识缺失，请刷新页面重试', GAME_NOT_FOUND: '对局不存在', GAME_FINISHED: '对局已结束',
         ALREADY_GUESSED: '已经猜过这名选手了', PLAYER_NOT_FOUND: '选手不存在', PLAYER_HAS_HISTORY: '该选手已有历史对局，无法永久删除；可以停用并移出选手池',
         PLAYER_MUST_BE_DISABLED: '永久删除前必须先停用该选手', NICKNAME_TAKEN: '选手昵称已存在', EMPTY_PLAYER_POOL: '选手库为空，请联系管理员导入数据', DIFFICULTY_UNAVAILABLE: '该难度尚未开放或选手库为空', INVALID_DIFFICULTY: '包含不存在的难度',
@@ -255,7 +256,7 @@ export const resources = {
         logoutMessage: 'You will switch to a guest session and any active multiplayer connection will be closed.', logoutConfirm: 'Log out',
         loginRegister: 'Log in / Sign up', singleMode: 'Solo mode', singleModeDescription: 'Choose a difficulty before starting a solo game',
         search: 'Player search', searchDescription: 'Teams, countries or regions, and Major history', multiplayer: 'Multiplayer',
-        multiplayerDescription: 'Create a room or find a match', stats: 'Stats', leaderboard: 'Leaderboard', announcements: 'Updates', bilibili: 'Bilibili: 怂皇的一天', github: 'GitHub',
+        multiplayerDescription: 'Create a room or find a match', stats: 'Stats', leaderboard: 'Leaderboard', announcements: 'Updates', bilibili: 'Bilibili: 怂皇的一天', github: 'GitHub', specialThanks: 'Special Thanks', closeSpecialThanks: 'Close special thanks',
       },
       rules: {
         trigger: 'Game Rules', title: 'Game Rules', description: 'Use color and arrow feedback from each guess to identify the randomly selected pro player.',
@@ -356,7 +357,7 @@ export const resources = {
       announcements: { title: 'Updates', empty: 'No announcements yet', acknowledge: 'I understand' },
       resourceUpdate: { listenFailed: 'Unable to listen for resource updates. Refresh the page later.', title: 'Update available', laterAria: 'Refresh later', message: 'New page resources are available. Refresh to use the latest version.', later: 'Later', refresh: 'Refresh now' },
       admin: {
-        title: 'Admin Panel', presence: 'Live presence', online: 'Online users', multiRooms: 'Multiplayer rooms', singleGames: 'Solo games', playersTab: 'Players', difficultiesTab: 'Difficulties', usersTab: 'Users', announcementsTab: 'Announcements', apiTokensTab: 'API tokens', resourcesTab: 'Resource version',
+        title: 'Admin Panel', presence: 'Live presence', online: 'Online users', multiRooms: 'Multiplayer rooms', singleGames: 'Solo games', playersTab: 'Players', difficultiesTab: 'Difficulties', usersTab: 'Users', announcementsTab: 'Announcements', thanksTab: 'Special Thanks', apiTokensTab: 'API tokens', resourcesTab: 'Resource version',
         playersTitle: 'Player Management', totalPlayers: '{{count}} players', addPlayer: 'Add player', searchPlayers: 'Search nickname, country, region, or team', pageSize: 'Per page', noMatchPlayers: 'No matching players', noPlayers: 'No players', pageOf: 'Page {{page}} / {{total}}', zeroItems: '0 items',
         importTitle: 'JSON Batch Import', importDescription: 'Paste a player array. Use difficulties to assign one or more difficulty pools.',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"Ukraine","region":"Europe","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: 'Import',
@@ -366,6 +367,7 @@ export const resources = {
         yes: 'Yes', no: 'No', available: 'Available', disabled: 'Disabled', edit: 'Edit', disable: 'Disable', enable: 'Enable', delete: 'Permanently delete', disableFirst: 'Disable the player before permanently deleting them', noDifficultySelected: 'Select difficulties',
         saveFailed: 'Could not save. Try again later.', editPlayer: 'Edit player: {{player}}', formDescription: 'Complete the player attributes. Fields marked with an asterisk are required.', playerNickname: 'Player nickname *', nationalityRequired: 'Country or region *', regionPlaceholder: 'Europe, CIS, North America, etc.', currentTeam: 'Current team', ageRequired: 'Age *', playerRole: 'Player role', majorAppearances: 'Major appearances', easyPool: 'Include in Easy player pool', activePlayer: 'Active player', enabledPlayer: 'Allow in the player pool and guess list', saving: 'Saving...', saveChanges: 'Save changes',
         announcementsTitle: 'Announcement Management', announcementPublished: 'Announcement published', deleteAnnouncementTitle: 'Delete announcement?', deleteAnnouncementMessage: 'The announcement will be removed from every user page immediately. This cannot be undone.', deleteAnnouncementConfirm: 'Delete announcement', announcementDeleted: 'Announcement deleted', announcementTitle: 'Announcement title', announcementContent: 'Announcement content', popupAnnouncement: 'Require acknowledgement in a popup', popupAnnouncementBadge: 'Popup', publish: 'Publish',
+        thanksTitle: 'Special Thanks List', thanksNamePlaceholder: 'Enter a name to thank', thanksNotePlaceholder: 'Add a note (optional)', addThanks: 'Add to list', thanksAdding: 'Adding...', thanksAdded: 'Added to the thanks list', thanksAlreadyListed: 'This name is already on the thanks list', noThanks: 'The thanks list is empty', deleteThanksTitle: 'Remove {{name}} from the thanks list?', deleteThanksMessage: 'The name will no longer appear on the home page.', deleteThanksConfirm: 'Remove', thanksDeleted: 'Removed from the thanks list',
         resourcesTitle: 'Resource Version', currentVersion: 'Current page version', broadcastTitle: 'Broadcast resource update?', broadcastMessage: 'Online users on a different version will be prompted to refresh immediately. New connections will also receive the prompt.', broadcastConfirm: 'Broadcast', broadcastSuccess: 'Current resource version broadcast', broadcasting: 'Broadcasting...', broadcast: 'Broadcast current version',
         usersTitle: 'User Management', totalUsers: '{{count}} registered users', searchUsers: 'Search username or anonymous ID', noMatchUsers: 'No matching users', noUsers: 'No registered users', username: 'Username', anonymousId: 'Anonymous ID', permission: 'Role', createdAt: 'Registered', adminRole: 'Admin', userRole: 'User', querying: 'Loading', viewStats: 'View stats', gameRecords: 'Game history', leaderboardStatus: 'Leaderboard', leaderboardVisible: 'Visible', leaderboardHidden: 'Hidden', hideFromLeaderboard: 'Hide', showOnLeaderboard: 'Show again', hideUserFromLeaderboard: 'Hide {{user}} from the leaderboard', showUserOnLeaderboard: 'Show {{user}} on the leaderboard again', leaderboardHiddenSuccess: 'The user is now hidden from leaderboards', leaderboardVisibleSuccess: 'The user is visible on leaderboards again',
         userStats: 'User Stats', closeUserStats: 'Close user stats', gamesTitle: 'Game History', closeGames: 'Close game history', gameType: 'Game type', single: 'Solo', multi: 'Multiplayer', opponent: 'Opponent', noSingleGames: 'No solo games', noMultiGames: 'No multiplayer games',
@@ -374,7 +376,7 @@ export const resources = {
       errors: {
         VALIDATION_FAILED: 'Invalid input', INVALID_REQUEST_BODY: 'The request is incomplete. Please try again.', PAYLOAD_TOO_LARGE: 'The import is too large. Split it and try again.',
         INTERNAL_ERROR: 'Something went wrong on the server. Please try again later.', AUTH_REQUIRED: 'Please log in first.', AUTH_EXPIRED: 'Your session has expired. Please log in again.',
-        FORBIDDEN: 'You do not have permission to do that.', USERNAME_TAKEN: 'That username is already registered.', USER_NOT_FOUND: 'User not found.', INVALID_CREDENTIALS: 'Incorrect username or password.',
+        FORBIDDEN: 'You do not have permission to do that.', USERNAME_TAKEN: 'That username is already registered.', USER_NOT_FOUND: 'User not found.', INVALID_CREDENTIALS: 'Incorrect username or password.', SPECIAL_THANKS_LIMIT_REACHED: 'The special thanks list has reached its 10-name limit.',
         NOT_FOUND: 'Content not found.', GUEST_KEY_REQUIRED: 'Guest identity is missing. Refresh the page and try again.', GAME_NOT_FOUND: 'Game not found.', GAME_FINISHED: 'This game has ended.',
         ALREADY_GUESSED: 'You already guessed this player.', PLAYER_NOT_FOUND: 'Player not found.', PLAYER_HAS_HISTORY: 'This player has game history and cannot be permanently deleted. Disable and remove them from the pool instead.',
         PLAYER_MUST_BE_DISABLED: 'Disable the player before permanently deleting them.', NICKNAME_TAKEN: 'That player nickname already exists.', EMPTY_PLAYER_POOL: 'The player pool is empty. Ask an administrator to import players.', DIFFICULTY_UNAVAILABLE: 'This difficulty is unavailable or has no players.', INVALID_DIFFICULTY: 'One or more difficulties do not exist.',
@@ -414,7 +416,7 @@ export const resources = {
         restoring: 'ログイン状態を復元中', admin: '管理者', adminPanel: '管理画面', manage: '管理', logout: 'ログアウト', logoutTitle: 'ログアウトしますか？',
         logoutMessage: 'ゲスト状態に切り替わり、進行中のマルチプレイ接続は終了します。', logoutConfirm: 'ログアウト', loginRegister: 'ログイン / 登録', singleMode: 'ソロモード', singleModeDescription: '難易度を選んでソロゲームを開始',
         search: '選手検索', searchDescription: 'チーム、国・地域、Major 経歴',
-        multiplayer: 'マルチプレイ', multiplayerDescription: 'ルーム作成またはランダムマッチ', stats: '統計', leaderboard: 'ランキング', announcements: '更新情報', bilibili: 'Bilibili：怂皇的一天', github: 'GitHub',
+        multiplayer: 'マルチプレイ', multiplayerDescription: 'ルーム作成またはランダムマッチ', stats: '統計', leaderboard: 'ランキング', announcements: '更新情報', bilibili: 'Bilibili：怂皇的一天', github: 'GitHub', specialThanks: '特別感謝', closeSpecialThanks: '特別感謝を閉じる',
       },
       rules: {
         trigger: 'ゲームルール', title: 'ゲームルール', description: '各予想の色と矢印のヒントを使い、ランダムに選ばれたプロ選手を当てます。',
@@ -514,7 +516,7 @@ export const resources = {
       announcements: { title: '更新情報', empty: 'お知らせはまだありません', acknowledge: '確認しました' },
       resourceUpdate: { listenFailed: '更新情報を受信できません。後でページを更新してください。', title: '更新があります', laterAria: '後で更新', message: '新しいページリソースがあります。更新すると最新版を利用できます。', later: '後で', refresh: '今すぐ更新' },
       admin: {
-        title: '管理画面', presence: 'リアルタイム接続状況', online: 'オンライン人数', multiRooms: 'マルチルーム', singleGames: 'ソロゲーム', playersTab: '選手管理', difficultiesTab: '難易度管理', usersTab: 'ユーザー管理', announcementsTab: 'お知らせ管理', apiTokensTab: 'API トークン', resourcesTab: 'リソースバージョン',
+        title: '管理画面', presence: 'リアルタイム接続状況', online: 'オンライン人数', multiRooms: 'マルチルーム', singleGames: 'ソロゲーム', playersTab: '選手管理', difficultiesTab: '難易度管理', usersTab: 'ユーザー管理', announcementsTab: 'お知らせ管理', thanksTab: '特別感謝', apiTokensTab: 'API トークン', resourcesTab: 'リソースバージョン',
         playersTitle: '選手管理', totalPlayers: '選手 {{count}} 名', addPlayer: '選手を追加', searchPlayers: 'ニックネーム、国、地域、チームを検索', pageSize: '1 ページ', noMatchPlayers: '一致する選手がいません', noPlayers: '選手がいません', pageOf: '{{page}} / {{total}} ページ', zeroItems: '0 件',
         importTitle: 'JSON 一括インポート', importDescription: '選手配列を貼り付けます。difficulties 配列で複数の難易度を設定できます。',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"ウクライナ","region":"ヨーロッパ","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: 'インポート',
@@ -524,6 +526,7 @@ export const resources = {
         yes: 'はい', no: 'いいえ', available: '利用可', disabled: '無効', edit: '編集', disable: '無効化', enable: '有効化', delete: '完全削除', disableFirst: '完全削除する前に無効化してください', noDifficultySelected: '難易度を選択してください',
         saveFailed: '保存できませんでした。後でもう一度お試しください。', editPlayer: '選手を編集：{{player}}', formDescription: '選手属性を入力してください。アスタリスク付きは必須項目です。', playerNickname: '選手ニックネーム *', nationalityRequired: '国・地域 *', regionPlaceholder: 'ヨーロッパ、CIS、北米など', currentTeam: '現在のチーム', ageRequired: '年齢 *', playerRole: '選手の役割', majorAppearances: 'Major 出場数', easyPool: 'イージー選手プールに追加', activePlayer: '現役選手', enabledPlayer: '選手プールと予想一覧で利用可能', saving: '保存中...', saveChanges: '変更を保存',
         announcementsTitle: 'お知らせ管理', announcementPublished: 'お知らせを公開しました', deleteAnnouncementTitle: 'お知らせを削除しますか？', deleteAnnouncementMessage: 'すべてのユーザーページから直ちに削除されます。この操作は取り消せません。', deleteAnnouncementConfirm: '削除', announcementDeleted: 'お知らせを削除しました', announcementTitle: 'タイトル', announcementContent: '内容', popupAnnouncement: '確認必須のポップアップとして表示', popupAnnouncementBadge: 'ポップアップ', publish: '公開',
+        thanksTitle: '特別感謝リスト', thanksNamePlaceholder: '感謝する名前を入力', thanksNotePlaceholder: '感謝メモを入力（任意）', addThanks: 'リストに追加', thanksAdding: '追加中...', thanksAdded: '感謝リストに追加しました', thanksAlreadyListed: 'この名前はすでにリストにあります', noThanks: '感謝リストは空です', deleteThanksTitle: '{{name}} を感謝リストから削除しますか？', deleteThanksMessage: 'ホーム画面にこの名前が表示されなくなります。', deleteThanksConfirm: '削除', thanksDeleted: '感謝リストから削除しました',
         resourcesTitle: 'リソースバージョン', currentVersion: '現在のページバージョン', broadcastTitle: 'リソース更新を通知しますか？', broadcastMessage: '異なるバージョンのオンラインユーザーに更新案内が表示され、以後の接続にも通知されます。', broadcastConfirm: '通知する', broadcastSuccess: '現在のリソースバージョンを通知しました', broadcasting: '通知中...', broadcast: '現在のバージョンを通知',
         usersTitle: 'ユーザー管理', totalUsers: '登録ユーザー {{count}} 名', searchUsers: 'ユーザー名または匿名 ID を検索', noMatchUsers: '一致するユーザーがいません', noUsers: '登録ユーザーがいません', username: 'ユーザー名', anonymousId: '匿名 ID', permission: '権限', createdAt: '登録日時', adminRole: '管理者', userRole: 'ユーザー', querying: '取得中', viewStats: '戦績を見る', gameRecords: '対局履歴', leaderboardStatus: 'ランキング', leaderboardVisible: '表示中', leaderboardHidden: '非表示', hideFromLeaderboard: '非表示にする', showOnLeaderboard: '再表示', hideUserFromLeaderboard: '{{user}} をランキングから非表示にする', showUserOnLeaderboard: '{{user}} をランキングに再表示する', leaderboardHiddenSuccess: 'ユーザーをランキングから非表示にしました', leaderboardVisibleSuccess: 'ユーザーをランキングに再表示しました',
         userStats: 'ユーザー戦績', closeUserStats: 'ユーザー戦績を閉じる', gamesTitle: '対局履歴', closeGames: '対局履歴を閉じる', gameType: '対局種別', single: 'ソロ', multi: 'マルチ', opponent: '対戦相手', noSingleGames: 'ソロ対局がありません', noMultiGames: 'マルチ対局がありません',
@@ -532,7 +535,7 @@ export const resources = {
       errors: {
         VALIDATION_FAILED: '入力形式が正しくありません', INVALID_REQUEST_BODY: 'リクエストデータが不足しています。もう一度お試しください。', PAYLOAD_TOO_LARGE: 'インポートデータが大きすぎます。分割して再試行してください。',
         INTERNAL_ERROR: 'サーバーで問題が発生しました。後でもう一度お試しください。', AUTH_REQUIRED: '先にログインしてください。', AUTH_EXPIRED: 'ログインの有効期限が切れました。再度ログインしてください。',
-        FORBIDDEN: 'この操作を行う権限がありません。', USERNAME_TAKEN: 'このユーザー名は既に登録されています。', USER_NOT_FOUND: 'ユーザーが見つかりません。', INVALID_CREDENTIALS: 'ユーザー名またはパスワードが正しくありません。',
+        FORBIDDEN: 'この操作を行う権限がありません。', USERNAME_TAKEN: 'このユーザー名は既に登録されています。', USER_NOT_FOUND: 'ユーザーが見つかりません。', INVALID_CREDENTIALS: 'ユーザー名またはパスワードが正しくありません。', SPECIAL_THANKS_LIMIT_REACHED: '特別感謝リストは 10 名の上限に達しています。',
         NOT_FOUND: 'コンテンツが見つかりません。', GUEST_KEY_REQUIRED: 'ゲスト識別情報がありません。ページを更新してください。', GAME_NOT_FOUND: '対局が見つかりません。', GAME_FINISHED: 'この対局は終了しています。',
         ALREADY_GUESSED: 'この選手はすでに予想済みです。', PLAYER_NOT_FOUND: '選手が見つかりません。', PLAYER_HAS_HISTORY: 'この選手には対局履歴があるため完全削除できません。無効化してプールから外してください。',
         PLAYER_MUST_BE_DISABLED: '完全削除する前に選手を無効化してください。', NICKNAME_TAKEN: 'この選手名は既に存在します。', EMPTY_PLAYER_POOL: '選手プールが空です。管理者にインポートを依頼してください。',

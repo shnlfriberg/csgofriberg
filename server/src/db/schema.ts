@@ -435,4 +435,18 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.boolean('is_popup').notNullable().defaultTo(false);
     });
   }
+
+  if (!(await instance.schema.hasTable('special_thanks'))) {
+    await instance.schema.createTable('special_thanks', (t) => {
+      t.increments('id').primary();
+      t.string('name', 80).notNullable().unique();
+      t.string('note', 200).notNullable().defaultTo('');
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+  }
+  if (!(await instance.schema.hasColumn('special_thanks', 'note'))) {
+    await instance.schema.alterTable('special_thanks', (t) => {
+      t.string('note', 200).notNullable().defaultTo('');
+    });
+  }
 }

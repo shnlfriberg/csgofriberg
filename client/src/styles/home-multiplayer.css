@@ -96,6 +96,58 @@
 .btn-bilibili:hover { background: #0096cc; }
 .btn-github { background: #24292f; }
 .btn-github:hover { background: #3a4149; }
+.btn-special-thanks { background: var(--accent); }
+.thanks-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 230;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  padding: 20px;
+  background: rgba(17, 12, 20, 0.68);
+  backdrop-filter: blur(7px);
+}
+.thanks-dialog {
+  width: min(620px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+}
+.thanks-dialog-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.thanks-dialog-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  font-size: 1.1rem;
+  letter-spacing: 0;
+}
+.thanks-dialog-heading h2 svg { color: var(--danger); }
+.thanks-dialog-list {
+  display: grid;
+  max-height: calc(100dvh - 130px);
+  margin: 0;
+  padding: 4px 20px 14px;
+  overflow-y: auto;
+  list-style: none;
+}
+.thanks-dialog-list li { min-width: 0; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.thanks-dialog-list li:last-child { border-bottom: 0; }
+.thanks-dialog-list strong { display: block; overflow-wrap: anywhere; }
+.thanks-dialog-list p { margin: 5px 0 0; color: var(--text-sec); line-height: 1.55; overflow-wrap: anywhere; }
 
 .single-lobby-subtitle { margin: 0 0 4px; }
 .single-difficulty-grid {

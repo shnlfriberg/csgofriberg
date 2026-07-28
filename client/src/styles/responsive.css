@@ -134,6 +134,8 @@
   .leaderboard-mode-tabs,
   .leaderboard-difficulty-select { flex: none; width: 100%; }
   .leaderboard-mode-tabs button { padding-inline: 5px; font-size: var(--fs-xs); }
+  .admin-thanks-form { grid-template-columns: 1fr; }
+  .admin-thanks-form .btn { width: 100%; }
 
   .home-hero { padding: 34px 18px 28px; border-radius: 18px; }
   .home-hero h1 { font-size: 2.35rem; }

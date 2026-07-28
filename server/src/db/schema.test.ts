@@ -63,6 +63,9 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasTable('api_tokens')).toBe(true);
     expect(await instance.schema.hasColumn('api_tokens', 'token_hash')).toBe(true);
     expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
+    expect(await instance.schema.hasTable('special_thanks')).toBe(true);
+    expect(await instance.schema.hasColumn('special_thanks', 'name')).toBe(true);
+    expect(await instance.schema.hasColumn('special_thanks', 'note')).toBe(true);
     const player = await instance('players').where({ nickname: 'legacy' }).first();
     expect(player.age).toBe(new Date().getFullYear() - 1990);
     expect((await instance('players').columnInfo('age')).nullable).toBe(false);

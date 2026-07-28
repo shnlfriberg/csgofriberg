@@ -23,6 +23,7 @@ import ThemeToggle from '../components/ThemeToggle';
 import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import LanguageSelect from '../components/LanguageSelect';
+import HomeSpecialThanks from '../components/HomeSpecialThanks';
 
 function GitHubIcon() {
   return (
@@ -194,6 +195,7 @@ export default function Home() {
             <Megaphone size={15} />
             {t('home.announcements')}
           </Link>
+          <HomeSpecialThanks />
           <a
             href="https://space.bilibili.com/290893104"
             className="btn btn-bilibili"

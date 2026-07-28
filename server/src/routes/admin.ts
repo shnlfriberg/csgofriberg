@@ -17,6 +17,7 @@ import {
 } from '../middleware/common';
 import { invalidateCached } from '../services/queryCache';
 import { allLeaderboardCacheKeys } from '../services/leaderboardCache';
+import { withKeyLock } from '../services/keyLock';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { publishResourceVersion } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
@@ -566,6 +567,56 @@ const announcementSchema = z.object({
   content: z.string().trim().min(1).max(10000),
   is_popup: z.boolean().default(false),
 });
+
+const specialThanksSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  note: z.string().trim().max(200).default(''),
+});
+
+router.post(
+  '/special-thanks',
+  adminWriteLimit,
+  validateBody(specialThanksSchema),
+  asyncHandler(async (req, res) => {
+    const result = await withKeyLock('special-thanks-write', async () => {
+      const existing = await db('special_thanks').where({ name: req.body.name }).first('id', 'name', 'note');
+      if (existing) {
+        return {
+          id: Number(existing.id),
+          name: String(existing.name),
+          note: String(existing.note ?? ''),
+          created: false,
+        };
+      }
+      const [{ count }] = await db('special_thanks').count<{ count: number | string }[]>({ count: '*' });
+      if (Number(count) >= 10) throw new HttpError(409, 'SPECIAL_THANKS_LIMIT_REACHED');
+      const [insertedId] = await db('special_thanks')
+        .insert({ name: req.body.name, note: req.body.note })
+        .returning('id');
+      return {
+        id: Number(typeof insertedId === 'object' ? insertedId.id : insertedId),
+        name: req.body.name,
+        note: req.body.note,
+        created: true,
+      };
+    });
+    if (result.created) await invalidateCached('special-thanks');
+    res.status(result.created ? 201 : 200).json(result);
+  })
+);
+
+router.delete(
+  '/special-thanks/:id',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const count = await db('special_thanks').where({ id }).del();
+    if (!count) throw new HttpError(404, 'NOT_FOUND');
+    await invalidateCached('special-thanks');
+    res.json({ ok: true });
+  })
+);
 
 router.post(
   '/announcements',

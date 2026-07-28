@@ -27,6 +27,10 @@ describe('desktop/mobile layout contracts', () => {
     expect(responsive).toMatch(
       /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.single-lobby-action\s+\.btn\s*\{[^}]*width:\s*100%/
     );
+    expect(home).toMatch(/\.thanks-dialog\s*\{[^}]*max-height:\s*calc\(100dvh - 40px\)/s);
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*640px\)\s*\{[\s\S]*\.admin-thanks-form\s*\{[^}]*grid-template-columns:\s*1fr/
+    );
   });
 
   it('hides chrome for mobile keyboards and stacks multiplayer boards only when space is genuinely narrow', () => {
