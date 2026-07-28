@@ -19,6 +19,7 @@
 .home-hero::before,
 .home-hero::after {
   position: absolute;
+  z-index: 0;
   content: '';
   width: 180px;
   height: 180px;
@@ -26,6 +27,7 @@
   border-radius: 50%;
   pointer-events: none;
 }
+.home-hero > * { position: relative; z-index: 1; }
 .home-hero::before { top: -116px; left: -68px; }
 .home-hero::after { right: -92px; bottom: -138px; }
 .home-hero h1 {

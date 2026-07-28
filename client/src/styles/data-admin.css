@@ -3,6 +3,9 @@
   margin-inline: auto;
 }
 .stats-error { margin-bottom: 12px; }
+.stats-difficulty-section { display: grid; min-width: 0; gap: 12px; }
+.stats-difficulty-toolbar { display: flex; justify-content: flex-end; }
+.stats-difficulty-select { width: min(320px, 100%); }
 .stats-overview-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

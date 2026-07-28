@@ -4,6 +4,10 @@ import { duplicateRedisClient, redis, redisKey } from '../redis';
 import { invalidateCached } from './queryCache';
 import { logTransientError } from './transientLog';
 import { leaderboardCacheKey } from './leaderboardCache';
+import {
+  globalStatsCacheKeysForDifficulty,
+  personalStatsCacheKeysForDifficulty,
+} from './statsCache';
 
 export interface MatchResultPayload {
   recordId: string;
@@ -75,8 +79,9 @@ async function persist(payload: MatchResultPayload): Promise<void> {
   if (insertedMatch) {
     await invalidateCached(
       leaderboardCacheKey('multi', payload.dbType),
+      ...globalStatsCacheKeysForDifficulty(payload.dbType),
       ...payload.participants.flatMap((player) => [
-        `stats:personal:${player.key}`,
+        ...personalStatsCacheKeysForDifficulty(player.key, payload.dbType),
         `room-player-performance:${player.key}`,
       ])
     );

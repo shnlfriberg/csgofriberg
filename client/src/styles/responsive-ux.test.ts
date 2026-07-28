@@ -19,6 +19,10 @@ describe('desktop/mobile layout contracts', () => {
       /\.single-difficulty-option\.active\s+\.single-difficulty-check\s*\{[^}]*background:\s*var\(--primary\)/s
     );
     expect(home).toMatch(/\.single-difficulty-check\s*\{[^}]*color:\s*#201118/s);
+    expect(home).toMatch(
+      /\.home-hero::before,\s*\n?\s*\.home-hero::after\s*\{[^}]*z-index:\s*0/s
+    );
+    expect(home).toMatch(/\.home-hero\s*>\s*\*\s*\{[^}]*z-index:\s*1/s);
 
     const responsive = readCss('./responsive.css');
     expect(responsive).toMatch(

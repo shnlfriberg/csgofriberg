@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BarChart3, ChevronLeft, ChevronRight, Play, Swords, User, Users } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, ChevronLeft, ChevronRight, Play, Swords, User, Users } from 'lucide-react';
 import Page from '../components/Page';
 import DataTable, { Column } from '../components/DataTable';
 import Badge from '../components/Badge';
@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { difficultyLabel } from '../utils/difficulty';
 import { currentLocale } from '../i18n';
 import type { PlayerPerformanceStats } from '../types';
+import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
 
 interface SingleStats {
   totalGames: number;
@@ -21,6 +22,7 @@ interface SingleStats {
 }
 
 interface StatsResponse {
+  difficulties: string[];
   personal: SingleStats & { multiGames: number; multiWins: number };
   global: SingleStats & { multiGames: number; registeredUsers: number };
 }
@@ -56,6 +58,8 @@ interface ReplayPage<T> {
 
 type ReplayType = 'single' | 'multi';
 
+const STATS_DIFFICULTIES = AVAILABLE_DIFFICULTIES.map((difficulty) => difficulty.key);
+
 function formatAverage(value: number | null): string {
   return value == null ? '-' : value.toFixed(2);
 }
@@ -76,8 +80,64 @@ function StatTable({ rows }: { rows: [string, string | number][] }) {
   );
 }
 
+function StatsDifficultyMultiSelect({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (value: string[]) => void;
+}) {
+  const { t } = useTranslation();
+  const selected = new Set(value);
+  const allSelected = value.length === STATS_DIFFICULTIES.length;
+  const summary = allSelected
+    ? t('stats.allDifficulties')
+    : value.map((key) => difficultyLabel(t, key)).join(', ');
+
+  return (
+    <details className="difficulty-multi-select stats-difficulty-select">
+      <summary className="difficulty-multi-select-trigger">
+        <span className="difficulty-multi-select-summary">{summary}</span>
+        <ChevronDown size={15} aria-hidden="true" />
+      </summary>
+      <div className="difficulty-multi-select-menu" role="group" aria-label={t('stats.difficultyLevels')}>
+        <label className="difficulty-multi-select-option">
+          <input
+            type="checkbox"
+            checked={allSelected}
+            onChange={() => onChange([...STATS_DIFFICULTIES])}
+          />
+          <span>{t('stats.allDifficulties')}</span>
+          {allSelected && <Check size={14} aria-hidden="true" />}
+        </label>
+        {STATS_DIFFICULTIES.map((key) => {
+          const isSelected = selected.has(key);
+          return (
+            <label key={key} className="difficulty-multi-select-option">
+              <input
+                type="checkbox"
+                checked={isSelected}
+                disabled={isSelected && value.length === 1}
+                onChange={(event) => {
+                  const next = event.target.checked
+                    ? STATS_DIFFICULTIES.filter((difficulty) => selected.has(difficulty) || difficulty === key)
+                    : value.filter((difficulty) => difficulty !== key);
+                  if (next.length) onChange(next);
+                }}
+              />
+              <span>{difficultyLabel(t, key)}</span>
+              {isSelected && <Check size={14} aria-hidden="true" />}
+            </label>
+          );
+        })}
+      </div>
+    </details>
+  );
+}
+
 export default function Stats() {
   const { t } = useTranslation();
+  const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>(STATS_DIFFICULTIES);
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [type, setType] = useState<ReplayType>('single');
   const [page, setPage] = useState(1);
@@ -89,18 +149,28 @@ export default function Stats() {
   const [opponentStats, setOpponentStats] = useState<PlayerPerformanceStats | null>(null);
   const [opponentStatsLoading, setOpponentStatsLoading] = useState(false);
   const requestId = useRef(0);
+  const statsRequestId = useRef(0);
 
   const [statsLoading, setStatsLoading] = useState(true);
   const [statsError, setStatsError] = useState(false);
 
   const loadStats = useCallback(() => {
+    const currentRequest = ++statsRequestId.current;
     setStatsLoading(true);
     setStatsError(false);
-    api.get<StatsResponse>('/stats/me')
-      .then((res) => setStats(res.data))
-      .catch(() => setStatsError(true))
-      .finally(() => setStatsLoading(false));
-  }, []);
+    api.get<StatsResponse>('/stats/me', {
+      params: { difficulties: selectedDifficulties.join(',') },
+    })
+      .then((res) => {
+        if (currentRequest === statsRequestId.current) setStats(res.data);
+      })
+      .catch(() => {
+        if (currentRequest === statsRequestId.current) setStatsError(true);
+      })
+      .finally(() => {
+        if (currentRequest === statsRequestId.current) setStatsLoading(false);
+      });
+  }, [selectedDifficulties]);
 
   useEffect(() => {
     loadStats();
@@ -204,50 +274,65 @@ export default function Stats() {
     <Page title={t('stats.title')} icon={<BarChart3 size={17} />}>
       <div className="stats-content">
         {!stats && statsLoading && (
-          <div className="stats-overview-grid" aria-busy="true">
-            <section className="card" role="status" aria-label={t('common.loading')}>
-              <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
-            </section>
-            <section className="card" aria-hidden="true">
-              <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
-            </section>
-          </div>
+          <section className="stats-difficulty-section" aria-busy="true">
+            <div className="stats-difficulty-toolbar">
+              <StatsDifficultyMultiSelect value={selectedDifficulties} onChange={setSelectedDifficulties} />
+            </div>
+            <div className="stats-overview-grid">
+              <div className="card" role="status" aria-label={t('common.loading')}>
+                <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
+              </div>
+              <div className="card" aria-hidden="true">
+                <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
+              </div>
+            </div>
+          </section>
         )}
         {!stats && !statsLoading && statsError && (
-          <div className="card game-empty-actions" style={{ alignItems: 'center' }}>
-            <p className="muted" style={{ margin: 0 }}>{t('stats.loadFailed')}</p>
-            <button className="btn btn-ghost btn-sm" type="button" onClick={loadStats}>
-              {t('common.retry')}
-            </button>
-          </div>
+          <section className="stats-difficulty-section">
+            <div className="stats-difficulty-toolbar">
+              <StatsDifficultyMultiSelect value={selectedDifficulties} onChange={setSelectedDifficulties} />
+            </div>
+            <div className="card game-empty-actions" style={{ alignItems: 'center' }}>
+              <p className="muted" style={{ margin: 0 }}>{t('stats.loadFailed')}</p>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={loadStats}>
+                {t('common.retry')}
+              </button>
+            </div>
+          </section>
         )}
         {stats && (
-          <div className="stats-overview-grid">
-            <section className="card">
-              <h3><BarChart3 size={16} />{t('stats.personal')}</h3>
-              <StatTable rows={[
-                [t('stats.singleGames'), stats.personal.totalGames],
-                [t('stats.singleWins'), stats.personal.wins],
-                [t('stats.singleWinRate'), `${(stats.personal.winRate * 100).toFixed(1)}%`],
-                [t('stats.avgWinningGuesses'), formatAverage(stats.personal.avgGuesses)],
-                [t('stats.bestGuess'), stats.personal.bestGuesses ?? '-'],
-                [t('stats.topFirstGuess'), formatFirstGuess(stats.personal.firstGuess)],
-                [t('stats.multiGamesWins'), `${stats.personal.multiGames} / ${stats.personal.multiWins}`],
-              ]} />
-            </section>
-            <section className="card">
-              <h3><Users size={16} />{t('stats.global')}</h3>
-              <StatTable rows={[
-                [t('stats.registeredUsers'), stats.global.registeredUsers],
-                [t('stats.singleGames'), stats.global.totalGames],
-                [t('stats.singleWins'), stats.global.wins],
-                [t('stats.globalWinRate'), `${(stats.global.winRate * 100).toFixed(1)}%`],
-                [t('stats.avgWinningGuesses'), formatAverage(stats.global.avgGuesses)],
-                [t('stats.topFirstGuess'), formatFirstGuess(stats.global.firstGuess)],
-                [t('stats.multiGames'), stats.global.multiGames],
-              ]} />
-            </section>
-          </div>
+          <section className="stats-difficulty-section" aria-busy={statsLoading}>
+            <div className="stats-difficulty-toolbar">
+              <StatsDifficultyMultiSelect value={selectedDifficulties} onChange={setSelectedDifficulties} />
+            </div>
+            <div className="stats-overview-grid">
+              <div className="card">
+                <h3><BarChart3 size={16} />{t('stats.personal')}</h3>
+                <StatTable rows={[
+                  [t('stats.singleGames'), stats.personal.totalGames],
+                  [t('stats.singleWins'), stats.personal.wins],
+                  [t('stats.singleWinRate'), `${(stats.personal.winRate * 100).toFixed(1)}%`],
+                  [t('stats.avgWinningGuesses'), formatAverage(stats.personal.avgGuesses)],
+                  [t('stats.bestGuess'), stats.personal.bestGuesses ?? '-'],
+                  [t('stats.topFirstGuess'), formatFirstGuess(stats.personal.firstGuess)],
+                  [t('stats.multiGamesWins'), `${stats.personal.multiGames} / ${stats.personal.multiWins}`],
+                ]} />
+              </div>
+              <div className="card">
+                <h3><Users size={16} />{t('stats.global')}</h3>
+                <StatTable rows={[
+                  [t('stats.registeredUsers'), stats.global.registeredUsers],
+                  [t('stats.singleGames'), stats.global.totalGames],
+                  [t('stats.singleWins'), stats.global.wins],
+                  [t('stats.globalWinRate'), `${(stats.global.winRate * 100).toFixed(1)}%`],
+                  [t('stats.avgWinningGuesses'), formatAverage(stats.global.avgGuesses)],
+                  [t('stats.topFirstGuess'), formatFirstGuess(stats.global.firstGuess)],
+                  [t('stats.multiGames'), stats.global.multiGames],
+                ]} />
+              </div>
+            </div>
+          </section>
         )}
 
         <section className="card stats-recent-card">

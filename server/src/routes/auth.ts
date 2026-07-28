@@ -19,6 +19,7 @@ import { invalidateCached } from '../services/queryCache';
 import { leaderboardCacheKey } from '../services/leaderboardCache';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from '../services/password';
 import { DIFFICULTY_LEVELS } from '../difficulties';
+import { allGlobalStatsCacheKeys, allPersonalStatsCacheKeys } from '../services/statsCache';
 
 const router = Router();
 
@@ -53,6 +54,7 @@ router.post(
       .then((rows) => rows.map((r: any) => (typeof r === 'object' ? r.id : r)));
 
     const user = { id, username, role, token_version: 0 };
+    await invalidateCached(...allGlobalStatsCacheKeys());
     setAuthCookies(res, user);
     res.json({ user: { id, username, role } });
   })
@@ -160,8 +162,8 @@ router.post(
     clearGuestCookie(res);
     await invalidateCached(
       ...DIFFICULTY_LEVELS.map((difficulty) => leaderboardCacheKey('single', difficulty.key)),
-      `stats:personal:g:${guestKey}`,
-      `stats:personal:u:${req.user!.id}`,
+      ...allPersonalStatsCacheKeys(`g:${guestKey}`),
+      ...allPersonalStatsCacheKeys(`u:${req.user!.id}`),
       `room-player-performance:g:${guestKey}`,
       `room-player-performance:u:${req.user!.id}`
     );

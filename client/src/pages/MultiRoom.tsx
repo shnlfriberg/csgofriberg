@@ -1003,7 +1003,7 @@ export default function MultiRoom() {
           )}
           {room.matchmaking && opponent && (
             <div className="matchmaking-opponent-preview">
-              <span>{t('multi.recentWinningGuessAverage')}</span>
+              <span>{t('multi.opponentRecentWinningGuessAverage')}</span>
               <strong className={matchmakingAverageClass(
                 opponentPreview?.stats.multi.recentAverageWinningGuesses
               )}>

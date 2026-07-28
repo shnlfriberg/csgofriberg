@@ -178,6 +178,7 @@ describe('MultiRoom replay', () => {
 
     renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
     const ready = await screen.findByRole('button', { name: '准备' });
+    expect(screen.getByText('对方近 10 场胜局平均猜测')).toBeInTheDocument();
     expect(await screen.findByText('2.8')).toHaveClass('matchmaking-average-low');
     expect(screen.queryByRole('button', { name: '开始对局' })).not.toBeInTheDocument();
     await user.click(ready);

@@ -5,10 +5,12 @@ import { guestNameFromKey, optionalAuth, userNameFromUsername } from '../middlew
 import { asyncHandler, HttpError, validateParams, validateQuery } from '../middleware/common';
 import { cached } from '../services/queryCache';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
-import { getPlayer } from '../services/playerCache';
+import { getPlayer, isDifficultyAvailable } from '../services/playerCache';
 import { getPlayerPerformance } from '../services/playerPerformance';
 import { GuessFeedback, Player } from '../types';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
+import { globalStatsCacheKey, personalStatsCacheKey } from '../services/statsCache';
+import { DIFFICULTY_LEVELS } from '../difficulties';
 
 const router = Router();
 router.use(optionalAuth);
@@ -145,13 +147,13 @@ function answerView(target: Player) {
   };
 }
 
-async function globalStats() {
-  return cached('stats:global', 60, async () => {
+async function globalStats(difficulties: string[]) {
+  return cached(globalStatsCacheKey(difficulties), 60, async () => {
     const [single, multi, users, firstGuess] = await Promise.all([
-      singleAggregate(db('games')),
-      db('match_records').count({ total: 'id' }).first(),
+      singleAggregate(db('games').whereIn('mode', difficulties)),
+      db('match_records').whereIn('db_type', difficulties).count({ total: 'id' }).first(),
       db('users').count({ total: 'id' }).first(),
-      firstGuessSummary(db('games')),
+      firstGuessSummary(db('games').whereIn('mode', difficulties)),
     ]);
     return {
       ...singleSummary(single),
@@ -162,16 +164,18 @@ async function globalStats() {
   });
 }
 
-async function personalStats(owner: Owner, identityKey: string) {
-  return cached(`stats:personal:${identityKey}`, 30, async () => {
+async function personalStats(owner: Owner, identityKey: string, difficulties: string[]) {
+  return cached(personalStatsCacheKey(identityKey, difficulties), 30, async () => {
     const [single, firstGuess, multi] = await Promise.all([
-      singleAggregate(db('games').where(owner)),
-      firstGuessSummary(db('games').where(owner)),
-      db('match_players')
-        .where({ player_key: identityKey })
+      singleAggregate(db('games').where(owner).whereIn('mode', difficulties)),
+      firstGuessSummary(db('games').where(owner).whereIn('mode', difficulties)),
+      db('match_players as mp')
+        .join('match_records as m', 'm.id', 'mp.match_id')
+        .where('mp.player_key', identityKey)
+        .whereIn('m.db_type', difficulties)
         .first()
-        .count({ total: 'id' })
-        .sum({ wins: db.raw('case when is_winner then 1 else 0 end') }),
+        .count({ total: 'mp.id' })
+        .sum({ wins: db.raw('case when mp.is_winner then 1 else 0 end') }),
     ]);
     return {
       ...singleSummary(single),
@@ -186,6 +190,9 @@ const replayListQuery = z.object({
   type: z.enum(['single', 'multi']).default('single'),
   page: z.coerce.number().int().min(1).max(500).default(1),
   pageSize: z.coerce.number().int().min(5).max(30).default(15),
+});
+const statsSummaryQuery = z.object({
+  difficulties: z.string().trim().min(1).max(128).optional(),
 });
 const replayIdParams = z.object({ id: z.coerce.number().int().positive() });
 
@@ -214,21 +221,29 @@ router.get(
     key: requestIdentity,
     failClosed: true,
   }),
+  validateQuery(statsSummaryQuery),
   asyncHandler(async (req, res) => {
     const owner = ownerFor(req);
     if (!owner) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
     const identityKey = identityKeyFor(req);
     if (!identityKey) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
-
+    const available: string[] = DIFFICULTY_LEVELS
+      .filter((difficulty) => difficulty.isEnabled && isDifficultyAvailable(difficulty.key))
+      .map((difficulty) => difficulty.key);
+    const raw = (req.query as unknown as z.infer<typeof statsSummaryQuery>).difficulties;
+    const requested = raw
+      ? [...new Set(raw.split(',').map((difficulty) => difficulty.trim()).filter(Boolean))]
+      : available;
+    if (!requested.length || requested.some((difficulty) => !available.includes(difficulty))) {
+      throw new HttpError(400, 'DIFFICULTY_UNAVAILABLE');
+    }
+    const difficulties = available.filter((difficulty) => requested.includes(difficulty));
     const [personal, global] = await Promise.all([
-      personalStats(owner, identityKey),
-      globalStats(),
+      personalStats(owner, identityKey, difficulties),
+      globalStats(difficulties),
     ]);
 
-    res.json({
-      personal,
-      global,
-    });
+    res.json({ difficulties, personal, global });
   })
 );
 

@@ -13,6 +13,7 @@ import { errorHandler } from '../middleware/common';
 import { initPlayerCache, getPlayer } from '../services/playerCache';
 import { invalidateCached } from '../services/queryCache';
 import { guestNameFromKey, userNameFromUsername } from '../middleware/auth';
+import { allGlobalStatsCacheKeys } from '../services/statsCache';
 
 let server: http.Server;
 let baseUrl: string;
@@ -70,7 +71,7 @@ describe('stats and replay', () => {
       })
       .returning('id')
       .then((rows) => rows.map((item: any) => typeof item === 'object' ? item.id : item));
-    await invalidateCached('stats:global');
+    await invalidateCached(...allGlobalStatsCacheKeys());
 
     const meKey = `g:${ownerKey}`;
     const opponentKey = `g:${otherKey}`;
@@ -110,25 +111,59 @@ describe('stats and replay', () => {
     ]);
 
     try {
-      const stats = await request('/api/stats/me', guestCookie(ownerKey));
-      expect(stats.response.status).toBe(200);
-      expect(stats.data.personal.totalGames).toBe(1);
-      expect(stats.data.personal.wins).toBe(1);
-      expect(stats.data.personal.multiGames).toBe(1);
-      expect(stats.data.personal.multiWins).toBe(1);
-      expect(stats.data.personal.firstGuess).toEqual({
+      const easyStats = await request('/api/stats/me?difficulties=easy', guestCookie(ownerKey));
+      expect(easyStats.response.status).toBe(200);
+      expect(easyStats.data.difficulties).toEqual(['easy']);
+      const [expectedEasySingle, expectedEasyMulti] = await Promise.all([
+        db('games').where({ mode: 'easy' }).whereNot({ status: 'playing' }).count({ count: 'id' }).first(),
+        db('match_records').where({ db_type: 'easy' }).count({ count: 'id' }).first(),
+      ]);
+      expect(easyStats.data.personal.totalGames).toBe(1);
+      expect(easyStats.data.personal.wins).toBe(1);
+      expect(easyStats.data.personal.multiGames).toBe(1);
+      expect(easyStats.data.personal.multiWins).toBe(1);
+      expect(easyStats.data.personal.firstGuess).toEqual({
         playerId: target.id,
         nickname: target.nickname,
         percentage: 1,
       });
-      expect(stats.data.global.totalGames).toBeGreaterThanOrEqual(1);
-      expect(stats.data.global.firstGuess).toMatchObject({
+      expect(easyStats.data.global.totalGames).toBeGreaterThanOrEqual(1);
+      expect(easyStats.data.global.firstGuess).toMatchObject({
         playerId: expect.any(Number),
         nickname: expect.any(String),
         percentage: expect.any(Number),
       });
-      expect(stats.data.global.firstGuess.percentage).toBeGreaterThan(0);
-      expect(stats.data.global.firstGuess.percentage).toBeLessThanOrEqual(1);
+      expect(easyStats.data.global.firstGuess.percentage).toBeGreaterThan(0);
+      expect(easyStats.data.global.firstGuess.percentage).toBeLessThanOrEqual(1);
+      expect(easyStats.data.global.multiGames).toBeGreaterThanOrEqual(1);
+      expect(easyStats.data.global.totalGames).toBe(Number(expectedEasySingle?.count ?? 0));
+      expect(easyStats.data.global.multiGames).toBe(Number(expectedEasyMulti?.count ?? 0));
+
+      const normalStats = await request('/api/stats/me?difficulties=normal', guestCookie(ownerKey));
+      expect(normalStats.response.status).toBe(200);
+      expect(normalStats.data.difficulties).toEqual(['normal']);
+      const [expectedNormalSingle, expectedNormalMulti] = await Promise.all([
+        db('games').where({ mode: 'normal' }).whereNot({ status: 'playing' }).count({ count: 'id' }).first(),
+        db('match_records').where({ db_type: 'normal' }).count({ count: 'id' }).first(),
+      ]);
+      expect(normalStats.data).toMatchObject({
+        personal: { totalGames: 0, wins: 0, multiGames: 0, multiWins: 0 },
+        global: {
+          totalGames: Number(expectedNormalSingle?.count ?? 0),
+          multiGames: Number(expectedNormalMulti?.count ?? 0),
+        },
+      });
+
+      const combinedStats = await request('/api/stats/me?difficulties=normal,easy', guestCookie(ownerKey));
+      expect(combinedStats.response.status).toBe(200);
+      expect(combinedStats.data.difficulties).toEqual(['easy', 'normal']);
+      expect(combinedStats.data.personal).toMatchObject({ totalGames: 1, wins: 1, multiGames: 1, multiWins: 1 });
+      expect(combinedStats.data.global.totalGames).toBe(
+        Number(expectedEasySingle?.count ?? 0) + Number(expectedNormalSingle?.count ?? 0)
+      );
+      expect(combinedStats.data.global.multiGames).toBe(
+        Number(expectedEasyMulti?.count ?? 0) + Number(expectedNormalMulti?.count ?? 0)
+      );
       const singleList = await request('/api/stats/replays?type=single&page=1&pageSize=5', guestCookie(ownerKey));
       expect(singleList.response.status).toBe(200);
       expect(singleList.data.items[0]).toMatchObject({ type: 'single', id: gameId });
@@ -213,7 +248,7 @@ describe('stats and replay', () => {
     } finally {
       await db('games').where({ session_id: sessionId }).del();
       await db('match_records').where({ id: matchId }).del();
-      await invalidateCached('stats:global');
+      await invalidateCached(...allGlobalStatsCacheKeys());
     }
   });
 
@@ -243,7 +278,7 @@ describe('stats and replay', () => {
     })));
 
     try {
-      const stats = await request('/api/stats/me', guestCookie(ownerKey));
+      const stats = await request('/api/stats/me?difficulties=easy', guestCookie(ownerKey));
       expect(stats.response.status).toBe(200);
       expect(stats.data.personal.firstGuess).toEqual({
         playerId: favorite.id,
@@ -252,8 +287,14 @@ describe('stats and replay', () => {
       });
     } finally {
       await db('games').where({ guest_key: ownerKey }).del();
-      await invalidateCached('stats:global');
+      await invalidateCached(...allGlobalStatsCacheKeys());
     }
+  });
+
+  it('rejects unavailable difficulty filters', async () => {
+    const stats = await request('/api/stats/me?difficulties=easy,impossible', guestCookie(`invalid-stats-${Date.now()}`));
+    expect(stats.response.status).toBe(400);
+    expect(stats.data.code).toBe('DIFFICULTY_UNAVAILABLE');
   });
 
   it('returns draw for a match where neither player is marked as winner', async () => {

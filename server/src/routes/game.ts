@@ -19,6 +19,10 @@ import {
 } from '../services/singleGameStore';
 import { shouldPersistSingleSettlement } from '../services/singleSettlementLimit';
 import { leaderboardCacheKey } from '../services/leaderboardCache';
+import {
+  globalStatsCacheKeysForDifficulty,
+  personalStatsCacheKeysForDifficulty,
+} from '../services/statsCache';
 
 const router = Router();
 router.use(optionalAuth);
@@ -83,13 +87,11 @@ async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promis
   }
   await deleteSingleGame(game);
   if (!shouldPersist) return false;
-  const personalStatsKey = game.userId != null
-    ? `stats:personal:u:${game.userId}`
-    : `stats:personal:g:${game.guestKey}`;
   const identityKey = game.userId != null ? `u:${game.userId}` : `g:${game.guestKey}`;
   await invalidateCached(
     leaderboardCacheKey('single', game.mode),
-    personalStatsKey,
+    ...personalStatsCacheKeysForDifficulty(identityKey, game.mode),
+    ...globalStatsCacheKeysForDifficulty(game.mode),
     `room-player-performance:${identityKey}`
   );
   return true;
