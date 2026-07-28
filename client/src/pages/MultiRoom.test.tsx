@@ -169,7 +169,7 @@ describe('MultiRoom replay', () => {
           displayId: 'Opponent',
           stats: {
             single: { games: 0, wins: 0, losses: 0, winRate: 0, avgGuesses: null, bestGuesses: null },
-            multi: { games: 1, wins: 1, losses: 0, winRate: 1, recentAverageWinningGuesses: 2.8, recentMatches: [] },
+            multi: { games: 1, wins: 1, losses: 0, winRate: 1, recentAverageWinningGuesses: 3.4, recentMatches: [] },
           },
         });
       }
@@ -179,7 +179,7 @@ describe('MultiRoom replay', () => {
     renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
     const ready = await screen.findByRole('button', { name: '准备' });
     expect(screen.getByText('对方近 10 场胜局平均猜测')).toBeInTheDocument();
-    expect(await screen.findByText('2.8')).toHaveClass('matchmaking-average-low');
+    expect(await screen.findByText('3.4')).toHaveClass('matchmaking-average-low');
     expect(screen.queryByRole('button', { name: '开始对局' })).not.toBeInTheDocument();
     await user.click(ready);
     expect(socket.emit).toHaveBeenCalledWith('room:ready', { ready: true }, expect.any(Function));

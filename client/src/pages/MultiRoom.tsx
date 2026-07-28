@@ -76,7 +76,7 @@ function localDeadline(timestamp: unknown, anchor: ServerClockAnchor | null): nu
 
 function matchmakingAverageClass(value: number | null | undefined): string {
   if (value == null) return '';
-  if (value < 3) return ' matchmaking-average-low';
+  if (value < 3.5) return ' matchmaking-average-low';
   if (value <= 4.5) return ' matchmaking-average-medium';
   return ' matchmaking-average-high';
 }

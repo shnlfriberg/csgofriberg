@@ -16,7 +16,7 @@ function cooldownSeconds(strikes: number, durationMultiplier: number): number {
 }
 
 export function readyExitPenaltyMultiplier(averageGuesses: number | null): 0 | 0.5 | 1 {
-  if (averageGuesses !== null && averageGuesses < 3) return 0;
+  if (averageGuesses !== null && averageGuesses < 3.5) return 0;
   if (averageGuesses !== null && averageGuesses <= 4.5) return 0.5;
   return 1;
 }

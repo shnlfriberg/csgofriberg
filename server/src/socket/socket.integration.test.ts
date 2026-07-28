@@ -159,8 +159,8 @@ describe('multiplayer socket integration', () => {
     const identity = `g:cooldown-${Date.now()}`;
     const halfIdentity = `g:cooldown-half-${Date.now()}`;
     try {
-      expect(readyExitPenaltyMultiplier(2.99)).toBe(0);
-      expect(readyExitPenaltyMultiplier(3)).toBe(0.5);
+      expect(readyExitPenaltyMultiplier(3.49)).toBe(0);
+      expect(readyExitPenaltyMultiplier(3.5)).toBe(0.5);
       expect(readyExitPenaltyMultiplier(4.5)).toBe(0.5);
       expect(readyExitPenaltyMultiplier(4.51)).toBe(1);
       expect(readyExitPenaltyMultiplier(null)).toBe(1);
