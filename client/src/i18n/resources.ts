@@ -39,6 +39,10 @@ export const resources = {
         easyDescription: '知名选手池 · 快速上手',
         normalDescription: '完整数据库 · 终极挑战',
       },
+      settings: {
+        title: '个人设置',
+        motion: '动画效果',
+      },
       home: {
         subtitle: 'CS:GO / CS2 Major 选手猜测游戏',
         titleSponsor: '玩机器丶Machine 冠名赞助',
@@ -243,6 +247,10 @@ export const resources = {
         easyDescription: 'Famous player pool · Quick start',
         normalDescription: 'Full database · Ultimate challenge',
       },
+      settings: {
+        title: 'Personal settings',
+        motion: 'Animation effects',
+      },
       common: {
         brand: '弗一把', guest: 'Guest', home: 'Home', close: 'Close', cancel: 'Cancel', confirm: 'Confirm', loading: 'Loading...', noData: 'No data', unknown: 'Unknown',
         skipToContent: 'Skip to main content', retry: 'Retry',
@@ -403,6 +411,10 @@ export const resources = {
         beginnerDescription: '最も有名な選手プール · ルールに慣れる',
         easyDescription: '有名選手プール · すぐ遊べる',
         normalDescription: '完全データベース · 高難度',
+      },
+      settings: {
+        title: '個人設定',
+        motion: 'アニメーション効果',
       },
       common: {
         brand: '弗一把', guest: 'ゲスト', home: 'メインメニュー', close: '閉じる', cancel: 'キャンセル', confirm: '確認', loading: '読み込み中...', noData: 'データがありません', unknown: '不明',

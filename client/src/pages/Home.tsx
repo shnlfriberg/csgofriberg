@@ -24,6 +24,7 @@ import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import LanguageSelect from '../components/LanguageSelect';
 import HomeSpecialThanks from '../components/HomeSpecialThanks';
+import PersonalSettings from '../components/PersonalSettings';
 import wanjiqiImage from '../assets/wjq.jpg';
 
 function GitHubIcon() {
@@ -114,6 +115,7 @@ export default function Home() {
         </div>
         <span className="btns">
           <LanguageSelect />
+          <PersonalSettings />
           <ThemeToggle />
           {!initialized ? (
             <span className="auth-pending" aria-label={t('home.restoring')} />

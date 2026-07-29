@@ -6,6 +6,7 @@ import { initializeIdentity } from './api/session';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { ensurePow } from './api/pow';
 import { initializeTheme } from './store/theme';
+import { initializeMotionPreference } from './store/motion';
 import ResourceUpdateDialog from './components/ResourceUpdateDialog';
 import ToastViewport from './components/Toast';
 import AnnouncementDialog from './components/AnnouncementDialog';
@@ -14,6 +15,7 @@ import './i18n';
 localStorage.removeItem('token');
 localStorage.removeItem('user');
 initializeTheme();
+initializeMotionPreference();
 
 const visualViewport = window.visualViewport;
 if (visualViewport) {

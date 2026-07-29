@@ -6,6 +6,15 @@ const readCss = (relativePath: string) =>
   readFileSync(resolve(__dirname, relativePath), 'utf8');
 
 describe('desktop/mobile layout contracts', () => {
+  it('fully disables CSS motion when the personal preference is reduced', () => {
+    const responsive = readCss('./responsive.css');
+    expect(responsive).toMatch(/html\[data-motion='reduced'\][\s\S]*transition:\s*none\s*!important/s);
+    expect(responsive).toMatch(/html\[data-motion='reduced'\][\s\S]*animation:\s*none\s*!important/s);
+    expect(responsive).toMatch(
+      /html\[data-motion='reduced'\]\s+\.matchmaking-spinner\s*\{[^}]*animation:\s*spin\s+0\.8s\s+linear\s+infinite\s*!important/s
+    );
+  });
+
   it('caps single difficulty cards on wide screens and stacks actions on mobile', () => {
     const home = readCss('./home-multiplayer.css');
     expect(home).toMatch(

@@ -439,7 +439,7 @@ export default function MultiLobby() {
             />
             {searching ? (
               <div style={{ textAlign: 'center', marginTop: 14 }}>
-                <div className="spinner" />
+                <div className="spinner matchmaking-spinner" />
                 <p style={{ margin: '12px 0', fontWeight: 600 }}>{t('multi.searching')}</p>
                 <button className="btn btn-ghost btn-sm" onClick={cancelMatch}>
                   <XCircle size={15} />

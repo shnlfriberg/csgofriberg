@@ -372,6 +372,54 @@
 .confirm-content > p { margin: 10px 0 20px; color: var(--text-sec); line-height: 1.6; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .confirm-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
+.settings-dialog-icon { color: var(--primary); background: var(--primary-soft); }
+.settings-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  min-height: 58px;
+  margin-top: 16px;
+  padding: 14px 0 2px;
+  border-top: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+}
+.settings-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  font-weight: 650;
+}
+.settings-option-label svg { flex-shrink: 0; color: var(--primary); }
+.settings-switch {
+  position: relative;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 24px;
+  margin: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  appearance: none;
+  background: var(--bg);
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+.settings-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--text-light);
+  transition: transform 0.16s ease, background 0.16s ease;
+}
+.settings-switch:checked { border-color: var(--primary); background: var(--primary); }
+.settings-switch:checked::after { transform: translateX(20px); background: #fff; }
+.settings-switch:focus-visible { outline: 3px solid var(--primary-soft); outline-offset: 2px; }
 .announcement-popup-dialog { width: min(560px, 100%); }
 .confirm-content > .announcement-popup-content {
   max-height: min(52dvh, 420px);

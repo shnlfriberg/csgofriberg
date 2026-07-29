@@ -11,6 +11,9 @@
     <script>
       try {
         var storedUiTheme = localStorage.getItem('ui-theme');
+        if (localStorage.getItem('ui-motion') === 'off') {
+          document.documentElement.dataset.motion = 'reduced';
+        }
         var initTheme =
           storedUiTheme === 'light'
             ? 'light'
