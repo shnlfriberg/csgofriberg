@@ -23,8 +23,16 @@ interface SingleStats {
 
 interface StatsResponse {
   difficulties: string[];
-  personal: SingleStats & { multiGames: number; multiWins: number };
-  global: SingleStats & { multiGames: number; registeredUsers: number };
+  personal: SingleStats & {
+    multiGames: number;
+    multiWins: number;
+    multiAvgWinningGuesses: number | null;
+  };
+  global: SingleStats & {
+    multiGames: number;
+    multiAvgWinningGuesses: number | null;
+    registeredUsers: number;
+  };
 }
 
 interface SingleReplayItem {
@@ -280,10 +288,10 @@ export default function Stats() {
             </div>
             <div className="stats-overview-grid">
               <div className="card" role="status" aria-label={t('common.loading')}>
-                <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
+                <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /><i /></div>
               </div>
               <div className="card" aria-hidden="true">
-                <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /></div>
+                <div className="table-skeleton"><i /><i /><i /><i /><i /><i /><i /><i /></div>
               </div>
             </div>
           </section>
@@ -317,6 +325,7 @@ export default function Stats() {
                   [t('stats.bestGuess'), stats.personal.bestGuesses ?? '-'],
                   [t('stats.topFirstGuess'), formatFirstGuess(stats.personal.firstGuess)],
                   [t('stats.multiGamesWins'), `${stats.personal.multiGames} / ${stats.personal.multiWins}`],
+                  [t('stats.multiAvgWinningGuesses'), formatAverage(stats.personal.multiAvgWinningGuesses)],
                 ]} />
               </div>
               <div className="card">
@@ -329,6 +338,7 @@ export default function Stats() {
                   [t('stats.avgWinningGuesses'), formatAverage(stats.global.avgGuesses)],
                   [t('stats.topFirstGuess'), formatFirstGuess(stats.global.firstGuess)],
                   [t('stats.multiGames'), stats.global.multiGames],
+                  [t('stats.multiAvgWinningGuesses'), formatAverage(stats.global.multiAvgWinningGuesses)],
                 ]} />
               </div>
             </div>

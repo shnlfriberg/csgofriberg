@@ -2,10 +2,13 @@ import { Knex } from 'knex';
 import { db } from './knex';
 import { userNameFromUsername } from '../services/identityDisplay';
 import { DIFFICULTY_LEVELS } from '../difficulties';
+import { winningGuessMetricsByPlayer } from '../services/matchGuessMetrics';
 
 const FIRST_GUESS_BACKFILL_BATCH_SIZE = 1000;
 const USER_DISPLAY_ID_BACKFILL_BATCH_SIZE = 1000;
 const PLAYER_DIFFICULTIES_BACKFILL_MIGRATION = '20260724-player-difficulties-backfill';
+const MULTI_WINNING_GUESSES_BACKFILL_MIGRATION = '20260729-multi-winning-guesses-backfill';
+const MULTI_WINNING_GUESSES_BACKFILL_BATCH_SIZE = 200;
 
 export async function backfillLegacyPlayerDifficulties(instance: Knex = db): Promise<void> {
   await instance.transaction(async (trx) => {
@@ -96,6 +99,46 @@ async function backfillFirstGuessPlayerIds(instance: Knex): Promise<void> {
       }
     });
   }
+}
+
+async function backfillMultiWinningGuesses(instance: Knex): Promise<void> {
+  const applied = await instance('app_migrations')
+    .where({ name: MULTI_WINNING_GUESSES_BACKFILL_MIGRATION })
+    .first();
+  if (applied) return;
+
+  let cursor = 0;
+  while (true) {
+    const matches = await instance('match_records')
+      .select('id', 'replay')
+      .where('id', '>', cursor)
+      .orderBy('id')
+      .limit(MULTI_WINNING_GUESSES_BACKFILL_BATCH_SIZE);
+    if (!matches.length) break;
+    cursor = Number(matches[matches.length - 1].id);
+    await instance.transaction(async (trx) => {
+      const matchIds = matches.map((match) => Number(match.id));
+      await trx('match_players')
+        .whereIn('match_id', matchIds)
+        .update({ winning_guess_sum: 0, winning_rounds: 0 });
+      for (const match of matches) {
+        const metrics = winningGuessMetricsByPlayer(match.replay);
+        for (const [playerKey, values] of metrics) {
+          await trx('match_players')
+            .where({ match_id: match.id, player_key: playerKey })
+            .update({
+              winning_guess_sum: values.winningGuessSum,
+              winning_rounds: values.winningRounds,
+            });
+        }
+      }
+    });
+  }
+
+  await instance('app_migrations')
+    .insert({ name: MULTI_WINNING_GUESSES_BACKFILL_MIGRATION })
+    .onConflict('name')
+    .ignore();
 }
 
 export async function ensureSchema(instance: Knex = db): Promise<void> {
@@ -347,8 +390,20 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('player_name', 32).notNullable().defaultTo('');
       t.integer('score').notNullable().defaultTo(0);
       t.boolean('is_winner').notNullable().defaultTo(false);
+      t.integer('winning_guess_sum').notNullable().defaultTo(0);
+      t.integer('winning_rounds').notNullable().defaultTo(0);
       t.unique(['match_id', 'player_key']);
       t.index(['user_id', 'is_winner'], 'match_players_user_winner_idx');
+    });
+  }
+  if (!(await instance.schema.hasColumn('match_players', 'winning_guess_sum'))) {
+    await instance.schema.alterTable('match_players', (t) => {
+      t.integer('winning_guess_sum').notNullable().defaultTo(0);
+    });
+  }
+  if (!(await instance.schema.hasColumn('match_players', 'winning_rounds'))) {
+    await instance.schema.alterTable('match_players', (t) => {
+      t.integer('winning_rounds').notNullable().defaultTo(0);
     });
   }
 
@@ -384,6 +439,7 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       }
     }
   }
+  await backfillMultiWinningGuesses(instance);
 
   const gameIndexes = [
     ['games_user_status_mode_idx', ['user_id', 'status', 'mode']],

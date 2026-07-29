@@ -24,6 +24,7 @@ function statsSummary(difficulties: string[]) {
       firstGuess: null,
       multiGames: includesBeginner ? 4 : 3,
       multiWins: 2,
+      multiAvgWinningGuesses: 1.5,
     },
     global: {
       totalGames: includesBeginner ? 60 : 50,
@@ -33,6 +34,7 @@ function statsSummary(difficulties: string[]) {
       bestGuesses: 1,
       firstGuess: null,
       multiGames: includesBeginner ? 40 : 35,
+      multiAvgWinningGuesses: 2.25,
       registeredUsers: 12,
     },
   };
@@ -69,6 +71,12 @@ describe('Stats difficulty filter', () => {
     expect(screen.getAllByRole('heading', { name: '全站统计', level: 3 })).toHaveLength(1);
     expect(screen.getByText('6')).toBeInTheDocument();
     expect(screen.getByText('60')).toBeInTheDocument();
+    const personalCard = screen.getByRole('heading', { name: '个人统计', level: 3 }).closest('.card') as HTMLElement;
+    const globalCard = screen.getByRole('heading', { name: '全站统计', level: 3 }).closest('.card') as HTMLElement;
+    expect(within(personalCard).getByText('多人胜场平均猜测次数')).toBeInTheDocument();
+    expect(within(personalCard).getByText('1.50')).toBeInTheDocument();
+    expect(within(globalCard).getByText('多人胜场平均猜测次数')).toBeInTheDocument();
+    expect(within(globalCard).getByText('2.25')).toBeInTheDocument();
 
     await user.click(screen.getByText('全部分级', { selector: '.difficulty-multi-select-summary' }));
     const difficultyGroup = screen.getByRole('group', { name: '统计难度' });

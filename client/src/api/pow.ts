@@ -45,9 +45,8 @@ function scheduleRefresh(): void {
   }, delay);
 }
 
-function solveChallenge(challenge: string, difficulty: number): Promise<string> {
+function runWorker(worker: Worker, challenge: string, difficulty: number): Promise<string> {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('./pow.worker.ts', import.meta.url), { type: 'module' });
     const finish = () => worker.terminate();
     worker.onmessage = (event: MessageEvent<{ nonce?: string; error?: string }>) => {
       finish();
@@ -60,6 +59,18 @@ function solveChallenge(challenge: string, difficulty: number): Promise<string> 
     };
     worker.postMessage({ challenge, difficulty });
   });
+}
+
+async function solveChallenge(challenge: string, difficulty: number): Promise<string> {
+  try {
+    const wasmWorker = new Worker(new URL('./pow.worker.ts', import.meta.url), { type: 'module' });
+    return await runWorker(wasmWorker, challenge, difficulty);
+  } catch {
+    // Classic Worker plus synchronous JavaScript SHA-256 covers WebKit versions that
+    // cannot load module workers or bridge WebAssembly i64 values through BigInt.
+    const fallbackWorker = new Worker(new URL('./pow.fallback.worker.ts', import.meta.url));
+    return runWorker(fallbackWorker, challenge, difficulty);
+  }
 }
 
 async function refreshPow(): Promise<void> {

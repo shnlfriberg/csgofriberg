@@ -74,6 +74,11 @@ function singleAggregate(query: ReturnType<typeof db>) {
     .min({ bestGuesses: db.raw("case when status = 'won' then guess_count else null end") });
 }
 
+function multiAvgWinningGuesses(row: any): number | null {
+  const winningRounds = Number(row?.winningRounds ?? 0);
+  return winningRounds ? Number(row?.winningGuessSum ?? 0) / winningRounds : null;
+}
+
 function firstGuessPlayerId(value: unknown): number | null {
   try {
     const guesses = JSON.parse(String(value));
@@ -149,15 +154,22 @@ function answerView(target: Player) {
 
 async function globalStats(difficulties: string[]) {
   return cached(globalStatsCacheKey(difficulties), 60, async () => {
-    const [single, multi, users, firstGuess] = await Promise.all([
+    const [single, multi, multiGuesses, users, firstGuess] = await Promise.all([
       singleAggregate(db('games').whereIn('mode', difficulties)),
       db('match_records').whereIn('db_type', difficulties).count({ total: 'id' }).first(),
+      db('match_players as mp')
+        .join('match_records as m', 'm.id', 'mp.match_id')
+        .whereIn('m.db_type', difficulties)
+        .first()
+        .sum({ winningGuessSum: 'mp.winning_guess_sum' })
+        .sum({ winningRounds: 'mp.winning_rounds' }),
       db('users').count({ total: 'id' }).first(),
       firstGuessSummary(db('games').whereIn('mode', difficulties)),
     ]);
     return {
       ...singleSummary(single),
       multiGames: Number(multi?.total ?? 0),
+      multiAvgWinningGuesses: multiAvgWinningGuesses(multiGuesses),
       registeredUsers: Number(users?.total ?? 0),
       firstGuess,
     };
@@ -175,12 +187,15 @@ async function personalStats(owner: Owner, identityKey: string, difficulties: st
         .whereIn('m.db_type', difficulties)
         .first()
         .count({ total: 'mp.id' })
-        .sum({ wins: db.raw('case when mp.is_winner then 1 else 0 end') }),
+        .sum({ wins: db.raw('case when mp.is_winner then 1 else 0 end') })
+        .sum({ winningGuessSum: 'mp.winning_guess_sum' })
+        .sum({ winningRounds: 'mp.winning_rounds' }),
     ]);
     return {
       ...singleSummary(single),
       multiGames: Number(multi?.total ?? 0),
       multiWins: Number(multi?.wins ?? 0),
+      multiAvgWinningGuesses: multiAvgWinningGuesses(multi),
       firstGuess,
     };
   });

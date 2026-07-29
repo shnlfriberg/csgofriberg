@@ -14,6 +14,7 @@ import { initPlayerCache, getPlayer } from '../services/playerCache';
 import { invalidateCached } from '../services/queryCache';
 import { guestNameFromKey, userNameFromUsername } from '../middleware/auth';
 import { allGlobalStatsCacheKeys } from '../services/statsCache';
+import { persistMatchResult } from '../services/matchResultQueue';
 
 let server: http.Server;
 let baseUrl: string;
@@ -75,40 +76,30 @@ describe('stats and replay', () => {
 
     const meKey = `g:${ownerKey}`;
     const opponentKey = `g:${otherKey}`;
-    const [matchId] = await db('match_records')
-      .insert({
-        room_id: randomUUID(),
-        db_type: 'easy',
-        bo_type: 1,
-        replay: JSON.stringify([{
-          round: 1,
-          targetPlayerId: target.id,
-          winnerKey: meKey,
-          reason: 'guessed',
-          guessesByPlayer: {
-            [meKey]: [target.id],
-            [opponentKey]: [otherPlayer.id],
-          },
-        }]),
-      })
-      .returning('id')
-      .then((rows) => rows.map((item: any) => typeof item === 'object' ? item.id : item));
-    await db('match_players').insert([
-      {
-        match_id: matchId,
-        player_key: meKey,
-        player_name: '',
-        score: 1,
-        is_winner: true,
-      },
-      {
-        match_id: matchId,
-        player_key: opponentKey,
-        player_name: '',
-        score: 0,
-        is_winner: false,
-      },
-    ]);
+    const matchRecordId = randomUUID();
+    await persistMatchResult({
+      recordId: matchRecordId,
+      dbType: 'easy',
+      boType: 1,
+      winnerKey: meKey,
+      reason: 'score',
+      forfeitedKey: null,
+      participants: [
+        { key: meKey, userId: null, score: 1 },
+        { key: opponentKey, userId: null, score: 0 },
+      ],
+      rounds: [{
+        round: 1,
+        targetPlayerId: target.id,
+        winnerKey: meKey,
+        reason: 'guessed',
+        guessesByPlayer: {
+          [meKey]: [target.id],
+          [opponentKey]: [otherPlayer.id],
+        },
+      }],
+    });
+    const matchId = Number((await db('match_records').where({ room_id: matchRecordId }).first('id')).id);
 
     try {
       const easyStats = await request('/api/stats/me?difficulties=easy', guestCookie(ownerKey));
@@ -118,10 +109,17 @@ describe('stats and replay', () => {
         db('games').where({ mode: 'easy' }).whereNot({ status: 'playing' }).count({ count: 'id' }).first(),
         db('match_records').where({ db_type: 'easy' }).count({ count: 'id' }).first(),
       ]);
+      const expectedEasyMultiGuesses = await db('match_players as mp')
+        .join('match_records as m', 'm.id', 'mp.match_id')
+        .where('m.db_type', 'easy')
+        .first()
+        .sum({ guessSum: 'mp.winning_guess_sum' })
+        .sum({ rounds: 'mp.winning_rounds' });
       expect(easyStats.data.personal.totalGames).toBe(1);
       expect(easyStats.data.personal.wins).toBe(1);
       expect(easyStats.data.personal.multiGames).toBe(1);
       expect(easyStats.data.personal.multiWins).toBe(1);
+      expect(easyStats.data.personal.multiAvgWinningGuesses).toBe(1);
       expect(easyStats.data.personal.firstGuess).toEqual({
         playerId: target.id,
         nickname: target.nickname,
@@ -136,6 +134,10 @@ describe('stats and replay', () => {
       expect(easyStats.data.global.firstGuess.percentage).toBeGreaterThan(0);
       expect(easyStats.data.global.firstGuess.percentage).toBeLessThanOrEqual(1);
       expect(easyStats.data.global.multiGames).toBeGreaterThanOrEqual(1);
+      expect(easyStats.data.global.multiAvgWinningGuesses).toBe(
+        Number(expectedEasyMultiGuesses?.guessSum ?? 0)
+        / Number(expectedEasyMultiGuesses?.rounds ?? 1)
+      );
       expect(easyStats.data.global.totalGames).toBe(Number(expectedEasySingle?.count ?? 0));
       expect(easyStats.data.global.multiGames).toBe(Number(expectedEasyMulti?.count ?? 0));
 
@@ -147,7 +149,13 @@ describe('stats and replay', () => {
         db('match_records').where({ db_type: 'normal' }).count({ count: 'id' }).first(),
       ]);
       expect(normalStats.data).toMatchObject({
-        personal: { totalGames: 0, wins: 0, multiGames: 0, multiWins: 0 },
+        personal: {
+          totalGames: 0,
+          wins: 0,
+          multiGames: 0,
+          multiWins: 0,
+          multiAvgWinningGuesses: null,
+        },
         global: {
           totalGames: Number(expectedNormalSingle?.count ?? 0),
           multiGames: Number(expectedNormalMulti?.count ?? 0),

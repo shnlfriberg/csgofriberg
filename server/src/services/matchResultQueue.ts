@@ -8,6 +8,7 @@ import {
   globalStatsCacheKeysForDifficulty,
   personalStatsCacheKeysForDifficulty,
 } from './statsCache';
+import { winningGuessMetricsByPlayer } from './matchGuessMetrics';
 
 export interface MatchResultPayload {
   recordId: string;
@@ -38,8 +39,21 @@ const DEAD_LETTER_KEY = redisKey('stream:match-results:dead');
 let workerClient: NonNullable<ReturnType<typeof duplicateRedisClient>> | null = null;
 let pendingClaimCursor = '0-0';
 
-async function persist(payload: MatchResultPayload): Promise<void> {
+export async function persistMatchResult(payload: MatchResultPayload): Promise<void> {
   const winner = payload.participants.find((player) => player.key === payload.winnerKey);
+  const guessMetrics = winningGuessMetricsByPlayer(payload.rounds);
+  const participantValues = (player: MatchResultPayload['participants'][number]) => {
+    const metrics = guessMetrics.get(player.key);
+    return {
+      user_id: player.userId,
+      player_key: player.key,
+      player_name: player.name ?? '',
+      score: player.score,
+      is_winner: player.key === payload.winnerKey,
+      winning_guess_sum: metrics?.winningGuessSum ?? 0,
+      winning_rounds: metrics?.winningRounds ?? 0,
+    };
+  };
   const insertedMatch = await db.transaction(async (trx) => {
     const inserted = await trx('match_records')
       .insert({
@@ -57,9 +71,24 @@ async function persist(payload: MatchResultPayload): Promise<void> {
       .returning('id');
     if (!inserted.length) {
       if (payload.rounds.length) {
-        await trx('match_records')
+        const existing = await trx('match_records')
           .where({ room_id: payload.recordId })
-          .update({ replay: JSON.stringify(payload.rounds) });
+          .first('id');
+        if (existing) {
+          await trx('match_records')
+            .where({ id: existing.id })
+            .update({ replay: JSON.stringify(payload.rounds) });
+          for (const player of payload.participants) {
+            const values = participantValues(player);
+            await trx('match_players')
+              .where({ match_id: existing.id, player_key: player.key })
+              .update({
+                winning_guess_sum: values.winning_guess_sum,
+                winning_rounds: values.winning_rounds,
+              });
+          }
+          return true;
+        }
       }
       return false;
     }
@@ -67,11 +96,7 @@ async function persist(payload: MatchResultPayload): Promise<void> {
     await trx('match_players').insert(
       payload.participants.map((player) => ({
         match_id: matchId,
-        user_id: player.userId,
-        player_key: player.key,
-        player_name: player.name ?? '',
-        score: player.score,
-        is_winner: player.key === payload.winnerKey,
+        ...participantValues(player),
       }))
     );
     return true;
@@ -90,7 +115,7 @@ async function persist(payload: MatchResultPayload): Promise<void> {
 
 export async function enqueueMatchResult(payload: MatchResultPayload): Promise<void> {
   const client = redis();
-  if (!client) return persist(payload);
+  if (!client) return persistMatchResult(payload);
   try {
     await client.sendCommand([
       'XADD', STREAM_KEY, 'MAXLEN', '~', '10000', '*', 'payload', JSON.stringify(payload),
@@ -99,7 +124,7 @@ export async function enqueueMatchResult(payload: MatchResultPayload): Promise<v
     // A timed-out XADD may still have reached Redis. Direct persistence is safe
     // because match_records.room_id is a stable UUID and the transaction is idempotent.
     console.warn('[match-result] queue unavailable, persisting directly', err);
-    await persist(payload);
+    await persistMatchResult(payload);
   }
 }
 
@@ -121,7 +146,7 @@ function parseMessages(reply: unknown): { id: string; payload: MatchResultPayloa
 async function handleMessages(client: NonNullable<ReturnType<typeof duplicateRedisClient>>, reply: unknown) {
   for (const message of parseMessages(reply)) {
     try {
-      await persist(message.payload);
+      await persistMatchResult(message.payload);
       await client.sendCommand(['XACK', STREAM_KEY, GROUP, message.id]);
     } catch (err) {
       console.error('[match-result] persist failed, pending for retry', err);

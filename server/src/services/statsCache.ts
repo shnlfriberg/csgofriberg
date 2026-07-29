@@ -20,11 +20,11 @@ function allSelections(): string[][] {
 }
 
 export function globalStatsCacheKey(difficulties: readonly string[]): string {
-  return `stats:global:${selectionKey(difficulties)}`;
+  return `stats:global:v2:${selectionKey(difficulties)}`;
 }
 
 export function personalStatsCacheKey(identityKey: string, difficulties: readonly string[]): string {
-  return `stats:personal:${identityKey}:${selectionKey(difficulties)}`;
+  return `stats:personal:v2:${identityKey}:${selectionKey(difficulties)}`;
 }
 
 export function allGlobalStatsCacheKeys(): string[] {

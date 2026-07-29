@@ -57,6 +57,8 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasColumn('match_records', 'winner_key')).toBe(true);
     expect(await instance.schema.hasColumn('match_records', 'finish_reason')).toBe(true);
     expect(await instance.schema.hasColumn('match_records', 'forfeited_key')).toBe(true);
+    expect(await instance.schema.hasColumn('match_players', 'winning_guess_sum')).toBe(true);
+    expect(await instance.schema.hasColumn('match_players', 'winning_rounds')).toBe(true);
     expect(await instance.schema.hasColumn('games', 'first_guess_player_id')).toBe(true);
     expect(await instance.schema.hasColumn('users', 'display_id')).toBe(true);
     expect(await instance.schema.hasColumn('users', 'leaderboard_hidden')).toBe(true);
@@ -120,6 +122,43 @@ describe('player schema migration', () => {
 
     expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
     expect((await instance('announcements').where({ title: 'legacy' }).first()).is_popup).toBe(0);
+  });
+
+  it('backfills multiplayer winning guess metrics from stored replays', async () => {
+    const instance = knex({
+      client: 'better-sqlite3',
+      connection: { filename: ':memory:' },
+      useNullAsDefault: true,
+    });
+    instances.push(instance);
+    await ensureSchema(instance);
+    await instance('app_migrations')
+      .where({ name: '20260729-multi-winning-guesses-backfill' })
+      .del();
+    const [match] = await instance('match_records')
+      .insert({
+        room_id: 'legacy-multi-winning-guesses',
+        db_type: 'easy',
+        bo_type: 3,
+        replay: JSON.stringify([
+          { winnerKey: 'g:a', guessesByPlayer: { 'g:a': [1], 'g:b': [2] } },
+          { winnerKey: 'g:b', guessesByPlayer: { 'g:a': [1], 'g:b': [2, 3] } },
+          { winnerKey: 'g:a', guessesByPlayer: { 'g:a': [1, 2], 'g:b': [] } },
+        ]),
+      })
+      .returning('id');
+    const matchId = Number(typeof match === 'object' ? match.id : match);
+    await instance('match_players').insert([
+      { match_id: matchId, player_key: 'g:a', is_winner: true },
+      { match_id: matchId, player_key: 'g:b', is_winner: false },
+    ]);
+
+    await ensureSchema(instance);
+
+    expect(await instance('match_players').where({ match_id: matchId, player_key: 'g:a' }).first())
+      .toMatchObject({ winning_guess_sum: 3, winning_rounds: 2 });
+    expect(await instance('match_players').where({ match_id: matchId, player_key: 'g:b' }).first())
+      .toMatchObject({ winning_guess_sum: 2, winning_rounds: 1 });
   });
 
   it('backfills beginner membership only for easy Major champions', async () => {

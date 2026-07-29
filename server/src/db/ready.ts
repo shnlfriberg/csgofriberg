@@ -27,7 +27,14 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'forfeited_key',
     'replay',
   ],
-  match_players: ['id', 'match_id', 'player_key', 'is_winner'],
+  match_players: [
+    'id',
+    'match_id',
+    'player_key',
+    'is_winner',
+    'winning_guess_sum',
+    'winning_rounds',
+  ],
   announcements: ['id', 'title', 'content', 'is_popup'],
 };
 
