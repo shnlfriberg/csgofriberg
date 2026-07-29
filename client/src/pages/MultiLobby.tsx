@@ -21,6 +21,7 @@ import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
 import { difficultyLabel } from '../utils/difficulty';
+import { loadMultiLobbyPreferences, saveMultiLobbyPreferences } from '../store/multiLobbyPreferences';
 
 type DbType = string;
 const BO_OPTIONS = [1, 3, 5, 7];
@@ -57,11 +58,18 @@ function OptionGroup<T extends string | number>({
 export default function MultiLobby() {
   const { t } = useTranslation();
   const difficulties = AVAILABLE_DIFFICULTIES;
-  const [dbType, setDbType] = useState<DbType>('normal');
-  const [boType, setBoType] = useState(3);
-  const [allowSpectators, setAllowSpectators] = useState(false);
+  const difficultyKeys = difficulties.map((item) => item.key);
+  const defaultDifficulty = difficulties.find((item) => item.key === 'normal')?.key
+    ?? difficulties[0]?.key
+    ?? 'normal';
+  const [initialPreferences] = useState(() =>
+    loadMultiLobbyPreferences(difficultyKeys, defaultDifficulty)
+  );
+  const [dbType, setDbType] = useState<DbType>(initialPreferences.createDifficulty);
+  const [boType, setBoType] = useState(initialPreferences.boType);
+  const [allowSpectators, setAllowSpectators] = useState(initialPreferences.allowSpectators);
   const anonymous = true;
-  const [mmDbType, setMmDbType] = useState<DbType>('normal');
+  const [mmDbType, setMmDbType] = useState<DbType>(initialPreferences.matchmakingDifficulty);
   const mmAnonymous = true;
   const [joinCode, setJoinCode] = useState('');
   const [createdRoom, setCreatedRoom] = useState<RoomState | null>(null);
@@ -96,6 +104,15 @@ export default function MultiLobby() {
     if (!difficulties.some((item) => item.key === dbType)) setDbType(defaultKey);
     if (!difficulties.some((item) => item.key === mmDbType)) setMmDbType(defaultKey);
   }, [difficulties, dbType, mmDbType]);
+
+  useEffect(() => {
+    saveMultiLobbyPreferences({
+      createDifficulty: dbType,
+      boType,
+      allowSpectators,
+      matchmakingDifficulty: mmDbType,
+    });
+  }, [allowSpectators, boType, dbType, mmDbType]);
 
   useEffect(() => {
     if (!matchCooldownDeadline) {
