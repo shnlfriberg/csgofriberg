@@ -25,7 +25,8 @@
   .presence-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-overview-grid { grid-template-columns: 1fr; }
   .admin-players-header { align-items: stretch; flex-direction: column; }
-  .admin-player-add { width: 100%; }
+  .admin-player-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-player-header-actions .btn { width: 100%; }
   .admin-list-toolbar { grid-template-columns: 1fr; align-items: stretch; }
   .admin-page-size { justify-content: space-between; }
   .admin-pagination { flex-direction: column; }

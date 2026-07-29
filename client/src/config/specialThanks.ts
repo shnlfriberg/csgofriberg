@@ -1,3 +1,6 @@
+import ouseTonaeImage from '../assets/OuseTonae.jpg';
+import wanjiqiImage from '../assets/wjq.jpg';
+
 export interface SpecialThanksItem {
   name: string;
   note?: string;
@@ -10,14 +13,14 @@ export const SPECIAL_THANKS: SpecialThanksItem[] = [
   {
     name: '玩机器丶Machine',
     note: '对网站的冠名赞助',
-    image: '/image/wjq.jpg',
+    image: wanjiqiImage,
     href: 'https://www.douyu.com/6979222',
     analyticsEvent: 'home-special-thanks-wanjiqi',
   },
   {
     name: 'OuseTonae | AS202355 Ciallo Networks LTD',
     note: '提供了网站的服务器',
-    image: '/image/OuseTonae.jpg',
+    image: ouseTonaeImage,
     href: 'https://ciallo.ee/',
     analyticsEvent: 'home-special-thanks-ciallo',
   },

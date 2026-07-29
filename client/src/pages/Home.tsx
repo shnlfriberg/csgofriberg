@@ -24,6 +24,7 @@ import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import LanguageSelect from '../components/LanguageSelect';
 import HomeSpecialThanks from '../components/HomeSpecialThanks';
+import wanjiqiImage from '../assets/wjq.jpg';
 
 function GitHubIcon() {
   return (
@@ -108,7 +109,7 @@ export default function Home() {
       <div className="header-bar">
         <div className="home-brand">
           <span className="home-brand-slashes" aria-hidden="true">//</span>
-          <img className="home-brand-logo" src="/image/wjq.jpg" alt="" />
+          <img className="home-brand-logo" src={wanjiqiImage} alt="" />
           <span className="title">{t('common.brand')}</span>
         </div>
         <span className="btns">

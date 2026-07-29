@@ -1,10 +1,24 @@
 import express from 'express';
 import http from 'http';
 import { AddressInfo } from 'net';
-import { describe, expect, it } from 'vitest';
-import { rejectMissingClientAsset } from './clientAssets';
+import path from 'path';
+import type { Response } from 'express';
+import { describe, expect, it, vi } from 'vitest';
+import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './clientAssets';
 
 describe('client asset fallback', () => {
+  it('marks Vite fingerprinted assets as immutable for browser caching', () => {
+    const setHeader = vi.fn();
+    setClientAssetCacheHeaders(
+      { setHeader } as unknown as Response,
+      path.join('client', 'dist', 'assets', 'wjq-contenthash.jpg')
+    );
+    expect(setHeader).toHaveBeenCalledWith(
+      'Cache-Control',
+      'public, max-age=31536000, immutable'
+    );
+  });
+
   it('returns 404 for missing Vite assets instead of the SPA HTML', async () => {
     const app = express();
     app.use(rejectMissingClientAsset);

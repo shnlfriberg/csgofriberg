@@ -10,6 +10,7 @@ import { errorHandler } from '../middleware/common';
 import { guestNameFromKey, signToken, userNameFromUsername } from '../middleware/auth';
 import { initRedis } from '../redis';
 import { initPlayerCache } from '../services/playerCache';
+import { playerImportSchema } from '../services/playerMutations';
 
 let server: http.Server;
 let baseUrl: string;
@@ -248,6 +249,80 @@ describe('admin user management', () => {
       await db('games').where('session_id', 'like', `${sessionPrefix}%`).del();
       await db('match_records').where('room_id', 'like', `${matchPrefix}%`).del();
       await db('users').whereIn('username', [adminUsername, username]).del();
+    }
+  });
+
+  it('exports all player fields in the JSON import format for admins only', async () => {
+    const stamp = Date.now();
+    const adminUsername = `admin-export-admin-${stamp}`;
+    const userUsername = `admin-export-user-${stamp}`;
+    const nickname = `export-player-${stamp}`;
+    const insertedUsers = await db('users')
+      .insert([
+        {
+          username: adminUsername,
+          display_id: userNameFromUsername(adminUsername),
+          password_hash: 'test',
+          role: 'admin',
+          token_version: 0,
+        },
+        {
+          username: userUsername,
+          display_id: userNameFromUsername(userUsername),
+          password_hash: 'test',
+          role: 'user',
+          token_version: 0,
+        },
+      ])
+      .returning(['id', 'username', 'token_version']);
+    const admin = insertedUsers.find((user) => user.username === adminUsername)!;
+    const user = insertedUsers.find((item) => item.username === userUsername)!;
+    const [insertedPlayer] = await db('players')
+      .insert({
+        nickname,
+        nationality: 'China',
+        region: 'Asia',
+        team: 'Export Test',
+        age: 24,
+        role: 'Rifler',
+        major_championships: 0,
+        major_appearances: 2,
+        is_active: false,
+        is_enabled: true,
+      })
+      .returning('id');
+    const playerId = Number(typeof insertedPlayer === 'object' ? insertedPlayer.id : insertedPlayer);
+    try {
+      await db('player_difficulties').insert([
+        { player_id: playerId, difficulty_key: 'normal' },
+        { player_id: playerId, difficulty_key: 'easy' },
+      ]);
+
+      const exported = await request('/api/admin/players/export', authCookie(admin));
+      expect(exported.response.status).toBe(200);
+      expect(exported.response.headers.get('content-disposition')).toContain('players.json');
+      expect(() => playerImportSchema.parse({ players: exported.data })).not.toThrow();
+      expect(exported.data.find((player: { nickname: string }) => player.nickname === nickname)).toEqual({
+        nickname,
+        nationality: 'China',
+        region: 'Asia',
+        team: 'Export Test',
+        age: 24,
+        role: 'Rifler',
+        major_championships: 0,
+        major_appearances: 2,
+        difficulties: ['easy', 'normal'],
+        is_active: false,
+        is_enabled: true,
+      });
+
+      const forbidden = await request('/api/admin/players/export', authCookie(user));
+      expect(forbidden.response.status).toBe(403);
+      expect(forbidden.data).toEqual({ code: 'FORBIDDEN' });
+    } finally {
+      await db('player_difficulties').where({ player_id: playerId }).del();
+      await db('players').where({ id: playerId }).del();
+      await db('users').whereIn('username', [adminUsername, userUsername]).del();
     }
   });
 });

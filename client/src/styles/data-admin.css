@@ -301,6 +301,8 @@
 .admin-players-title { min-width: 0; }
 .admin-players-title h3 { justify-content: flex-start; margin: 0; }
 .admin-players-title .muted { margin: 4px 0 0; }
+.admin-player-header-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.admin-player-header-actions .btn { white-space: nowrap; }
 .admin-player-add { flex-shrink: 0; }
 .admin-players-table { margin-top: 14px; }
 .admin-players-table table { min-width: 1080px; }

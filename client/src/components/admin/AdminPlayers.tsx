@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Search } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Download, Plus, Search } from 'lucide-react';
 import DataTable, { Column } from '../DataTable';
 import PlayerEditForm, { PlayerForm, emptyPlayer } from './PlayerEditForm';
 import { api, errMsg } from '../../api/client';
@@ -23,7 +23,7 @@ interface PlayerPage {
   totalPages: number;
 }
 
-/** 管理后台 - 选手管理(列表/新增/编辑/删除/JSON 导入) */
+/** 管理后台 - 选手管理(列表/新增/编辑/删除/JSON 导入导出) */
 export default function AdminPlayers() {
   const { t } = useTranslation();
   const confirm = useConfirm();
@@ -36,6 +36,7 @@ export default function AdminPlayers() {
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<PlayerForm | null>(null);
   const [importText, setImportText] = useState('');
+  const [exporting, setExporting] = useState(false);
   const requestId = useRef(0);
 
   const load = useCallback(async () => {
@@ -141,6 +142,32 @@ export default function AdminPlayers() {
     }
   };
 
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get<PlayerForm[]>('/admin/players/export');
+      const blob = new Blob([`${JSON.stringify(res.data, null, 2)}\n`], {
+        type: 'application/json;charset=utf-8',
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'players.json';
+      document.body.appendChild(link);
+      try {
+        link.click();
+      } finally {
+        link.remove();
+        URL.revokeObjectURL(url);
+      }
+      toast.success(t('admin.exportDone', { count: res.data.length }));
+    } catch (err) {
+      toast.error(errMsg(err));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const columns: Column<AdminPlayer>[] = [
     { key: 'nickname', title: t('admin.nickname') },
     { key: 'nationality', title: t('admin.nationality') },
@@ -188,14 +215,25 @@ export default function AdminPlayers() {
             <h3>{t('admin.playersTitle')}</h3>
             <p className="muted">{t('admin.totalPlayers', { count: total })}</p>
           </div>
-          <button
-            type="button"
-            className="btn btn-green admin-player-add"
-            onClick={() => setEditing({ ...emptyPlayer })}
-          >
-            <Plus size={16} />
-            {t('admin.addPlayer')}
-          </button>
+          <div className="admin-player-header-actions">
+            <button
+              type="button"
+              className="btn btn-ghost admin-player-export"
+              onClick={() => void doExport()}
+              disabled={exporting}
+            >
+              <Download size={16} />
+              {exporting ? t('admin.exporting') : t('admin.exportAction')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-green admin-player-add"
+              onClick={() => setEditing({ ...emptyPlayer })}
+            >
+              <Plus size={16} />
+              {t('admin.addPlayer')}
+            </button>
+          </div>
         </div>
         <div className="admin-list-toolbar">
           <label className="admin-search">

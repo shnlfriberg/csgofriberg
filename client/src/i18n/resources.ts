@@ -198,7 +198,7 @@ export const resources = {
       },
       admin: {
         title: '管理后台', presence: '实时在线统计', online: '在线人数', multiRooms: '多人房间', singleGames: '单人游戏', playersTab: '选手管理', difficultiesTab: '难度管理', usersTab: '用户管理', announcementsTab: '公告管理', apiTokensTab: 'API Token', resourcesTab: '资源版本',
-        playersTitle: '选手管理', totalPlayers: '共 {{count}} 名选手', addPlayer: '新增选手', searchPlayers: '搜索昵称、国家、赛区或队伍', pageSize: '每页显示', noMatchPlayers: '没有匹配的选手', noPlayers: '暂无选手',
+        playersTitle: '选手管理', totalPlayers: '共 {{count}} 名选手', addPlayer: '新增选手', exportAction: '导出 JSON', exporting: '导出中...', exportDone: '已导出 {{count}} 名选手', searchPlayers: '搜索昵称、国家、赛区或队伍', pageSize: '每页显示', noMatchPlayers: '没有匹配的选手', noPlayers: '暂无选手',
         pageOf: '第 {{page}} / {{total}} 页', zeroItems: '0 条', importTitle: 'JSON 批量导入', importDescription: '粘贴选手数组，按昵称去重，已存在则更新。使用 difficulties 数组设置一个或多个难度。',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"乌克兰","region":"欧洲","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: '导入',
         saved: '修改已保存', added: '新增成功', disableTitle: '停用选手 {{player}}？', disableMessage: '停用后，该选手会立即从目标池和猜测候选列表中移除，但历史对局仍会保留。', disableConfirm: '确认停用',
@@ -359,7 +359,7 @@ export const resources = {
       resourceUpdate: { listenFailed: 'Unable to listen for resource updates. Refresh the page later.', title: 'Update available', laterAria: 'Refresh later', message: 'New page resources are available. Refresh to use the latest version.', later: 'Later', refresh: 'Refresh now' },
       admin: {
         title: 'Admin Panel', presence: 'Live presence', online: 'Online users', multiRooms: 'Multiplayer rooms', singleGames: 'Solo games', playersTab: 'Players', difficultiesTab: 'Difficulties', usersTab: 'Users', announcementsTab: 'Announcements', apiTokensTab: 'API tokens', resourcesTab: 'Resource version',
-        playersTitle: 'Player Management', totalPlayers: '{{count}} players', addPlayer: 'Add player', searchPlayers: 'Search nickname, country, region, or team', pageSize: 'Per page', noMatchPlayers: 'No matching players', noPlayers: 'No players', pageOf: 'Page {{page}} / {{total}}', zeroItems: '0 items',
+        playersTitle: 'Player Management', totalPlayers: '{{count}} players', addPlayer: 'Add player', exportAction: 'Export JSON', exporting: 'Exporting...', exportDone: 'Exported {{count}} players', searchPlayers: 'Search nickname, country, region, or team', pageSize: 'Per page', noMatchPlayers: 'No matching players', noPlayers: 'No players', pageOf: 'Page {{page}} / {{total}}', zeroItems: '0 items',
         importTitle: 'JSON Batch Import', importDescription: 'Paste a player array. Use difficulties to assign one or more difficulty pools.',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"Ukraine","region":"Europe","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: 'Import',
         saved: 'Changes saved', added: 'Player added', disableTitle: 'Disable {{player}}?', disableMessage: 'The player will be removed from the target pool and guess suggestions immediately. Historical games remain available.', disableConfirm: 'Disable player',
@@ -518,7 +518,7 @@ export const resources = {
       resourceUpdate: { listenFailed: '更新情報を受信できません。後でページを更新してください。', title: '更新があります', laterAria: '後で更新', message: '新しいページリソースがあります。更新すると最新版を利用できます。', later: '後で', refresh: '今すぐ更新' },
       admin: {
         title: '管理画面', presence: 'リアルタイム接続状況', online: 'オンライン人数', multiRooms: 'マルチルーム', singleGames: 'ソロゲーム', playersTab: '選手管理', difficultiesTab: '難易度管理', usersTab: 'ユーザー管理', announcementsTab: 'お知らせ管理', apiTokensTab: 'API トークン', resourcesTab: 'リソースバージョン',
-        playersTitle: '選手管理', totalPlayers: '選手 {{count}} 名', addPlayer: '選手を追加', searchPlayers: 'ニックネーム、国、地域、チームを検索', pageSize: '1 ページ', noMatchPlayers: '一致する選手がいません', noPlayers: '選手がいません', pageOf: '{{page}} / {{total}} ページ', zeroItems: '0 件',
+        playersTitle: '選手管理', totalPlayers: '選手 {{count}} 名', addPlayer: '選手を追加', exportAction: 'JSON をエクスポート', exporting: 'エクスポート中...', exportDone: '選手 {{count}} 名をエクスポートしました', searchPlayers: 'ニックネーム、国、地域、チームを検索', pageSize: '1 ページ', noMatchPlayers: '一致する選手がいません', noPlayers: '選手がいません', pageOf: '{{page}} / {{total}} ページ', zeroItems: '0 件',
         importTitle: 'JSON 一括インポート', importDescription: '選手配列を貼り付けます。difficulties 配列で複数の難易度を設定できます。',
         importPlaceholder: '[{"nickname":"s1mple","nationality":"ウクライナ","region":"ヨーロッパ","team":"NAVI","age":29,"role":"AWPer","major_championships":1,"major_appearances":12,"difficulties":["normal","easy"],"is_active":true,"is_enabled":true}]', importAction: 'インポート',
         saved: '変更を保存しました', added: '選手を追加しました', disableTitle: '{{player}} を無効化しますか？', disableMessage: '対象プールと予想候補から直ちに削除されますが、過去の対局は保持されます。', disableConfirm: '無効化',
