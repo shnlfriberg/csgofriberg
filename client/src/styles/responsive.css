@@ -336,6 +336,9 @@
   .admin-user-game-details { grid-template-columns: 1fr; }
   .admin-user-game-footer { align-items: flex-end; flex-direction: column; }
   .admin-user-actions { flex-wrap: wrap; min-width: 180px; }
+  .admin-user-detail-dialog { height: calc(100dvh - 20px); }
+  .admin-user-ranking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-analysis-summary { grid-template-columns: 1fr; }
   .admin-announcement-row { align-items: flex-start; flex-direction: column; }
   .admin-announcement-row > .btn { align-self: flex-end; }
   .overlay-card .btns,
@@ -401,6 +404,10 @@
   .game-table td .dir svg { width: 8px; height: 8px; }
   .overlay-card .btns,
   .confirm-actions { grid-template-columns: 1fr; }
+  .admin-user-detail-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-user-ranking-grid { grid-template-columns: 1fr; }
+  .admin-user-leaderboard-control { align-items: flex-start; flex-direction: column; }
+  .admin-analysis-summary dl { grid-template-columns: 1fr; }
   .announcement-popup-actions .btn { width: 100%; }
   .room-ready-actions { flex-direction: column; }
   .room-waiting-card .room-ready-actions {

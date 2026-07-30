@@ -21,8 +21,10 @@ import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { publishResourceVersion } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
-import { getPlayer } from '../services/playerCache';
+import { getDifficultyPlayers, getEnabledPlayers, getPlayer } from '../services/playerCache';
 import type { GuessFeedback, Player } from '../types';
+import { DIFFICULTY_LEVELS } from '../difficulties';
+import { analyzeGameChoices, AnalysisRoundInput } from '../services/userGameAnalysis';
 import {
   createPlayer,
   deletePlayer,
@@ -465,6 +467,124 @@ router.get(
       page,
       pageSize,
       totalPages,
+    });
+  })
+);
+
+router.get(
+  '/users/:id/leaderboards',
+  adminReadLimit,
+  validateParams(idParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const user = await db('users').where({ id }).first('id', 'leaderboard_hidden');
+    if (!user) throw new HttpError(404, 'USER_NOT_FOUND');
+
+    const entries = await Promise.all(
+      DIFFICULTY_LEVELS.filter((difficulty) => difficulty.isEnabled).flatMap((difficulty) =>
+        (['single', 'multi'] as const).map(async (mode) => {
+          const rows = mode === 'multi'
+            ? await db('match_players as mp')
+              .join('users as u', 'u.id', 'mp.user_id')
+              .join('match_records as m', 'm.id', 'mp.match_id')
+              .where('m.db_type', difficulty.key)
+              .where((builder) => builder.where('u.leaderboard_hidden', false).orWhere('u.id', id))
+              .groupBy('u.id')
+              .select('u.id')
+              .count({ total: 'mp.id' })
+              .sum({ wins: db.raw("case when mp.is_winner then 1 else 0 end") })
+            : await db('games as g')
+              .join('users as u', 'u.id', 'g.user_id')
+              .where('g.mode', difficulty.key)
+              .whereNot('g.status', 'playing')
+              .where((builder) => builder.where('u.leaderboard_hidden', false).orWhere('u.id', id))
+              .groupBy('u.id')
+              .select('u.id')
+              .count({ total: 'g.id' })
+              .sum({ wins: db.raw("case when g.status = 'won' then 1 else 0 end") })
+              .avg({ avgGuesses: db.raw("case when g.status = 'won' then g.guess_count else null end") });
+          const board = (rows as any[]).map((row) => ({
+            id: Number(row.id),
+            total: Number(row.total),
+            wins: Number(row.wins ?? 0),
+            winRate: Number(row.total) ? Number(row.wins ?? 0) / Number(row.total) : 0,
+            avgGuesses: mode === 'single' && row.avgGuesses != null ? Number(row.avgGuesses) : null,
+          })).sort((a, b) => b.wins - a.wins || b.winRate - a.winRate || b.total - a.total || a.id - b.id);
+          const index = board.findIndex((entry) => entry.id === id);
+          const own = index >= 0 ? board[index] : null;
+          return {
+            mode,
+            difficulty: difficulty.key,
+            rank: index >= 0 ? index + 1 : null,
+            totalRanked: board.length,
+            total: own?.total ?? 0,
+            wins: own?.wins ?? 0,
+            winRate: own?.winRate ?? 0,
+            avgGuesses: own?.avgGuesses ?? null,
+          };
+        })
+      )
+    );
+    res.json({ leaderboardHidden: Boolean(user.leaderboard_hidden), entries });
+  })
+);
+
+router.get(
+  '/users/:id/analysis',
+  adminReadLimit,
+  validateParams(idParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    if (!(await db('users').where({ id }).first('id'))) throw new HttpError(404, 'USER_NOT_FOUND');
+    const identityKey = `u:${id}`;
+    const multiRows = await db('match_records as m')
+      .join('match_players as mp', 'mp.match_id', 'm.id')
+      .where('mp.user_id', id)
+      .orderBy('m.created_at', 'desc')
+      .limit(10)
+      .select('m.id', 'm.db_type as mode', 'm.replay', 'm.created_at as finishedAt', 'mp.player_key as playerKey');
+    const inputs: AnalysisRoundInput[] = [];
+    const relevantPlayerIds = new Set<number>();
+    for (const row of multiRows) {
+      let rounds: unknown = [];
+      try { rounds = JSON.parse(String(row.replay)); } catch { rounds = []; }
+      if (!Array.isArray(rounds)) continue;
+      for (const value of rounds.slice(0, 30)) {
+        if (!value || typeof value !== 'object') continue;
+        const stored = value as Record<string, unknown>;
+        const guessesByPlayer = stored.guessesByPlayer;
+        const guessIds = guessesByPlayer && typeof guessesByPlayer === 'object'
+          ? safeGuessIds((guessesByPlayer as Record<string, unknown>)[String(row.playerKey || identityKey)])
+          : [];
+        const targetPlayerId = Number(stored.targetPlayerId);
+        if (!Number.isInteger(targetPlayerId) || targetPlayerId <= 0) continue;
+        relevantPlayerIds.add(targetPlayerId);
+        guessIds.forEach((playerId) => relevantPlayerIds.add(playerId));
+        inputs.push({
+          source: 'multi', recordId: Number(row.id), mode: String(row.mode),
+          finishedAt: String(row.finishedAt), round: Number(stored.round),
+          targetPlayerId, guessPlayerIds: guessIds,
+        });
+      }
+    }
+    inputs.sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt) || b.recordId - a.recordId);
+    const allEnabledPlayers = getEnabledPlayers();
+    const playersById = new Map(allEnabledPlayers.map((player) => [player.id, player]));
+    for (const playerId of relevantPlayerIds) {
+      const player = getPlayer(playerId);
+      if (player) playersById.set(playerId, player);
+    }
+    const difficultyPools = new Map(
+      DIFFICULTY_LEVELS.map((difficulty) => [difficulty.key, getDifficultyPlayers(difficulty.key)])
+    );
+    const analysis = await analyzeGameChoices(inputs, playersById, difficultyPools, allEnabledPlayers);
+    res.json({
+      summary: analysis.summary,
+      limitations: {
+        hasGuessTiming: false,
+        usesCurrentPlayerData: true,
+        statement: 'RISK_SIGNAL_NOT_PROOF',
+      },
     });
   })
 );

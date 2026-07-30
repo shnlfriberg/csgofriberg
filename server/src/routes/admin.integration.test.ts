@@ -82,7 +82,7 @@ describe('admin user management', () => {
       .returning(['id', 'username', 'token_version']);
     const admin = insertedUsers.find((user) => user.username === adminUsername)!;
     const targetUser = insertedUsers.find((user) => user.username === username)!;
-    const [targetPlayer] = await db('players').select('id').limit(1);
+    const [targetPlayer, analysisGuess] = await db('players').select('id').limit(2);
     try {
       await db('games').insert([
         {
@@ -90,8 +90,8 @@ describe('admin user management', () => {
           user_id: targetUser.id,
           target_player_id: targetPlayer.id,
           mode: 'easy',
-          guesses: JSON.stringify([targetPlayer.id]),
-          first_guess_player_id: targetPlayer.id,
+          guesses: JSON.stringify([analysisGuess.id, targetPlayer.id]),
+          first_guess_player_id: analysisGuess.id,
           status: 'won',
           guess_count: 2,
           finished_at: db.fn.now(),
@@ -101,8 +101,8 @@ describe('admin user management', () => {
           user_id: targetUser.id,
           target_player_id: targetPlayer.id,
           mode: 'normal',
-          guesses: JSON.stringify([targetPlayer.id]),
-          first_guess_player_id: targetPlayer.id,
+          guesses: JSON.stringify([analysisGuess.id, targetPlayer.id]),
+          first_guess_player_id: analysisGuess.id,
           status: 'lost',
           guess_count: 6,
           finished_at: db.fn.now(),
@@ -123,7 +123,7 @@ describe('admin user management', () => {
               winnerKey: won ? `u:${targetUser.id}` : `g:${opponentKey}`,
               reason: 'guessed',
               guessesByPlayer: {
-                [`u:${targetUser.id}`]: [targetPlayer.id],
+                [`u:${targetUser.id}`]: [analysisGuess.id, targetPlayer.id],
                 [`g:${opponentKey}`]: [targetPlayer.id],
               },
             }]),
@@ -171,6 +171,31 @@ describe('admin user management', () => {
       expect(hidden.response.status).toBe(200);
       expect(hidden.data).toEqual({ id: Number(targetUser.id), leaderboardHidden: true });
       expect(Boolean((await db('users').where({ id: targetUser.id }).first()).leaderboard_hidden)).toBe(true);
+
+      const leaderboards = await request(`/api/admin/users/${targetUser.id}/leaderboards`, adminSession);
+      expect(leaderboards.response.status).toBe(200);
+      expect(leaderboards.data).toMatchObject({ leaderboardHidden: true, entries: expect.any(Array) });
+      expect(leaderboards.data.entries).toHaveLength(6);
+      expect(leaderboards.data.entries.find((entry: { mode: string; difficulty: string }) => entry.mode === 'single' && entry.difficulty === 'easy')).toMatchObject({
+        total: 1,
+        wins: 1,
+        winRate: 1,
+        rank: expect.any(Number),
+      });
+      expect(leaderboards.data.entries.find((entry: { mode: string; difficulty: string }) => entry.mode === 'multi' && entry.difficulty === 'easy')).toMatchObject({
+        total: 2,
+        wins: 1,
+        winRate: 0.5,
+        rank: expect.any(Number),
+      });
+
+      const analysis = await request(`/api/admin/users/${targetUser.id}/analysis`, adminSession);
+      expect(analysis.response.status).toBe(200);
+      expect(analysis.data).toMatchObject({
+        summary: expect.objectContaining({ sampleSize: 2 }),
+        limitations: expect.objectContaining({ hasGuessTiming: false }),
+      });
+      expect(analysis.data).not.toHaveProperty('trajectories');
 
       const invalidVisibility = await request(
         `/api/admin/users/${targetUser.id}/leaderboard-visibility`,
@@ -220,7 +245,7 @@ describe('admin user management', () => {
       );
       expect(singleReplay.response.status).toBe(200);
       expect(singleReplay.data.guesses[0]).toMatchObject({
-        playerId: targetPlayer.id,
+        playerId: analysisGuess.id,
         nickname: expect.any(String),
       });
 
@@ -231,13 +256,16 @@ describe('admin user management', () => {
       expect(multiReplay.response.status).toBe(200);
       expect(multiReplay.data.rounds[0]).toMatchObject({
         answer: { id: targetPlayer.id },
-        me: { guesses: [{ playerId: targetPlayer.id }] },
+        me: { guesses: [{ playerId: analysisGuess.id }, { playerId: targetPlayer.id }] },
         opponent: { guesses: [{ playerId: targetPlayer.id }] },
       });
 
       const forbidden = await request(`/api/admin/users/${targetUser.id}/stats`, authCookie(targetUser));
       expect(forbidden.response.status).toBe(403);
       expect(forbidden.data).toEqual({ code: 'FORBIDDEN' });
+      const forbiddenAnalysis = await request(`/api/admin/users/${targetUser.id}/analysis`, authCookie(targetUser));
+      expect(forbiddenAnalysis.response.status).toBe(403);
+      expect(forbiddenAnalysis.data).toEqual({ code: 'FORBIDDEN' });
 
       const restored = await request(
         `/api/admin/users/${targetUser.id}/leaderboard-visibility`,

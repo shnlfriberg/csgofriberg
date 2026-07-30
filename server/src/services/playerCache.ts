@@ -97,6 +97,14 @@ export function getEnabledPlayer(id: number): Player | undefined {
   return player && Boolean(player.is_enabled) ? player : undefined;
 }
 
+export function getEnabledPlayers(): Player[] {
+  return allPlayers.slice();
+}
+
+export function getDifficultyPlayers(key: string): Player[] {
+  return playersByDifficulty.get(key) ?? [];
+}
+
 export function pickCachedTarget(mode: string): Player | null {
   const pool = playersByDifficulty.get(mode) ?? [];
   return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;

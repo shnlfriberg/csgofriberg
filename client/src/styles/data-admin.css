@@ -110,6 +110,7 @@
 .replay-heading h2 { margin: 0; font-size: 1.2rem; letter-spacing: 0; }
 .replay-heading p { margin: 5px 0 0; color: var(--text-sec); font-size: 0.9rem; }
 .replay-dialog-body {
+  flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
   overflow-x: hidden;
@@ -276,7 +277,7 @@
 .admin-users-table table { min-width: 880px; }
 .admin-users-table table th,
 .admin-users-table table td { text-align: center; vertical-align: middle; }
-.admin-user-actions { display: flex; justify-content: center; gap: 6px; min-width: 230px; }
+.admin-user-actions { display: flex; justify-content: center; gap: 6px; min-width: 110px; }
 .admin-user-actions .btn { min-height: 32px; padding: 6px 10px; white-space: nowrap; }
 .admin-user-leaderboard-toggle {
   display: inline-flex;
@@ -556,3 +557,62 @@
 .admin-user-game-empty { padding: 34px 0; text-align: center; }
 .admin-user-game-pagination { margin-top: 16px; }
 .admin-user-game-pagination > .btn { width: 36px; height: 36px; padding: 0; }
+.admin-user-detail-dialog { width: min(980px, 100%); height: min(780px, calc(100dvh - 40px)); overflow: hidden; }
+.admin-user-detail-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  margin: 16px 0 0;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-soft);
+}
+.admin-user-detail-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--text-sec);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 650;
+  cursor: pointer;
+}
+.admin-user-detail-tabs button.active { background: var(--card); color: var(--text); box-shadow: var(--shadow-sm); }
+.admin-user-detail-content { min-height: 0; margin-top: 16px; padding-right: 4px; overflow-y: auto; }
+.admin-user-detail-loading { padding: 72px 0; text-align: center; }
+.admin-user-leaderboard-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--card-soft);
+}
+.admin-user-leaderboard-control > div { display: grid; gap: 4px; }
+.admin-user-leaderboard-control > div span { color: var(--text-light); font-size: 0.86rem; }
+.admin-user-ranking-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+.admin-user-ranking-grid article { display: grid; gap: 5px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card); }
+.admin-user-ranking-grid article > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.admin-user-ranking-grid article > b { font-size: 1.55rem; color: var(--primary-strong); }
+.admin-user-ranking-grid article > span,
+.admin-user-ranking-grid article > small { color: var(--text-light); }
+.admin-analysis-summary { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 18px; }
+.admin-analysis-index { display: grid; place-items: center; align-content: center; min-height: 150px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card-soft); text-align: center; }
+.admin-analysis-index > strong { font-size: 2.8rem; line-height: 1; color: var(--primary-strong); }
+.admin-analysis-index > small { margin-top: 8px; color: var(--text-light); }
+.admin-analysis-index.level-high > strong { color: var(--danger); }
+.admin-analysis-index.level-elevated > strong { color: var(--warning); }
+.admin-analysis-summary dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.admin-analysis-summary dl > div { display: grid; gap: 7px; padding: 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); }
+.admin-analysis-summary dt { color: var(--text-light); font-size: 0.84rem; }
+.admin-analysis-summary dd { margin: 0; font-size: 1.15rem; font-weight: 700; }
