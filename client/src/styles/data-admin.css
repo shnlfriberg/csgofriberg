@@ -557,7 +557,13 @@
 .admin-user-game-empty { padding: 34px 0; text-align: center; }
 .admin-user-game-pagination { margin-top: 16px; }
 .admin-user-game-pagination > .btn { width: 36px; height: 36px; padding: 0; }
-.admin-user-detail-dialog { width: min(980px, 100%); height: min(780px, calc(100dvh - 40px)); overflow: hidden; }
+.admin-user-detail-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(980px, 100%);
+  height: min(780px, calc(100dvh - 40px));
+  overflow: hidden;
+}
 .admin-user-detail-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -586,7 +592,7 @@
   cursor: pointer;
 }
 .admin-user-detail-tabs button.active { background: var(--card); color: var(--text); box-shadow: var(--shadow-sm); }
-.admin-user-detail-content { min-height: 0; margin-top: 16px; padding-right: 4px; overflow-y: auto; }
+.admin-user-detail-content { flex: 1 1 auto; min-height: 0; margin-top: 16px; padding-right: 4px; overflow-y: auto; }
 .admin-user-detail-loading { padding: 72px 0; text-align: center; }
 .admin-user-leaderboard-control {
   display: flex;

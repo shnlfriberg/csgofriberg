@@ -6,6 +6,16 @@ const readCss = (relativePath: string) =>
   readFileSync(resolve(__dirname, relativePath), 'utf8');
 
 describe('desktop/mobile layout contracts', () => {
+  it('keeps the admin user detail content vertically scrollable', () => {
+    const admin = readCss('./data-admin.css');
+    expect(admin).toMatch(
+      /\.admin-user-detail-dialog\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;[^}]*overflow:\s*hidden;/s
+    );
+    expect(admin).toMatch(
+      /\.admin-user-detail-content\s*\{[^}]*flex:\s*1\s+1\s+auto;[^}]*min-height:\s*0;[^}]*overflow-y:\s*auto;/s
+    );
+  });
+
   it('fully disables CSS motion when the personal preference is reduced', () => {
     const responsive = readCss('./responsive.css');
     expect(responsive).toMatch(/html\[data-motion='reduced'\][\s\S]*transition:\s*none\s*!important/s);
