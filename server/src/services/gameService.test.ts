@@ -13,7 +13,6 @@ function makePlayer(overrides: Partial<Player>): Player {
     role: 'Rifler',
     major_championships: 1,
     major_appearances: 12,
-    is_easy: true,
     is_active: true,
     created_at: '',
     ...overrides,

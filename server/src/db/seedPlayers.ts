@@ -44,7 +44,6 @@ export async function insertMissingSeedPlayers(instance: Knex = db): Promise<num
         role: player.role ?? 'Rifler',
         major_championships: player.major_championships ?? 0,
         major_appearances: player.major_appearances ?? 0,
-        is_easy: difficulties(player).includes('easy'),
         is_active: player.is_active ?? true,
         is_enabled: player.is_enabled ?? true,
       })))

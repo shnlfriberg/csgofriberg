@@ -28,6 +28,7 @@ export const playerSchema = z.object({
 
 export const importedPlayerSchema = playerSchema.extend({
   is_enabled: z.boolean().optional(),
+  // Legacy import alias; it is converted to difficulty memberships and never persisted.
   is_easy: z.boolean().optional(),
 });
 

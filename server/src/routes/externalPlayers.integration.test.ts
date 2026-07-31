@@ -137,7 +137,7 @@ describe('external player API tokens', () => {
               nickname: nickB,
               nationality: 'Sweden',
               age: 23,
-              difficulties: ['normal'],
+              is_easy: true,
             },
           ],
         }),
@@ -145,6 +145,12 @@ describe('external player API tokens', () => {
       expect(imported.response.status).toBe(200);
       expect(imported.data).toEqual({ created: 1, updated: 1 });
       expect(getPlayer(playerId)?.team).toBe('Bulk Updated');
+      const importedPlayerId = await db('players').where({ nickname: nickB }).first('id');
+      expect(await db('player_difficulties')
+        .where({ player_id: importedPlayerId.id })
+        .orderBy('difficulty_key')
+        .pluck('difficulty_key')).toEqual(['easy', 'normal']);
+      expect(await db.schema.hasColumn('players', 'is_easy')).toBe(false);
 
       const revoked = await request(`/api/admin/api-tokens/${createdToken.data.id}`, {
         method: 'DELETE',

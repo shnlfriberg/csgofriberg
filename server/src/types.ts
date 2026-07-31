@@ -18,8 +18,6 @@ export interface Player {
   role: string;
   major_championships: number;
   major_appearances: number;
-  /** Deprecated compatibility field; difficulty membership lives in player_difficulties. */
-  is_easy?: boolean | number;
   difficulties?: string[];
   is_active: boolean | number;
   is_enabled: boolean | number;

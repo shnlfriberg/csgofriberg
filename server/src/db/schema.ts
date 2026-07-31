@@ -11,6 +11,7 @@ const MULTI_WINNING_GUESSES_BACKFILL_MIGRATION = '20260729-multi-winning-guesses
 const MULTI_WINNING_GUESSES_BACKFILL_BATCH_SIZE = 200;
 
 export async function backfillLegacyPlayerDifficulties(instance: Knex = db): Promise<void> {
+  if (!(await instance.schema.hasColumn('players', 'is_easy'))) return;
   await instance.transaction(async (trx) => {
     const applied = await trx('app_migrations')
       .where({ name: PLAYER_DIFFICULTIES_BACKFILL_MIGRATION })
@@ -209,7 +210,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('role', 32).notNullable().defaultTo('Rifler');
       t.integer('major_championships').notNullable().defaultTo(0);
       t.integer('major_appearances').notNullable().defaultTo(0);
-      t.boolean('is_easy').notNullable().defaultTo(false);
       t.boolean('is_active').notNullable().defaultTo(true);
       t.boolean('is_enabled').notNullable().defaultTo(true);
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
@@ -245,11 +245,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   if (!(await instance.schema.hasColumn('players', 'major_championships'))) {
     await instance.schema.alterTable('players', (t) => {
       t.integer('major_championships').notNullable().defaultTo(0);
-    });
-  }
-  if (!(await instance.schema.hasColumn('players', 'is_easy'))) {
-    await instance.schema.alterTable('players', (t) => {
-      t.boolean('is_easy').notNullable().defaultTo(false);
     });
   }
   if (!(await instance.schema.hasColumn('players', 'is_enabled'))) {
@@ -326,6 +321,10 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.primary(['player_id', 'difficulty_key']);
       t.index(['difficulty_key', 'player_id']);
     });
+  }
+  await backfillLegacyPlayerDifficulties(instance);
+  if (await instance.schema.hasColumn('players', 'is_easy')) {
+    await instance.schema.alterTable('players', (t) => t.dropColumn('is_easy'));
   }
   if (!(await instance.schema.hasColumn('games', 'first_guess_player_id'))) {
     await instance.schema.alterTable('games', (t) => t.integer('first_guess_player_id').nullable());

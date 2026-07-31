@@ -28,6 +28,7 @@ describe('player schema migration', () => {
       table.integer('birth_year').notNullable();
       table.string('role', 32).notNullable().defaultTo('Rifler');
       table.integer('major_appearances').notNullable().defaultTo(0);
+      table.boolean('is_easy').notNullable().defaultTo(false);
       table.boolean('is_active').notNullable().defaultTo(true);
       table.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
     });
@@ -40,14 +41,14 @@ describe('player schema migration', () => {
       birth_year: 1990,
       role: 'Rifler',
       major_appearances: 2,
+      is_easy: true,
     });
 
     await ensureSchema(instance);
-    await backfillLegacyPlayerDifficulties(instance);
 
     expect(await instance.schema.hasColumn('players', 'real_name')).toBe(false);
     expect(await instance.schema.hasColumn('players', 'major_championships')).toBe(true);
-    expect(await instance.schema.hasColumn('players', 'is_easy')).toBe(true);
+    expect(await instance.schema.hasColumn('players', 'is_easy')).toBe(false);
     expect(await instance.schema.hasColumn('players', 'is_enabled')).toBe(true);
     expect(await instance.schema.hasTable('difficulty_levels')).toBe(true);
     expect(await instance.schema.hasTable('player_difficulties')).toBe(true);
@@ -70,9 +71,12 @@ describe('player schema migration', () => {
     expect(player.age).toBe(new Date().getFullYear() - 1990);
     expect((await instance('players').columnInfo('age')).nullable).toBe(false);
     expect(player.major_championships).toBe(0);
-    expect(player.is_easy).toBe(0);
     expect(player.is_enabled).toBe(1);
-    expect(await instance('player_difficulties').where({ player_id: player.id }).pluck('difficulty_key')).toEqual(['normal']);
+    expect(await instance('player_difficulties')
+      .where({ player_id: player.id })
+      .orderBy('difficulty_key')
+      .pluck('difficulty_key'))
+      .toEqual(['easy', 'normal']);
     await instance('player_difficulties').where({ player_id: player.id }).del();
     await ensureSchema(instance);
     await backfillLegacyPlayerDifficulties(instance);
@@ -177,16 +181,18 @@ describe('player schema migration', () => {
         nationality: '测试',
         age: 25,
         major_championships: 1,
-        is_easy: true,
       },
       {
         nickname: 'beginner-non-champion',
         nationality: '测试',
         age: 25,
         major_championships: 0,
-        is_easy: true,
       },
     ]).returning(['id', 'nickname']);
+    await instance('player_difficulties').insert(players.map((player) => ({
+      player_id: player.id,
+      difficulty_key: 'easy',
+    })));
 
     await backfillBeginnerPlayers(instance);
 

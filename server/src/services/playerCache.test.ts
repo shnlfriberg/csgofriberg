@@ -40,7 +40,6 @@ describe('player cache invalidation', () => {
       role: 'Rifler',
       major_championships: 0,
       major_appearances: 0,
-      is_easy: false,
       is_active: true,
       is_enabled: true,
     }).returning('id');
@@ -69,7 +68,6 @@ describe('player cache invalidation', () => {
       role: 'Rifler',
       major_championships: 0,
       major_appearances: 0,
-      is_easy: false,
       is_active: true,
       is_enabled: true,
     }).returning('id');
@@ -95,7 +93,6 @@ describe('player cache invalidation', () => {
       role: 'Rifler',
       major_championships: 1,
       major_appearances: 1,
-      is_easy: true,
       is_active: true,
       is_enabled: true,
     }).returning('id');
