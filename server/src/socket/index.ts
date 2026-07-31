@@ -15,7 +15,6 @@ import {
   getEnabledPlayer,
   getPlayer,
   isDifficultyAvailable,
-  pickCachedTarget,
 } from '../services/playerCache';
 import {
   BoType,
@@ -68,6 +67,7 @@ import {
   recordMatchmakingExit,
 } from '../services/matchmakingCooldown';
 import { isMatchmakingRestricted } from '../services/matchmakingRestriction';
+import { pickTargetAvoidingRecent, rememberTargetSelection } from '../services/targetSelection';
 
 const NEXT_ROUND_DELAY_MS = 6_000;
 const ROUND_TIME_MS = 120_000;
@@ -605,7 +605,7 @@ async function finishMatch(
 }
 
 async function startRound(io: Server, roomId: string) {
-  const result = await withRoomLock(roomId, (room) => {
+  const result = await withRoomLock(roomId, async (room) => {
     if (room.status !== 'waiting' && room.status !== 'round_over' && room.status !== 'starting') {
       return null;
     }
@@ -615,7 +615,16 @@ async function startRound(io: Server, roomId: string) {
     if (room.status === 'starting' && room.nextRoundAt && room.nextRoundAt > Date.now()) {
       return { waitingForStart: room.nextRoundAt };
     }
-    const target = pickCachedTarget(room.dbType);
+    const identities = room.players.map((player) => player.key);
+    const previousTargets = [
+      ...room.replayRounds.map((round) => round.targetPlayerId),
+      ...(room.targetPlayerId ? [room.targetPlayerId] : []),
+    ];
+    const target = await pickTargetAvoidingRecent({
+      mode: room.dbType,
+      identities,
+      hardExcludedIds: previousTargets,
+    });
     if (!target) return { error: 'EMPTY_PLAYER_POOL' as const };
     room.status = 'playing';
     room.readyCheckEndsAt = null;
@@ -632,7 +641,7 @@ async function startRound(io: Server, roomId: string) {
       player.lastGuessAt = null;
       player.skipped = false;
     }
-    return { room };
+    return { room, targetSelection: { identities, playerId: target.id } };
   }, (value) => Boolean(
     value && !('waitingForReconnect' in value) && !('waitingForStart' in value)
   ));
@@ -644,6 +653,11 @@ async function startRound(io: Server, roomId: string) {
     return false;
   }
   const room = result.room;
+  await rememberTargetSelection({
+    mode: room.dbType,
+    identities: result.targetSelection.identities,
+    playerId: result.targetSelection.playerId,
+  });
   emitRoomViews(io, room, 'round:start', (viewerKey) => ({
     room: publicRoom(room, viewerKey),
     serverNow: Date.now(),

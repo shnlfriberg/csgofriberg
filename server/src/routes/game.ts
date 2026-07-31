@@ -5,15 +5,16 @@ import { optionalAuth } from '../middleware/auth';
 import { validateBody, validateParams, asyncHandler, HttpError } from '../middleware/common';
 import { GuessFeedback, Player } from '../types';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
-import { getEnabledPlayer, getPlayer, isDifficultyAvailable, pickCachedTarget } from '../services/playerCache';
+import { getEnabledPlayer, getPlayer, isDifficultyAvailable } from '../services/playerCache';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { withKeyLock } from '../services/keyLock';
 import { invalidateCached } from '../services/queryCache';
 import {
   SingleGameMode,
   SingleGameState,
-  createOrResumeSingleGame,
+  createOrResumeSingleGameWithStatus,
   deleteSingleGame,
+  loadActiveSingleGame,
   loadSingleGame,
   saveSingleGame,
 } from '../services/singleGameStore';
@@ -23,6 +24,7 @@ import {
   globalStatsCacheKeysForDifficulty,
   personalStatsCacheKeysForDifficulty,
 } from '../services/statsCache';
+import { pickTargetAvoidingRecent, rememberTargetSelection } from '../services/targetSelection';
 
 const router = Router();
 router.use(optionalAuth);
@@ -116,22 +118,37 @@ router.post(
     if (!owner) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
     const mode = req.body.mode as SingleGameMode;
     if (!isDifficultyAvailable(mode)) throw new HttpError(400, 'DIFFICULTY_UNAVAILABLE');
-    const response = await withKeyLock(`single-start:${owner.identityKey}:${mode}`, async () => {
-      const target = pickCachedTarget(mode);
+    const started = await withKeyLock(`single-start:${owner.identityKey}:${mode}`, async () => {
+      const existing = await loadActiveSingleGame(owner.identityKey, mode);
+      if (existing) return { game: existing, selectedTargetId: null };
+      const target = await pickTargetAvoidingRecent({
+        mode,
+        identities: [owner.identityKey],
+      });
       if (!target) throw new HttpError(500, 'EMPTY_PLAYER_POOL');
-      const game = await createOrResumeSingleGame({
+      const result = await createOrResumeSingleGameWithStatus({
         ...owner,
         mode,
         targetPlayerId: target.id,
       });
       return {
-        gameId: game.id,
-        mode: game.mode,
-        maxGuesses: MAX_GUESSES,
-        guesses: publicGuesses(game),
+        game: result.game,
+        selectedTargetId: result.created ? target.id : null,
       };
     });
-    res.json(response);
+    if (started.selectedTargetId !== null) {
+      await rememberTargetSelection({
+        mode,
+        identities: [owner.identityKey],
+        playerId: started.selectedTargetId,
+      });
+    }
+    res.json({
+      gameId: started.game.id,
+      mode: started.game.mode,
+      maxGuesses: MAX_GUESSES,
+      guesses: publicGuesses(started.game),
+    });
   })
 );
 

@@ -1,3 +1,4 @@
+import { randomInt } from 'crypto';
 import { db } from '../db/knex';
 import { redis, redisKey, redisPublisher, redisSubscriber } from '../redis';
 import { Player } from '../types';
@@ -105,9 +106,14 @@ export function getDifficultyPlayers(key: string): Player[] {
   return playersByDifficulty.get(key) ?? [];
 }
 
-export function pickCachedTarget(mode: string): Player | null {
+export function pickCachedTarget(mode: string, excludedIds: ReadonlySet<number> = new Set()): Player | null {
   const pool = playersByDifficulty.get(mode) ?? [];
-  return pool.length ? pool[Math.floor(Math.random() * pool.length)] : null;
+  if (!pool.length) return null;
+  const candidates = excludedIds.size
+    ? pool.filter((player) => !excludedIds.has(player.id))
+    : pool;
+  const source = candidates.length ? candidates : pool;
+  return source[randomInt(source.length)];
 }
 
 export function isDifficultyAvailable(key: string): boolean {

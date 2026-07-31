@@ -103,6 +103,35 @@ describe('single-player settlement soft limit', () => {
     }
   });
 
+  it('resumes without recording a discarded target and avoids an immediate repeat', async () => {
+    const guestKey = `target-history-${Date.now()}`;
+    const identityKey = `g:${guestKey}`;
+    const cookie = guestCookie(guestKey);
+    const historyKey = redisKey(`target-history:beginner:${identityKey}`);
+    const first = await post('/api/game/start', cookie, { mode: 'beginner' });
+    expect(first.response.status).toBe(200);
+    const firstRaw = await redis()!.get(redisKey(`single:game:${first.data.gameId}`));
+    const firstTarget = Number(JSON.parse(firstRaw!).targetPlayerId);
+    try {
+      const resumed = await post('/api/game/start', cookie, { mode: 'beginner' });
+      expect(resumed.data.gameId).toBe(first.data.gameId);
+      expect(await redis()!.zCard(historyKey)).toBe(1);
+
+      expect((await post(`/api/game/${first.data.gameId}/giveup`, cookie)).response.status).toBe(200);
+      const second = await post('/api/game/start', cookie, { mode: 'beginner' });
+      const secondRaw = await redis()!.get(redisKey(`single:game:${second.data.gameId}`));
+      const secondTarget = Number(JSON.parse(secondRaw!).targetPlayerId);
+      expect(secondTarget).not.toBe(firstTarget);
+      await post(`/api/game/${second.data.gameId}/giveup`, cookie);
+    } finally {
+      await db('games').where({ guest_key: guestKey }).del();
+      await redis()?.del([
+        historyKey,
+        redisKey(`single:settlement-limit:${identityKey}`),
+      ]);
+    }
+  });
+
   it('persists accepted guess times relative to the game start', async () => {
     const guestKey = `guess-times-${Date.now()}`;
     const cookie = guestCookie(guestKey);

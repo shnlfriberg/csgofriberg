@@ -56,15 +56,18 @@ export async function createOrResumeSingleGame(input: {
   mode: SingleGameMode;
   targetPlayerId: number;
 }): Promise<SingleGameState> {
-  const client = requiredRedis();
-  const active = activeKey(input.identityKey, input.mode);
-  const existingId = await client.get(active);
-  if (existingId) {
-    // Restoring after a refresh must not extend the inactivity window.
-    const existing = await loadSingleGame(existingId, input.identityKey);
-    if (existing) return existing;
-    await client.del(active);
-  }
+  return (await createOrResumeSingleGameWithStatus(input)).game;
+}
+
+export async function createOrResumeSingleGameWithStatus(input: {
+  identityKey: string;
+  userId: number | null;
+  guestKey: string | null;
+  mode: SingleGameMode;
+  targetPlayerId: number;
+}): Promise<{ game: SingleGameState; created: boolean }> {
+  const existing = await loadActiveSingleGame(input.identityKey, input.mode);
+  if (existing) return { game: existing, created: false };
 
   const now = Date.now();
   const game: SingleGameState = {
@@ -80,7 +83,22 @@ export async function createOrResumeSingleGame(input: {
     lastActiveAt: now,
   };
   await saveSingleGame(game);
-  return game;
+  return { game, created: true };
+}
+
+export async function loadActiveSingleGame(
+  identityKey: string,
+  mode: SingleGameMode
+): Promise<SingleGameState | null> {
+  const client = requiredRedis();
+  const active = activeKey(identityKey, mode);
+  const existingId = await client.get(active);
+  if (!existingId) return null;
+  // Restoring after a refresh must not extend the inactivity window.
+  const existing = await loadSingleGame(existingId, identityKey);
+  if (existing) return existing;
+  await client.del(active);
+  return null;
 }
 
 export async function loadSingleGame(
