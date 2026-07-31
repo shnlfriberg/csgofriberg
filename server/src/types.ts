@@ -59,6 +59,7 @@ export interface GameRow {
   target_player_id: number;
   mode: string;
   guesses: string;
+  guess_times: string;
   status: 'playing' | 'won' | 'lost';
   guess_count: number;
   created_at: string;

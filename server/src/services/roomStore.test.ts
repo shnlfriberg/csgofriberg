@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'crypto';
 import {
+  applyRoomGuess,
   StoredRoom,
   deleteRoom,
   getRoom,
@@ -30,6 +31,7 @@ function makeRoom(id: string): StoredRoom {
     players: [{
       key: 'u:1', userId: 1, name: 'one', socketId: 's1', ready: true,
       score: 0, guesses: [], lastGuessAt: null, connected: true, disconnectDeadline: null,
+      guessTimes: [],
     }],
     spectators: [],
     targetPlayerId: null,
@@ -150,5 +152,38 @@ describe('roomStore local fallback', () => {
 
     const current = await import('./roomStore').then(({ getRoom }) => getRoom(room.id));
     if (current) await deleteRoom(current);
+  });
+
+  it('records a bounded relative guess time in the room state', async () => {
+    const room = makeRoom(`TIMES${Date.now()}`);
+    room.status = 'playing';
+    room.round = 1;
+    room.targetPlayerId = 7;
+    room.roundEndsAt = 130_000;
+    vi.setSystemTime(12_500);
+    try {
+      await saveRoom(room);
+      const result = await applyRoomGuess({
+        roomId: room.id,
+        identity: 'u:1',
+        socketId: 's1',
+        expectedRound: 1,
+        eventId: 'event-1',
+        targetPlayerId: 7,
+        feedback: { playerId: 2, correct: false } as any,
+        maxGuesses: 10,
+        roundDurationMs: 120_000,
+        nextRoundDelayMs: 100,
+        minGuessIntervalMs: 1_500,
+        rateLimit: 12,
+        rateWindowSeconds: 10,
+      });
+      expect(result.kind).toBe('applied');
+      const stored = await getRoom(room.id);
+      expect(stored?.players[0].guessTimes).toEqual([2_500]);
+      if (stored) await deleteRoom(stored);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

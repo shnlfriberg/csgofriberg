@@ -12,6 +12,8 @@ export interface SingleGameState {
   mode: SingleGameMode;
   targetPlayerId: number;
   guesses: GuessFeedback[];
+  /** Milliseconds from game creation for each accepted guess. */
+  guessTimes: Array<number | null>;
   createdAt: number;
   lastActiveAt: number;
 }
@@ -32,6 +34,19 @@ function requiredRedis() {
   const client = redis();
   if (!client) throw new Error('REDIS_UNAVAILABLE');
   return client;
+}
+
+function normalizeGuessTimes(game: SingleGameState): void {
+  if (!Array.isArray(game.guessTimes)) game.guessTimes = [];
+  game.guessTimes = game.guessTimes.map((value) => (
+    typeof value === 'number' && Number.isFinite(value) && value >= 0
+      ? Math.floor(value)
+      : null
+  ));
+  if (game.guessTimes.length > game.guesses.length) {
+    game.guessTimes = game.guessTimes.slice(0, game.guesses.length);
+  }
+  while (game.guessTimes.length < game.guesses.length) game.guessTimes.push(null);
 }
 
 export async function createOrResumeSingleGame(input: {
@@ -60,6 +75,7 @@ export async function createOrResumeSingleGame(input: {
     mode: input.mode,
     targetPlayerId: input.targetPlayerId,
     guesses: [],
+    guessTimes: [],
     createdAt: now,
     lastActiveAt: now,
   };
@@ -77,6 +93,8 @@ export async function loadSingleGame(
   if (!raw) return null;
   const game = JSON.parse(raw) as SingleGameState;
   if (game.identityKey !== identityKey) return null;
+  if (!Array.isArray(game.guesses)) game.guesses = [];
+  normalizeGuessTimes(game);
   if (game.lastActiveAt + SINGLE_GAME_TTL_SECONDS * 1000 <= Date.now()) {
     await deleteSingleGame(game);
     return null;
@@ -90,6 +108,7 @@ export async function loadSingleGame(
 
 export async function saveSingleGame(game: SingleGameState): Promise<void> {
   const client = requiredRedis();
+  normalizeGuessTimes(game);
   game.lastActiveAt = Date.now();
   const expiresAt = game.lastActiveAt + SINGLE_GAME_TTL_SECONDS * 1000;
   await client.multi()

@@ -941,9 +941,14 @@ describe('multiplayer socket integration', () => {
         identityA
       ))!);
       expect(hotGuesses).toHaveLength(1);
-      expect((await getRoom(created.room.id))!.players.find(
-        (player) => player.key === identityA
-      )!.guesses).toHaveLength(1);
+      const roomAfterFirst = await getRoom(created.room.id);
+      const playerAfterFirst = roomAfterFirst!.players.find((player) => player.key === identityA)!;
+      expect(playerAfterFirst.guesses).toHaveLength(1);
+      expect(playerAfterFirst.guessTimes).toHaveLength(1);
+      expect(playerAfterFirst.guessTimes[0]).toBeGreaterThanOrEqual(0);
+      expect(playerAfterFirst.guessTimes[0]).toBeLessThanOrEqual(120_000);
+      expect(synced.room.players.find((player: any) => player.key === identityA))
+        .not.toHaveProperty('guessTimes');
       const bucket = Math.floor(Date.now() / 10_000);
       const rateKeys = [bucket, bucket - 1].map((value) => redisKey(`rl:socket:guess:${value}`));
       const rateKey = (await Promise.all(rateKeys.map(async (key) => ({
@@ -977,6 +982,12 @@ describe('multiplayer socket integration', () => {
       expect(second.feedback).toBeUndefined();
       expect(secondApplied.feedback.playerId).toBe(wrongGuesses[1].id);
       expect(second).not.toHaveProperty('room');
+      const roomAfterSecond = await getRoom(created.room.id);
+      const timesAfterSecond = roomAfterSecond!.players.find(
+        (player) => player.key === identityA
+      )!.guessTimes;
+      expect(timesAfterSecond).toHaveLength(2);
+      expect(timesAfterSecond[1]!).toBeGreaterThan(timesAfterSecond[0]!);
 
       for (let index = 4; index <= 12; index += 1) {
         const repeated = await emit(a, 'game:guess', {
@@ -1334,6 +1345,13 @@ describe('multiplayer socket integration', () => {
       });
       expect(restored.room.roundResult).toBeNull();
       expect(restored.room.matchReplay.rounds).toHaveLength(2);
+      const storedFinished = await getRoom(created.room.id);
+      expect(storedFinished?.replayRounds[0].guessTimesByPlayer[`g:${keyA}`]).toEqual([null]);
+      const finalGuessTimes = storedFinished?.replayRounds[1]
+        .guessTimesByPlayer[`g:${keyA}`];
+      expect(finalGuessTimes).toHaveLength(1);
+      expect(finalGuessTimes?.[0]).toBeGreaterThanOrEqual(0);
+      expect(finalGuessTimes?.[0]).toBeLessThanOrEqual(120_000);
     } finally {
       a.disconnect();
       b.disconnect();

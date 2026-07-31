@@ -15,7 +15,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
   ],
   difficulty_levels: ['key', 'sort_order', 'is_enabled'],
   player_difficulties: ['player_id', 'difficulty_key'],
-  games: ['id', 'session_id', 'user_id', 'guest_key', 'first_guess_player_id', 'status'],
+  games: ['id', 'session_id', 'user_id', 'guest_key', 'guess_times', 'first_guess_player_id', 'status'],
   match_records: [
     'id',
     'room_id',

@@ -76,6 +76,7 @@ async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promis
         target_player_id: game.targetPlayerId,
         mode: game.mode,
         guesses: JSON.stringify(game.guesses.map((guess) => guess.playerId)),
+        guess_times: JSON.stringify(game.guessTimes),
         first_guess_player_id: game.guesses[0]?.playerId ?? null,
         status,
         guess_count: game.guesses.length,
@@ -160,6 +161,7 @@ router.post(
 
       const feedback = compareGuess(guess, target);
       game.guesses.push(feedback);
+      game.guessTimes.push(Math.max(0, Math.floor(Date.now() - game.createdAt)));
       const finished = feedback.correct || game.guesses.length >= MAX_GUESSES;
       const status = feedback.correct ? 'won' : finished ? 'lost' : 'playing';
       const recorded = finished

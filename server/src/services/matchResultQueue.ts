@@ -29,6 +29,7 @@ export interface MatchResultPayload {
     winnerKey: string | null;
     reason: string;
     guessesByPlayer: Record<string, number[]>;
+    guessTimesByPlayer: Record<string, Array<number | null>>;
   }>;
 }
 

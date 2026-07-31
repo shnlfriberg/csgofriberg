@@ -60,6 +60,7 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasColumn('match_players', 'winning_guess_sum')).toBe(true);
     expect(await instance.schema.hasColumn('match_players', 'winning_rounds')).toBe(true);
     expect(await instance.schema.hasColumn('games', 'first_guess_player_id')).toBe(true);
+    expect(await instance.schema.hasColumn('games', 'guess_times')).toBe(true);
     expect(await instance.schema.hasColumn('users', 'display_id')).toBe(true);
     expect(await instance.schema.hasColumn('users', 'leaderboard_hidden')).toBe(true);
     expect(await instance.schema.hasTable('api_tokens')).toBe(true);
@@ -91,6 +92,7 @@ describe('player schema migration', () => {
     await ensureSchema(instance);
     const game = await instance('games').where({ session_id: 'legacy-first-guess' }).first();
     expect(game.first_guess_player_id).toBe(player.id);
+    expect(game.guess_times).toBe('[]');
 
     await instance('users').insert({
       username: 'legacy-user',

@@ -102,4 +102,30 @@ describe('single-player settlement soft limit', () => {
       await redis()?.del(key);
     }
   });
+
+  it('persists accepted guess times relative to the game start', async () => {
+    const guestKey = `guess-times-${Date.now()}`;
+    const cookie = guestCookie(guestKey);
+    const started = await post('/api/game/start', cookie, { mode: 'beginner' });
+    expect(started.response.status).toBe(200);
+    const activeRaw = await redis()!.get(redisKey(`single:game:${started.data.gameId}`));
+    const targetPlayerId = Number(JSON.parse(activeRaw!).targetPlayerId);
+    try {
+      const guessed = await post(`/api/game/${started.data.gameId}/guess`, cookie, {
+        playerId: targetPlayerId,
+      });
+      expect(guessed.response.status).toBe(200);
+      expect(guessed.data.status).toBe('won');
+      expect(guessed.data).not.toHaveProperty('guessTimes');
+
+      const stored = await db('games').where({ session_id: started.data.gameId }).first();
+      const guessTimes = JSON.parse(String(stored.guess_times));
+      expect(guessTimes).toHaveLength(1);
+      expect(guessTimes[0]).toBeGreaterThanOrEqual(0);
+      expect(guessTimes[0]).toBeLessThan(60_000);
+    } finally {
+      await db('games').where({ session_id: started.data.gameId }).del();
+      await redis()?.del(redisKey(`single:settlement-limit:g:${guestKey}`));
+    }
+  });
 });

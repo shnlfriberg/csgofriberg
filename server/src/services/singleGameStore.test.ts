@@ -25,6 +25,7 @@ describe('singleGameStore', () => {
       mode: 'easy',
       targetPlayerId: 1,
       guesses: [],
+      guessTimes: [],
       createdAt: 0,
       lastActiveAt: 0,
     })).rejects.toThrow('REDIS_UNAVAILABLE');
@@ -54,6 +55,7 @@ describe('singleGameStore', () => {
     expect(restored.id).toBe(created.id);
     expect(restored.targetPlayerId).toBe(1);
     expect(restored.guesses).toEqual(created.guesses);
+    expect(restored.guessTimes).toEqual([null]);
 
     await deleteSingleGame(restored);
     expect(await loadSingleGame(restored.id, identityKey)).toBeNull();
@@ -80,5 +82,27 @@ describe('singleGameStore', () => {
     expect(await loadSingleGame(created.id, identityKey)).toBeNull();
     expect(await redis()!.get(redisKey(`single:active:${identityKey}:normal`))).toBeNull();
     expect(await redis()!.zScore(redisKey('presence:single'), created.id)).toBeNull();
+  });
+
+  it('aligns missing legacy timing data with stored guesses', async () => {
+    await initRedis();
+    const identityKey = `g:single-legacy-times-${Date.now()}`;
+    const created = await createOrResumeSingleGame({
+      identityKey,
+      userId: null,
+      guestKey: identityKey.slice(2),
+      mode: 'normal',
+      targetPlayerId: 1,
+    });
+    created.guesses.push({ playerId: 2, nickname: 'test' } as any);
+    const key = redisKey(`single:game:${created.id}`);
+    await redis()!.set(key, JSON.stringify({ ...created, guessTimes: undefined }), { EX: 1800 });
+    try {
+      const restored = await loadSingleGame(created.id, identityKey);
+      expect(restored?.guessTimes).toEqual([null]);
+    } finally {
+      const restored = await loadSingleGame(created.id, identityKey);
+      if (restored) await deleteSingleGame(restored);
+    }
   });
 });

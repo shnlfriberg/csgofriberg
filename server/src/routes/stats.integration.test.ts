@@ -97,9 +97,18 @@ describe('stats and replay', () => {
           [meKey]: [target.id],
           [opponentKey]: [otherPlayer.id],
         },
+        guessTimesByPlayer: {
+          [meKey]: [850],
+          [opponentKey]: [2_200],
+        },
       }],
     });
-    const matchId = Number((await db('match_records').where({ room_id: matchRecordId }).first('id')).id);
+    const storedMatch = await db('match_records').where({ room_id: matchRecordId }).first();
+    const matchId = Number(storedMatch.id);
+    expect(JSON.parse(String(storedMatch.replay))[0].guessTimesByPlayer).toEqual({
+      [meKey]: [850],
+      [opponentKey]: [2_200],
+    });
 
     try {
       const easyStats = await request('/api/stats/me?difficulties=easy', guestCookie(ownerKey));
@@ -198,6 +207,7 @@ describe('stats and replay', () => {
       expect(multiReplay.data.rounds[0].winner).toBe('me');
       expect(multiReplay.data.rounds[0].me.guesses[0].correct).toBe(true);
       expect(multiReplay.data.rounds[0].opponent.guesses[0].playerId).toBe(otherPlayer.id);
+      expect(multiReplay.data.rounds[0].me).not.toHaveProperty('guessTimes');
       expect(multiReplay.data.opponent.displayId).toBe(guestNameFromKey(otherKey));
 
       const opponentStats = await request(

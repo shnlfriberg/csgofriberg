@@ -26,6 +26,7 @@ export interface StoredPlayer extends StoredIdentity {
   ready: boolean;
   score: number;
   guesses: GuessFeedback[];
+  guessTimes: Array<number | null>;
   lastGuessAt: number | null;
   connected: boolean;
   disconnectDeadline: number | null;
@@ -57,6 +58,7 @@ export interface StoredReplayRound {
   winnerKey: string | null;
   reason: string;
   guessesByPlayer: Record<string, number[]>;
+  guessTimesByPlayer: Record<string, Array<number | null>>;
 }
 
 export interface StoredRoom {
@@ -146,6 +148,19 @@ function evalCachedStateScript(
   return evalStateScript(name, script, options.keys, options.arguments);
 }
 
+function normalizeGuessTimes(value: unknown, guessCount: number): Array<number | null> {
+  const times = Array.isArray(value)
+    ? value.map((item) => (
+      typeof item === 'number' && Number.isFinite(item) && item >= 0
+        ? Math.floor(item)
+        : null
+    ))
+    : [];
+  if (times.length > guessCount) times.length = guessCount;
+  while (times.length < guessCount) times.push(null);
+  return times;
+}
+
 function normalizeRoom(room: StoredRoom): StoredRoom {
   room.recordId ??= legacyRecordId(room.id);
   if (!Array.isArray(room.players)) room.players = [];
@@ -165,9 +180,24 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   if (room.matchResult) room.matchResult.forfeitedKey ??= null;
   if (!Array.isArray(room.replayRounds)) room.replayRounds = [];
   if (room.replayRounds.length > 30) room.replayRounds = room.replayRounds.slice(-30);
+  for (const round of room.replayRounds) {
+    const guessesByPlayer = round.guessesByPlayer && typeof round.guessesByPlayer === 'object'
+      ? round.guessesByPlayer
+      : {};
+    const storedTimes = round.guessTimesByPlayer && typeof round.guessTimesByPlayer === 'object'
+      ? round.guessTimesByPlayer
+      : {};
+    round.guessTimesByPlayer = Object.fromEntries(
+      Object.entries(guessesByPlayer).map(([key, guesses]) => [
+        key,
+        normalizeGuessTimes(storedTimes[key], Array.isArray(guesses) ? guesses.length : 0),
+      ])
+    );
+  }
   room.revision ??= 0;
   for (const player of room.players) {
     if (!Array.isArray(player.guesses)) player.guesses = [];
+    player.guessTimes = normalizeGuessTimes(player.guessTimes, player.guesses.length);
     player.lastGuessAt ??= null;
   }
   for (const spectator of room.spectators) {
@@ -306,6 +336,7 @@ export interface ApplyRoomGuessInput {
   targetPlayerId: number;
   feedback: GuessFeedback;
   maxGuesses: number;
+  roundDurationMs: number;
   nextRoundDelayMs: number;
   minGuessIntervalMs: number;
   rateLimit: number;
@@ -402,12 +433,26 @@ if lastGuessAt > 0 and tonumber(ARGV[9]) - lastGuessAt < minGuessInterval then
   })
 end
 local feedback = cjson.decode(ARGV[8])
+local guessTimes = player.guessTimes or {}
+if type(guessTimes) ~= 'table' then guessTimes = {} end
+while #guessTimes < #guesses do table.insert(guessTimes, cjson.null) end
+while #guessTimes > #guesses do table.remove(guessTimes) end
+local now = tonumber(ARGV[9])
+local roundDuration = math.max(0, tonumber(ARGV[17]) or 0)
+local guessTime = 0
+if meta[4] and meta[4] ~= '' then
+  guessTime = now - (tonumber(meta[4]) - roundDuration)
+  if guessTime < 0 then guessTime = 0 end
+  if guessTime > roundDuration then guessTime = roundDuration end
+end
 table.insert(guesses, feedback)
+table.insert(guessTimes, guessTime)
 local guessCount = #guesses
 redis.call('HSET', KEYS[8], identity, cjson.encode(guesses))
 redis.call('HSET', KEYS[9], eventKey, guessCount - 1)
 player.guessCount = guessCount
 player.lastGuessAt = tonumber(ARGV[9])
+player.guessTimes = guessTimes
 if feedback.correct == true then player.score = tonumber(player.score or 0) + 1 end
 redis.call('HSET', KEYS[7], identity, cjson.encode(player))
 local allExhausted = true
@@ -445,7 +490,6 @@ if shouldFinish then
   })
 end
 local revision = tonumber(meta[5] or 0) + 1
-local now = tonumber(ARGV[9])
 redis.call('HSET', KEYS[2],
   'targetPlayerId', meta[2], 'status', status, 'round', meta[3],
   'roundEndsAt', roundEndsAt, 'nextRoundAt', nextRoundAt,
@@ -537,7 +581,8 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
       if (room.round !== input.expectedRound || room.targetPlayerId !== input.targetPlayerId) {
         return { kind: 'error', code: 'STALE_ROUND', reason: 'round_id_mismatch' };
       }
-      if (room.roundEndsAt && room.roundEndsAt <= Date.now()) {
+      const now = Date.now();
+      if (room.roundEndsAt && room.roundEndsAt <= now) {
         return { kind: 'error', code: 'NO_ACTIVE_ROUND', reason: 'deadline_passed' };
       }
       if (player.socketId !== input.socketId) return { kind: 'error', code: 'STALE_CONNECTION' };
@@ -547,7 +592,6 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
       if (player.guesses.some((previous) => previous.playerId === input.feedback.playerId)) {
         return { kind: 'error', code: 'ALREADY_GUESSED' };
       }
-      const now = Date.now();
       const elapsed = player.lastGuessAt ? now - player.lastGuessAt : input.minGuessIntervalMs;
       if (elapsed < input.minGuessIntervalMs) {
         return {
@@ -556,7 +600,12 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
           retryAfterMs: input.minGuessIntervalMs - elapsed,
         };
       }
+      player.guessTimes = normalizeGuessTimes(player.guessTimes, player.guesses.length);
+      const roundDurationMs = Math.max(0, Math.floor(input.roundDurationMs));
+      const roundStartedAt = room.roundEndsAt === null ? now : room.roundEndsAt - roundDurationMs;
+      const guessTime = Math.max(0, Math.min(roundDurationMs, Math.floor(now - roundStartedAt)));
       player.guesses.push(input.feedback);
+      player.guessTimes.push(guessTime);
       player.lastGuessAt = now;
       room.eventResults[eventKey] = player.guesses.length - 1;
       const shouldFinish = input.feedback.correct || room.players.every(
@@ -633,15 +682,16 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
     String(input.rateLimit),
     String(input.rateWindowSeconds + 1),
     String(input.minGuessIntervalMs),
+    String(input.roundDurationMs),
   ];
-  let result = await evalStateScript('apply-room-guess-hash-v2', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
+  let result = await evalStateScript('apply-room-guess-hash-v3', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
   if (typeof result !== 'string') throw new Error('INVALID_GUESS_RESULT');
   let parsed = JSON.parse(result) as ApplyRoomGuessResult;
   if (parsed.kind === 'error' && parsed.code === 'HOT_STATE_MISSING') {
     const room = await getRoom(input.roomId);
     if (!room) return { kind: 'error', code: 'NO_ACTIVE_ROUND', reason: 'room_missing' };
     await saveRoom(room);
-    result = await evalStateScript('apply-room-guess-hash-v2', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
+    result = await evalStateScript('apply-room-guess-hash-v3', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
     if (typeof result !== 'string') throw new Error('INVALID_GUESS_RESULT');
     parsed = JSON.parse(result) as ApplyRoomGuessResult;
   }
@@ -746,7 +796,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
   }
   const result = await evalCachedStateScript(
-    'room-save-v3',
+    'room-save-v4',
     `local incoming = cjson.decode(ARGV[1])
      local identityCount = tonumber(ARGV[6])
      local metaKey = KEYS[4 + identityCount]
@@ -811,9 +861,10 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
        local playerGuesses = player.guesses or {}
        local metadata = {
          key=player.key, userId=player.userId, name=player.name,
-         socketId=player.socketId, ready=player.ready, score=player.score,
-         connected=player.connected, disconnectDeadline=player.disconnectDeadline,
-         guessCount=#playerGuesses, lastGuessAt=player.lastGuessAt
+          socketId=player.socketId, ready=player.ready, score=player.score,
+          connected=player.connected, disconnectDeadline=player.disconnectDeadline,
+          guessCount=#playerGuesses, guessTimes=player.guessTimes or {},
+          lastGuessAt=player.lastGuessAt
        }
        redis.call('HSET', playersKey, player.key, cjson.encode(metadata))
        redis.call('HSET', guessesKey, player.key,

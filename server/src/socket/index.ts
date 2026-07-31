@@ -430,6 +430,7 @@ function makePlayer(identity: StoredIdentity, socketId: string, ready: boolean):
     ready,
     score: 0,
     guesses: [],
+    guessTimes: [],
     lastGuessAt: null,
     connected: true,
     disconnectDeadline: null,
@@ -447,6 +448,9 @@ function appendReplayRound(room: StoredRoom): void {
     reason: result.reason,
     guessesByPlayer: Object.fromEntries(
       room.players.map((player) => [player.key, player.guesses.map((guess) => guess.playerId)])
+    ),
+    guessTimesByPlayer: Object.fromEntries(
+      room.players.map((player) => [player.key, player.guessTimes.slice()])
     ),
   });
   if (room.replayRounds.length > 30) room.replayRounds = room.replayRounds.slice(-30);
@@ -551,6 +555,7 @@ function resetForRematch(room: StoredRoom): void {
     player.ready = player.key === room.hostKey;
     player.score = 0;
     player.guesses = [];
+    player.guessTimes = [];
     player.lastGuessAt = null;
     player.disconnectDeadline = null;
   }
@@ -616,6 +621,7 @@ async function startRound(io: Server, roomId: string) {
     room.matchResult = null;
     for (const player of room.players) {
       player.guesses = [];
+      player.guessTimes = [];
       player.lastGuessAt = null;
     }
     return { room };
@@ -1700,6 +1706,7 @@ export function setupSocket(io: Server) {
         targetPlayerId: targetState.targetPlayerId,
         feedback: compareGuess(guess, target),
         maxGuesses: MAX_GUESSES,
+        roundDurationMs: ROUND_TIME_MS,
         nextRoundDelayMs: NEXT_ROUND_DELAY_MS,
         minGuessIntervalMs: MULTI_GUESS_INTERVAL_MS,
         rateLimit: 12,
