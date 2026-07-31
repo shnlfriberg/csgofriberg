@@ -1,9 +1,10 @@
 import { ReactNode, useEffect } from 'react';
-import { Globe, Crosshair, Calendar, Shield, Trophy } from 'lucide-react';
+import { Globe, Crosshair, Calendar, Shield, Trophy, Layers3 } from 'lucide-react';
 import { playerRoleLabel } from '../utils/playerRoles';
 import { countryLabel, regionLabel } from '../utils/playerGeography';
 import ModalPortal from './ModalPortal';
 import { useTranslation } from 'react-i18next';
+import { difficultyLabel } from '../utils/difficulty';
 
 export interface AnswerInfo {
   nickname: string;
@@ -13,6 +14,7 @@ export interface AnswerInfo {
   role?: string;
   majorChampionships?: number;
   majorAppearances?: number;
+  difficulties?: string[];
 }
 
 /** 选手信息表(答案卡片/查询结果共用) */
@@ -29,6 +31,15 @@ export function PlayerInfoTable({ answer }: { answer: AnswerInfo }) {
     [<Trophy size={14} key="i" />, t('player.majorChampionships'), answer.majorChampionships ?? 0],
     [<Calendar size={14} key="i" />, t('player.majorAppearances'), answer.majorAppearances ?? '-'],
   ];
+  if (answer.difficulties) {
+    rows.push([
+      <Layers3 size={14} key="i" />,
+      t('player.difficulties'),
+      answer.difficulties.length
+        ? answer.difficulties.map((key) => difficultyLabel(t, key)).join(', ')
+        : '-',
+    ]);
+  }
   return (
     <table className="player-info-table">
       <tbody>

@@ -59,6 +59,7 @@ export default function Search() {
                 role: player.role,
                 majorChampionships: player.majorChampionships,
                 majorAppearances: player.majorAppearances,
+                difficulties: player.difficulties,
               }}
             />
           </div>

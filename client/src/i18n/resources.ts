@@ -139,7 +139,7 @@ export const resources = {
       },
       player: {
         team: '战队', nationality: '国家或地区', age: '年龄', role: '位置',
-        majorChampionships: 'Major 冠军数', majorAppearances: 'Major 次数', status: '状态', nickname: '昵称',
+        majorChampionships: 'Major 冠军数', majorAppearances: 'Major 次数', difficulties: '所属难度', status: '状态', nickname: '昵称',
         roles: { rifler: '步枪手', awper: '狙击手', coach: '教练' },
       },
       guess: {
@@ -332,7 +332,7 @@ export const resources = {
         toRegister: 'No account? Sign up', toLogin: 'Already have an account? Log in', claimFailed: 'Logged in, but guest results could not be synced: {{message}}',
       },
       player: {
-        team: 'Team', nationality: 'Country or region', age: 'Age', role: 'Role', majorChampionships: 'Major titles', majorAppearances: 'Major appearances', status: 'Status', nickname: 'Nickname',
+        team: 'Team', nationality: 'Country or region', age: 'Age', role: 'Role', majorChampionships: 'Major titles', majorAppearances: 'Major appearances', difficulties: 'Difficulties', status: 'Status', nickname: 'Nickname',
         roles: { rifler: 'Rifler', awper: 'AWPer', coach: 'Coach' },
       },
       guess: {
@@ -515,7 +515,7 @@ export const resources = {
         toRegister: 'アカウントがない場合は登録', toLogin: 'アカウントをお持ちの場合はログイン', claimFailed: 'ログインしましたが、ゲスト戦績を同期できませんでした：{{message}}',
       },
       player: {
-        team: 'チーム', nationality: '国・地域', age: '年齢', role: '役割', majorChampionships: 'Major 優勝数', majorAppearances: 'Major 出場数', status: '状態', nickname: 'ニックネーム',
+        team: 'チーム', nationality: '国・地域', age: '年齢', role: '役割', majorChampionships: 'Major 優勝数', majorAppearances: 'Major 出場数', difficulties: '所属難易度', status: '状態', nickname: 'ニックネーム',
         roles: { rifler: 'ライフラー', awper: 'AWPer', coach: 'コーチ' },
       },
       guess: {

@@ -56,6 +56,7 @@ router.get(
         role: p.role,
         majorChampionships: p.major_championships,
         majorAppearances: p.major_appearances,
+        difficulties: p.difficulties ?? [],
         isActive: Boolean(p.is_active),
       }))
     );

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import AnswerOverlay from './AnswerOverlay';
+import AnswerOverlay, { PlayerInfoTable } from './AnswerOverlay';
 import { renderWithProviders } from '../test/render';
 
 const answer = {
@@ -54,5 +54,14 @@ describe('AnswerOverlay', () => {
     );
     await user.keyboard('{Escape}');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('shows a player\'s difficulty memberships when provided', () => {
+    renderWithProviders(
+      <PlayerInfoTable answer={{ ...answer, difficulties: ['beginner', 'normal'] }} />
+    );
+
+    expect(screen.getByText('所属难度')).toBeInTheDocument();
+    expect(screen.getByText('入门版, 完整版')).toBeInTheDocument();
   });
 });

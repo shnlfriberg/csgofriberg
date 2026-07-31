@@ -55,6 +55,7 @@ export interface PlayerInfo {
   role: string;
   majorChampionships: number;
   majorAppearances: number;
+  difficulties?: string[];
   isActive: boolean;
 }
 
