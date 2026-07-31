@@ -44,6 +44,7 @@ function answerView(target: Player) {
     nickname: target.nickname,
     team: target.team,
     nationality: target.nationality,
+    region: target.region,
     role: target.role,
     majorChampionships: target.major_championships,
     majorAppearances: target.major_appearances,

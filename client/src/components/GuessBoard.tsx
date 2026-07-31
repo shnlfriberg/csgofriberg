@@ -6,6 +6,7 @@ import {
   MultiplayerGuessFeedback,
 } from '../types';
 import { playerRoleLabel } from '../utils/playerRoles';
+import { countryLabel } from '../utils/playerGeography';
 import { useTranslation } from 'react-i18next';
 
 function Cell({
@@ -87,7 +88,11 @@ function GuessBoard({ guesses }: { guesses: MultiplayerGuessFeedback[] }) {
                 {'hidden' in g ? null : g.nickname}
               </td>
               <Cell attr={g.attributes.team} label={columns[1]} />
-              <Cell attr={g.attributes.nationality} label={columns[2]} />
+              <Cell
+                attr={g.attributes.nationality}
+                label={columns[2]}
+                format={(value) => countryLabel(t, value)}
+              />
               <Cell attr={g.attributes.age} label={columns[3]} />
               <Cell attr={g.attributes.role} label={columns[4]} format={playerRoleLabel} />
               <Cell attr={g.attributes.majorChampionships} label={columns[5]} />

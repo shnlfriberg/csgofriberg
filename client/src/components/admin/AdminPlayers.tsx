@@ -10,6 +10,7 @@ import { toast } from '../Toast';
 import { useTranslation } from 'react-i18next';
 import { difficultyLabel } from '../../utils/difficulty';
 import { AVAILABLE_DIFFICULTIES } from '../../config/difficulties';
+import { countryLabel, regionLabel } from '../../utils/playerGeography';
 
 interface AdminPlayer extends PlayerForm {
   id: number;
@@ -170,8 +171,8 @@ export default function AdminPlayers() {
 
   const columns: Column<AdminPlayer>[] = [
     { key: 'nickname', title: t('admin.nickname') },
-    { key: 'nationality', title: t('admin.nationality') },
-    { key: 'region', title: t('admin.region') },
+    { key: 'nationality', title: t('admin.nationality'), render: (p) => countryLabel(t, p.nationality) },
+    { key: 'region', title: t('admin.region'), render: (p) => regionLabel(t, p.region) },
     { key: 'team', title: t('admin.team') },
     { key: 'age', title: t('admin.age') },
     { key: 'role', title: t('admin.role'), render: (p) => playerRoleLabel(p.role) },

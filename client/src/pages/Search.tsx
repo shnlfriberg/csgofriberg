@@ -54,7 +54,8 @@ export default function Search() {
               answer={{
                 nickname: player.nickname,
                 team: player.team,
-                nationality: `${player.nationality}(${player.region})`,
+                nationality: player.nationality,
+                region: player.region,
                 role: player.role,
                 majorChampionships: player.majorChampionships,
                 majorAppearances: player.majorAppearances,

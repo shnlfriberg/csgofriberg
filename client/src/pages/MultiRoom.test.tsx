@@ -80,6 +80,7 @@ const room: RoomState = {
       nickname: answer.nickname,
       team: answer.team,
       nationality: answer.nationality,
+      region: answer.region,
       role: answer.role,
       majorChampionships: answer.majorChampionships,
       majorAppearances: answer.majorAppearances,

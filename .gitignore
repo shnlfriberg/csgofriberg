@@ -7,8 +7,6 @@ pow-wasm/target/
 .DS_Store
 target/
 origin/
-data/imports/conversion-report.json
-data/imports/players-origin.json
 data/pgdata/
 .docker-runtime-test/
 compose.override.yaml

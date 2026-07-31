@@ -150,6 +150,7 @@ export interface RoomState {
       nickname: string;
       team: string;
       nationality: string;
+      region: string;
       role: string;
       majorChampionships: number;
       majorAppearances: number;
@@ -162,6 +163,7 @@ export interface RoomState {
       nickname: string;
       team: string;
       nationality: string;
+      region: string;
       role: string;
       majorChampionships: number;
       majorAppearances: number;

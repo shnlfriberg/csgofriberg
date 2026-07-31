@@ -176,7 +176,7 @@ describe('player schema migration', () => {
         nickname: 's1mple',
         nationality: '测试',
         age: 25,
-        major_championships: 0,
+        major_championships: 1,
         is_easy: true,
       },
       {

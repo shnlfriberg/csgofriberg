@@ -90,7 +90,7 @@ ADMIN_USERNAME=admin ADMIN_PASSWORD='至少12位强密码' pnpm create-admin
 | `pnpm start`        | 生产模式启动(server 托管 client/dist)   |
 | `pnpm test`         | 运行前后端测试                          |
 | `pnpm migrate`      | 初始化数据库结构 + 种子选手             |
-| `pnpm seed`         | 补充种子数据中缺失的选手                |
+| `pnpm seed`         | 补充 5 名基础种子选手中缺失的选手       |
 | `pnpm create-admin` | 显式创建或重置管理员                    |
 | `pnpm loadtest`     | 运行 HTTP 缓存接口与多人建房负载测试    |
 

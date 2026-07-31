@@ -116,6 +116,7 @@ describe('single-player settlement soft limit', () => {
       });
       expect(guessed.response.status).toBe(200);
       expect(guessed.data.status).toBe('won');
+      expect(guessed.data.answer.region).toEqual(expect.any(String));
       expect(guessed.data).not.toHaveProperty('guessTimes');
 
       const stored = await db('games').where({ session_id: started.data.gameId }).first();

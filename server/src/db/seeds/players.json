@@ -6,8 +6,11 @@
     "team": "Natus Vincere",
     "age": 29,
     "role": "AWPer",
+    "major_championships": 1,
     "major_appearances": 12,
-    "major_championships": 1
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
   },
   {
     "nickname": "ZywOo",
@@ -16,8 +19,11 @@
     "team": "Vitality",
     "age": 26,
     "role": "AWPer",
+    "major_championships": 3,
     "major_appearances": 8,
-    "major_championships": 3
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
   },
   {
     "nickname": "device",
@@ -26,8 +32,11 @@
     "team": "Astralis",
     "age": 31,
     "role": "AWPer",
+    "major_championships": 4,
     "major_appearances": 15,
-    "major_championships": 4
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
   },
   {
     "nickname": "NiKo",
@@ -36,8 +45,11 @@
     "team": "Falcons",
     "age": 29,
     "role": "Rifler",
+    "major_championships": 0,
     "major_appearances": 13,
-    "major_championships": 0
+    "difficulties": ["normal", "easy"],
+    "is_active": true,
+    "is_enabled": true
   },
   {
     "nickname": "donk",
@@ -46,365 +58,10 @@
     "team": "Team Spirit",
     "age": 19,
     "role": "Rifler",
+    "major_championships": 1,
     "major_appearances": 3,
-    "major_championships": 1
-  },
-  {
-    "nickname": "m0NESY",
-    "nationality": "俄罗斯",
-    "region": "独联体",
-    "team": "Falcons",
-    "age": 21,
-    "role": "AWPer",
-    "major_appearances": 5,
-    "major_championships": 1
-  },
-  {
-    "nickname": "sh1ro",
-    "nationality": "俄罗斯",
-    "region": "独联体",
-    "team": "Team Spirit",
-    "age": 25,
-    "role": "AWPer",
-    "major_appearances": 6,
-    "major_championships": 1
-  },
-  {
-    "nickname": "b1t",
-    "nationality": "乌克兰",
-    "region": "欧洲",
-    "team": "Natus Vincere",
-    "age": 23,
-    "role": "Rifler",
-    "major_appearances": 7,
-    "major_championships": 2
-  },
-  {
-    "nickname": "electroNic",
-    "nationality": "俄罗斯",
-    "region": "独联体",
-    "team": "Virtus.pro",
-    "age": 28,
-    "role": "Rifler",
-    "major_appearances": 11,
-    "major_championships": 1
-  },
-  {
-    "nickname": "Twistzz",
-    "nationality": "加拿大",
-    "region": "北美",
-    "team": "Team Liquid",
-    "age": 27,
-    "role": "Rifler",
-    "major_appearances": 11,
-    "major_championships": 1
-  },
-  {
-    "nickname": "ropz",
-    "nationality": "爱沙尼亚",
-    "region": "欧洲",
-    "team": "Vitality",
-    "age": 27,
-    "role": "Rifler",
-    "major_appearances": 11,
-    "major_championships": 3
-  },
-  {
-    "nickname": "rain",
-    "nationality": "挪威",
-    "region": "欧洲",
-    "team": "FaZe Clan",
-    "age": 32,
-    "role": "Rifler",
-    "major_appearances": 16,
-    "major_championships": 1
-  },
-  {
-    "nickname": "karrigan",
-    "nationality": "丹麦",
-    "region": "欧洲",
-    "team": "FaZe Clan",
-    "age": 36,
-    "role": "Rifler",
-    "major_appearances": 19,
-    "major_championships": 2
-  },
-  {
-    "nickname": "apEX",
-    "nationality": "法国",
-    "region": "欧洲",
-    "team": "Vitality",
-    "age": 33,
-    "role": "Rifler",
-    "major_appearances": 17,
-    "major_championships": 4
-  },
-  {
-    "nickname": "broky",
-    "nationality": "拉脱维亚",
-    "region": "欧洲",
-    "team": "FaZe Clan",
-    "age": 25,
-    "role": "AWPer",
-    "major_appearances": 8,
-    "major_championships": 1
-  },
-  {
-    "nickname": "coldzera",
-    "nationality": "巴西",
-    "region": "南美",
-    "team": "Legacy",
-    "age": 32,
-    "role": "Rifler",
-    "major_appearances": 13,
-    "major_championships": 2,
-    "is_active": true
-  },
-  {
-    "nickname": "FalleN",
-    "nationality": "巴西",
-    "region": "南美",
-    "team": "FURIA",
-    "age": 35,
-    "role": "Rifler",
-    "major_appearances": 16,
-    "major_championships": 2
-  },
-  {
-    "nickname": "KSCERATO",
-    "nationality": "巴西",
-    "region": "南美",
-    "team": "FURIA",
-    "age": 27,
-    "role": "Rifler",
-    "major_appearances": 8,
-    "major_championships": 0
-  },
-  {
-    "nickname": "yuurih",
-    "nationality": "巴西",
-    "region": "南美",
-    "team": "FURIA",
-    "age": 27,
-    "role": "Rifler",
-    "major_appearances": 8,
-    "major_championships": 0
-  },
-  {
-    "nickname": "EliGE",
-    "nationality": "美国",
-    "region": "北美",
-    "team": "Complexity",
-    "age": 29,
-    "role": "Rifler",
-    "major_appearances": 13,
-    "major_championships": 0
-  },
-  {
-    "nickname": "stavn",
-    "nationality": "丹麦",
-    "region": "欧洲",
-    "team": "Astralis",
-    "age": 24,
-    "role": "Rifler",
-    "major_appearances": 7,
-    "major_championships": 0
-  },
-  {
-    "nickname": "jabbi",
-    "nationality": "丹麦",
-    "region": "欧洲",
-    "team": "Astralis",
-    "age": 23,
-    "role": "Rifler",
-    "major_appearances": 5,
-    "major_championships": 0
-  },
-  {
-    "nickname": "Aleksib",
-    "nationality": "芬兰",
-    "region": "欧洲",
-    "team": "Natus Vincere",
-    "age": 29,
-    "role": "Rifler",
-    "major_appearances": 9,
-    "major_championships": 1
-  },
-  {
-    "nickname": "jL",
-    "nationality": "立陶宛",
-    "region": "欧洲",
-    "team": "Natus Vincere",
-    "age": 27,
-    "role": "Rifler",
-    "major_appearances": 4,
-    "major_championships": 1
-  },
-  {
-    "nickname": "iM",
-    "nationality": "罗马尼亚",
-    "region": "欧洲",
-    "team": "Natus Vincere",
-    "age": 27,
-    "role": "Rifler",
-    "major_appearances": 4,
-    "major_championships": 1
-  },
-  {
-    "nickname": "chopper",
-    "nationality": "俄罗斯",
-    "region": "独联体",
-    "team": "Team Spirit",
-    "age": 28,
-    "role": "Rifler",
-    "major_appearances": 7,
-    "major_championships": 1
-  },
-  {
-    "nickname": "magixx",
-    "nationality": "俄罗斯",
-    "region": "独联体",
-    "team": "Team Spirit",
-    "age": 23,
-    "role": "Rifler",
-    "major_appearances": 6,
-    "major_championships": 1
-  },
-  {
-    "nickname": "flameZ",
-    "nationality": "以色列",
-    "region": "欧洲",
-    "team": "Vitality",
-    "age": 23,
-    "role": "Rifler",
-    "major_appearances": 5,
-    "major_championships": 2
-  },
-  {
-    "nickname": "Spinx",
-    "nationality": "以色列",
-    "region": "欧洲",
-    "team": "Vitality",
-    "age": 26,
-    "role": "Rifler",
-    "major_appearances": 6,
-    "major_championships": 1
-  },
-  {
-    "nickname": "huNter-",
-    "nationality": "波黑",
-    "region": "欧洲",
-    "team": "G2 Esports",
-    "age": 30,
-    "role": "Rifler",
-    "major_appearances": 10,
-    "major_championships": 0
-  },
-  {
-    "nickname": "malbsMd",
-    "nationality": "危地马拉",
-    "region": "北美",
-    "team": "G2 Esports",
-    "age": 24,
-    "role": "Rifler",
-    "major_appearances": 3,
-    "major_championships": 0
-  },
-  {
-    "nickname": "Snax",
-    "nationality": "波兰",
-    "region": "欧洲",
-    "team": "G2 Esports",
-    "age": 33,
-    "role": "Rifler",
-    "major_appearances": 15,
-    "major_championships": 1
-  },
-  {
-    "nickname": "XANTARES",
-    "nationality": "土耳其",
-    "region": "欧洲",
-    "team": "Eternal Fire",
-    "age": 31,
-    "role": "Rifler",
-    "major_appearances": 6,
-    "major_championships": 0
-  },
-  {
-    "nickname": "olofmeister",
-    "nationality": "瑞典",
-    "region": "欧洲",
-    "team": "退役",
-    "age": 34,
-    "role": "Rifler",
-    "major_appearances": 13,
-    "major_championships": 2,
-    "is_active": false
-  },
-  {
-    "nickname": "GeT_RiGhT",
-    "nationality": "瑞典",
-    "region": "欧洲",
-    "team": "退役",
-    "age": 36,
-    "role": "Rifler",
-    "major_appearances": 11,
-    "major_championships": 1,
-    "is_active": false
-  },
-  {
-    "nickname": "f0rest",
-    "nationality": "瑞典",
-    "region": "欧洲",
-    "team": "退役",
-    "age": 38,
-    "role": "Rifler",
-    "major_appearances": 13,
-    "major_championships": 1,
-    "is_active": false
-  },
-  {
-    "nickname": "friberg",
-    "nationality": "瑞典",
-    "region": "欧洲",
-    "team": "退役",
-    "age": 35,
-    "role": "Rifler",
-    "major_appearances": 12,
-    "major_championships": 1,
-    "is_active": false
-  },
-  {
-    "nickname": "kennyS",
-    "nationality": "法国",
-    "region": "欧洲",
-    "team": "退役",
-    "age": 31,
-    "role": "AWPer",
-    "major_appearances": 12,
-    "major_championships": 1,
-    "is_active": false
-  },
-  {
-    "nickname": "shox",
-    "nationality": "法国",
-    "region": "欧洲",
-    "team": "退役",
-    "age": 34,
-    "role": "Rifler",
-    "major_appearances": 15,
-    "major_championships": 1,
-    "is_active": false
-  },
-  {
-    "nickname": "dupreeh",
-    "nationality": "丹麦",
-    "region": "欧洲",
-    "team": "退役",
-    "age": 33,
-    "role": "Rifler",
-    "major_appearances": 18,
-    "major_championships": 5,
-    "is_active": false
+    "difficulties": ["normal", "easy", "beginner"],
+    "is_active": true,
+    "is_enabled": true
   }
 ]

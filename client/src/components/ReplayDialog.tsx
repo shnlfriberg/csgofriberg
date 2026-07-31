@@ -38,7 +38,8 @@ function AnswerSection({ answer }: { answer: PlayerInfo }) {
         answer={{
           nickname: answer.nickname,
           team: answer.team,
-          nationality: `${answer.nationality}(${answer.region})`,
+          nationality: answer.nationality,
+          region: answer.region,
           role: answer.role,
           majorChampionships: answer.majorChampionships,
           majorAppearances: answer.majorAppearances,

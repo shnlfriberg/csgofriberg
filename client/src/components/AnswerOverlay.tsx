@@ -1,6 +1,7 @@
 import { ReactNode, useEffect } from 'react';
 import { Globe, Crosshair, Calendar, Shield, Trophy } from 'lucide-react';
 import { playerRoleLabel } from '../utils/playerRoles';
+import { countryLabel, regionLabel } from '../utils/playerGeography';
 import ModalPortal from './ModalPortal';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +9,7 @@ export interface AnswerInfo {
   nickname: string;
   team: string;
   nationality: string;
+  region?: string;
   role?: string;
   majorChampionships?: number;
   majorAppearances?: number;
@@ -16,9 +18,13 @@ export interface AnswerInfo {
 /** 选手信息表(答案卡片/查询结果共用) */
 export function PlayerInfoTable({ answer }: { answer: AnswerInfo }) {
   const { t } = useTranslation();
+  const nationality = countryLabel(t, answer.nationality);
+  const geography = answer.region
+    ? `${nationality} (${regionLabel(t, answer.region)})`
+    : nationality;
   const rows: [ReactNode, string, ReactNode][] = [
     [<Shield size={14} key="i" />, t('player.team'), answer.team || '-'],
-    [<Globe size={14} key="i" />, t('player.nationality'), answer.nationality],
+    [<Globe size={14} key="i" />, t('player.nationality'), geography],
     [<Crosshair size={14} key="i" />, t('player.role'), answer.role ? playerRoleLabel(answer.role) : '-'],
     [<Trophy size={14} key="i" />, t('player.majorChampionships'), answer.majorChampionships ?? 0],
     [<Calendar size={14} key="i" />, t('player.majorAppearances'), answer.majorAppearances ?? '-'],

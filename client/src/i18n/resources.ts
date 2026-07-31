@@ -31,6 +31,24 @@ export const resources = {
         switchDark: '切换到深色主题',
         language: '语言',
       },
+      geography: {
+        countries: {
+          argentina: '阿根廷', azerbaijan: '阿塞拜疆', estonia: '爱沙尼亚', australia: '澳大利亚', brazil: '巴西',
+          belarus: '白俄罗斯', bulgaria: '保加利亚', northMacedonia: '北马其顿', belgium: '比利时', bosniaHerzegovina: '波黑',
+          poland: '波兰', denmark: '丹麦', germany: '德国', russia: '俄罗斯', france: '法国', finland: '芬兰',
+          kazakhstan: '哈萨克斯坦', netherlands: '荷兰', montenegro: '黑山', canada: '加拿大', czechia: '捷克',
+          latvia: '拉脱维亚', lithuania: '立陶宛', romania: '罗马尼亚', malaysia: '马来西亚', unitedStates: '美国',
+          mongolia: '蒙古', southAfrica: '南非', norway: '挪威', portugal: '葡萄牙', sweden: '瑞典', switzerland: '瑞士',
+          serbia: '塞尔维亚', kosovo: '塞尔维亚科索沃', slovakia: '斯洛伐克', turkey: '土耳其', guatemala: '危地马拉',
+          ukraine: '乌克兰', uruguay: '乌拉圭', uzbekistan: '乌兹别克斯坦', spain: '西班牙', newZealand: '新西兰',
+          hungary: '匈牙利', israel: '以色列', india: '印度', indonesia: '印度尼西亚', unitedKingdom: '英国',
+          jordan: '约旦', chile: '智利', china: '中国',
+        },
+        regions: {
+          northAmerica: '北美洲', oceania: '大洋洲', cis: '独联体', africaIsrael: '非洲与以色列',
+          southAmerica: '南美洲', europe: '欧洲', asiaPacific: '亚太',
+        },
+      },
       difficulty: {
         beginner: '入门版',
         easy: '简单版',
@@ -259,6 +277,24 @@ export const resources = {
         previousPage: 'Previous page', nextPage: 'Next page', page: 'Page {{page}}', lightTheme: 'Light', darkTheme: 'Dark',
         switchLight: 'Switch to light theme', switchDark: 'Switch to dark theme', language: 'Language',
       },
+      geography: {
+        countries: {
+          argentina: 'Argentina', azerbaijan: 'Azerbaijan', estonia: 'Estonia', australia: 'Australia', brazil: 'Brazil',
+          belarus: 'Belarus', bulgaria: 'Bulgaria', northMacedonia: 'North Macedonia', belgium: 'Belgium', bosniaHerzegovina: 'Bosnia and Herzegovina',
+          poland: 'Poland', denmark: 'Denmark', germany: 'Germany', russia: 'Russia', france: 'France', finland: 'Finland',
+          kazakhstan: 'Kazakhstan', netherlands: 'Netherlands', montenegro: 'Montenegro', canada: 'Canada', czechia: 'Czechia',
+          latvia: 'Latvia', lithuania: 'Lithuania', romania: 'Romania', malaysia: 'Malaysia', unitedStates: 'United States',
+          mongolia: 'Mongolia', southAfrica: 'South Africa', norway: 'Norway', portugal: 'Portugal', sweden: 'Sweden', switzerland: 'Switzerland',
+          serbia: 'Serbia', kosovo: 'Kosovo', slovakia: 'Slovakia', turkey: 'Turkey', guatemala: 'Guatemala',
+          ukraine: 'Ukraine', uruguay: 'Uruguay', uzbekistan: 'Uzbekistan', spain: 'Spain', newZealand: 'New Zealand',
+          hungary: 'Hungary', israel: 'Israel', india: 'India', indonesia: 'Indonesia', unitedKingdom: 'United Kingdom',
+          jordan: 'Jordan', chile: 'Chile', china: 'China',
+        },
+        regions: {
+          northAmerica: 'North America', oceania: 'Oceania', cis: 'CIS', africaIsrael: 'Africa and Israel',
+          southAmerica: 'South America', europe: 'Europe', asiaPacific: 'Asia-Pacific',
+        },
+      },
       home: {
         subtitle: 'CS:GO / CS2 Major Player Guessing Game', guestHint: 'Play without signing in. Results stay on this device and sync after login.',
         titleSponsor: '玩机器冠名赞助',
@@ -424,6 +460,24 @@ export const resources = {
         beginner: '入門', easy: 'イージー', normal: 'フル', active: '現役', retired: '引退', win: '勝利', loss: '敗北', draw: '引き分け', me: '自分',
         previousPage: '前のページ', nextPage: '次のページ', page: '{{page}} ページ', lightTheme: 'ライト', darkTheme: 'ダーク',
         switchLight: 'ライトテーマに切り替え', switchDark: 'ダークテーマに切り替え', language: '言語',
+      },
+      geography: {
+        countries: {
+          argentina: 'アルゼンチン', azerbaijan: 'アゼルバイジャン', estonia: 'エストニア', australia: 'オーストラリア', brazil: 'ブラジル',
+          belarus: 'ベラルーシ', bulgaria: 'ブルガリア', northMacedonia: '北マケドニア', belgium: 'ベルギー', bosniaHerzegovina: 'ボスニア・ヘルツェゴビナ',
+          poland: 'ポーランド', denmark: 'デンマーク', germany: 'ドイツ', russia: 'ロシア', france: 'フランス', finland: 'フィンランド',
+          kazakhstan: 'カザフスタン', netherlands: 'オランダ', montenegro: 'モンテネグロ', canada: 'カナダ', czechia: 'チェコ',
+          latvia: 'ラトビア', lithuania: 'リトアニア', romania: 'ルーマニア', malaysia: 'マレーシア', unitedStates: 'アメリカ合衆国',
+          mongolia: 'モンゴル', southAfrica: '南アフリカ', norway: 'ノルウェー', portugal: 'ポルトガル', sweden: 'スウェーデン', switzerland: 'スイス',
+          serbia: 'セルビア', kosovo: 'コソボ', slovakia: 'スロバキア', turkey: 'トルコ', guatemala: 'グアテマラ',
+          ukraine: 'ウクライナ', uruguay: 'ウルグアイ', uzbekistan: 'ウズベキスタン', spain: 'スペイン', newZealand: 'ニュージーランド',
+          hungary: 'ハンガリー', israel: 'イスラエル', india: 'インド', indonesia: 'インドネシア', unitedKingdom: 'イギリス',
+          jordan: 'ヨルダン', chile: 'チリ', china: '中国',
+        },
+        regions: {
+          northAmerica: '北アメリカ', oceania: 'オセアニア', cis: 'CIS', africaIsrael: 'アフリカ・イスラエル',
+          southAmerica: '南アメリカ', europe: 'ヨーロッパ', asiaPacific: 'アジア太平洋',
+        },
       },
       home: {
         subtitle: 'CS:GO / CS2 Major 選手当てゲーム', guestHint: 'ログインなしでプレイできます。戦績は端末に保存され、ログイン後に同期されます。',

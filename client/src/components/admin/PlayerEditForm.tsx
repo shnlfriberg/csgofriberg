@@ -5,6 +5,15 @@ import ModalPortal from '../ModalPortal';
 import { toast } from '../Toast';
 import { useTranslation } from 'react-i18next';
 import DifficultyMultiSelect from './DifficultyMultiSelect';
+import {
+  COUNTRY_OPTIONS,
+  REGION_OPTIONS,
+  canonicalRegionValue,
+  countryLabel,
+  isKnownCountry,
+  isKnownRegion,
+  regionLabel,
+} from '../../utils/playerGeography';
 
 export interface PlayerForm {
   id?: number;
@@ -44,7 +53,10 @@ interface Props {
 
 export default function PlayerEditForm({ initial, difficultyKeys, onSubmit, onCancel }: Props) {
   const { t } = useTranslation();
-  const [form, setForm] = useState<PlayerForm>(initial);
+  const [form, setForm] = useState<PlayerForm>(() => ({
+    ...initial,
+    region: canonicalRegionValue(initial.region),
+  }));
   const [saving, setSaving] = useState(false);
   const titleId = useId();
   const firstInputRef = useRef<HTMLInputElement>(null);
@@ -108,11 +120,27 @@ export default function PlayerEditForm({ initial, difficultyKeys, onSubmit, onCa
             </label>
             <label className="admin-player-field">
               <span>{t('admin.nationalityRequired')}</span>
-              <input className="input" value={form.nationality} onChange={(event) => set({ nationality: event.target.value })} required />
+              <select className="input" value={form.nationality} onChange={(event) => set({ nationality: event.target.value })} required>
+                <option value="" disabled>{t('admin.nationalityRequired')}</option>
+                {form.nationality && !isKnownCountry(form.nationality) && (
+                  <option value={form.nationality}>{form.nationality}</option>
+                )}
+                {COUNTRY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{countryLabel(t, option.value)}</option>
+                ))}
+              </select>
             </label>
             <label className="admin-player-field">
               <span>{t('admin.region')}</span>
-              <input className="input" value={form.region} onChange={(event) => set({ region: event.target.value })} placeholder={t('admin.regionPlaceholder')} />
+              <select className="input" value={form.region} onChange={(event) => set({ region: event.target.value })}>
+                <option value="">{t('admin.regionPlaceholder')}</option>
+                {form.region && !isKnownRegion(form.region) && (
+                  <option value={form.region}>{form.region}</option>
+                )}
+                {REGION_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{regionLabel(t, option.value)}</option>
+                ))}
+              </select>
             </label>
             <label className="admin-player-field">
               <span>{t('admin.currentTeam')}</span>
