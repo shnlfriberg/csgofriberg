@@ -67,6 +67,7 @@ import {
   readyExitPenaltyMultiplier,
   recordMatchmakingExit,
 } from '../services/matchmakingCooldown';
+import { isMatchmakingRestricted } from '../services/matchmakingRestriction';
 
 const NEXT_ROUND_DELAY_MS = 6_000;
 const ROUND_TIME_MS = 120_000;
@@ -96,7 +97,7 @@ const MAX_SPECTATORS = 100;
 const MAX_CONNECTIONS_PER_IDENTITY = 3;
 const MAX_CONNECTIONS_PER_IP = 20;
 const ROOM_ID_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const localQueue = new Map<DbType, QueuedIdentity[]>();
+const localQueue = new Map<string, QueuedIdentity[]>();
 const timers = new Map<string, NodeJS.Timeout>();
 const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
 const roomPlayerStatsPayloadSchema = z.object({
@@ -427,7 +428,9 @@ async function genRoomId(): Promise<string> {
 
 function makePlayer(identity: StoredIdentity, socketId: string, ready: boolean): StoredPlayer {
   return {
-    ...identity,
+    key: identity.key,
+    userId: identity.userId,
+    name: identity.name,
     socketId,
     ready,
     score: 0,
@@ -1950,15 +1953,23 @@ export function setupSocket(io: Server) {
         ...me,
         socketId: socket.id,
         anonymous: payload.anonymous,
+        matchmakingPool: me.userId && await isMatchmakingRestricted(me.userId)
+          ? 'restricted'
+          : 'public',
       };
       let opponent = isRedisAvailable() ? await queueOrTakeOpponent(dbType, queuedMe) : null;
       if (isRedisAvailable() && !opponent) return ack?.({ queued: true });
       if (!isRedisAvailable() && !opponent) {
-        const queue = localQueue.get(dbType) ?? [];
+        const localQueueKey = `${queuedMe.matchmakingPool}:${dbType}`;
+        const queue = localQueue.get(localQueueKey) ?? [];
+        if (queuedMe.matchmakingPool === 'restricted') {
+          localQueue.set(localQueueKey, [...queue.filter((item) => item.key !== me.key), queuedMe]);
+          return ack?.({ queued: true });
+        }
         opponent = queue.find((item) => item.key !== me.key) ?? null;
-        if (opponent) localQueue.set(dbType, queue.filter((item) => item.key !== opponent!.key));
+        if (opponent) localQueue.set(localQueueKey, queue.filter((item) => item.key !== opponent!.key));
         else {
-          localQueue.set(dbType, [...queue.filter((item) => item.key !== me.key), queuedMe]);
+          localQueue.set(localQueueKey, [...queue.filter((item) => item.key !== me.key), queuedMe]);
           return ack?.({ queued: true });
         }
       }

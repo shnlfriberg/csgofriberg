@@ -5,6 +5,7 @@ export interface User {
   password_hash: string;
   role: 'user' | 'admin';
   token_version: number;
+  matchmaking_restricted: boolean | number;
   created_at: string;
 }
 

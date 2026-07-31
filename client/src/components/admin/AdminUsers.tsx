@@ -30,6 +30,7 @@ interface AdminUser {
   displayId: string;
   role: 'user' | 'admin';
   leaderboardHidden: boolean;
+  matchmakingRestricted: boolean;
   createdAt: string;
 }
 
@@ -209,12 +210,29 @@ function LeaderboardsTab({ view, updating, onToggle }: { view: LeaderboardView |
   </>;
 }
 
-function AnalysisTab({ view }: { view: AnalysisView | null }) {
+function AnalysisTab({
+  user,
+  view,
+  updating,
+  onToggle,
+}: {
+  user: AdminUser;
+  view: AnalysisView | null;
+  updating: boolean;
+  onToggle: (restricted: boolean) => void;
+}) {
   const { t } = useTranslation();
-  if (!view) return <p className="muted admin-user-detail-loading">{t('common.loading')}</p>;
+  const restrictionControl = <div className="admin-user-leaderboard-control admin-user-restriction-control">
+    <div><strong>{t('admin.matchmakingRestriction')}</strong></div>
+    <label className="admin-user-leaderboard-toggle">
+      <input type="checkbox" checked={user.matchmakingRestricted} disabled={updating} onChange={(event) => onToggle(event.target.checked)} />
+      <span>{user.matchmakingRestricted ? t('admin.matchmakingRestricted') : t('admin.matchmakingNormal')}</span>
+    </label>
+  </div>;
+  if (!view) return <>{restrictionControl}<p className="muted admin-user-detail-loading">{t('common.loading')}</p></>;
   const summary = view.summary;
   const levelKey = `admin.analysisLevel.${summary.level}`;
-  return <div className="admin-analysis-summary">
+  return <>{restrictionControl}<div className="admin-analysis-summary">
       <div className={`admin-analysis-index level-${summary.level}`}><span>{t('admin.analysisIndex')}</span><strong>{summary.similarityIndex}</strong><small>{t(levelKey)}</small></div>
       <dl>
         <div><dt>{t('admin.analysisSamples')}</dt><dd>{summary.sampleSize}</dd></div>
@@ -222,7 +240,7 @@ function AnalysisTab({ view }: { view: AnalysisView | null }) {
         <div><dt>{t('admin.analysisEntropyPercentile')}</dt><dd>{summary.averageEntropyPercentile.toFixed(1)}%</dd></div>
         <div><dt>{t('admin.analysisTopDecile')}</dt><dd>{summary.topDecileRate.toFixed(1)}%</dd></div>
       </dl>
-    </div>;
+    </div></>;
 }
 
 function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminUser; onClose: () => void; onUserChange: (user: AdminUser) => void }) {
@@ -232,6 +250,7 @@ function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminUser; on
   const [leaderboards, setLeaderboards] = useState<LeaderboardView | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisView | null>(null);
   const [visibilityUpdating, setVisibilityUpdating] = useState(false);
+  const [restrictionUpdating, setRestrictionUpdating] = useState(false);
   const [replayOpen, setReplayOpen] = useState(false);
   const loaded = useRef(new Set<DetailTab>());
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -280,6 +299,16 @@ function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminUser; on
     finally { setVisibilityUpdating(false); }
   };
 
+  const updateMatchmakingRestriction = async (restricted: boolean) => {
+    setRestrictionUpdating(true);
+    try {
+      await api.patch(`/admin/users/${user.id}/matchmaking-restriction`, { restricted });
+      onUserChange({ ...user, matchmakingRestricted: restricted });
+      toast.success(restricted ? t('admin.matchmakingRestrictedSuccess') : t('admin.matchmakingRestoredSuccess'));
+    } catch (err) { toast.error(errMsg(err)); }
+    finally { setRestrictionUpdating(false); }
+  };
+
   const tabs: Array<{ key: DetailTab; icon: typeof Eye; label: string }> = [
     { key: 'stats', icon: BarChart3, label: t('admin.detailStats') },
     { key: 'games', icon: History, label: t('admin.gameRecords') },
@@ -296,7 +325,7 @@ function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminUser; on
         {tab === 'stats' && <StatsTab view={stats} />}
         {tab === 'games' && <GamesTab user={user} onReplayOpenChange={setReplayOpen} />}
         {tab === 'leaderboards' && <LeaderboardsTab view={leaderboards} updating={visibilityUpdating} onToggle={(hidden) => void updateVisibility(hidden)} />}
-        {tab === 'analysis' && <AnalysisTab view={analysis} />}
+        {tab === 'analysis' && <AnalysisTab user={user} view={analysis} updating={restrictionUpdating} onToggle={(restricted) => void updateMatchmakingRestriction(restricted)} />}
       </div>
     </div>
   </div></ModalPortal>;

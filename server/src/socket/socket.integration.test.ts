@@ -96,16 +96,41 @@ describe('multiplayer socket integration', () => {
     };
     const client = redis()!;
     const queueKey = redisKey('matchmaking:easy');
+    const restrictedQueueKey = redisKey('matchmaking:restricted:easy');
     await client.zAdd(queueKey, { score: Date.now() - 301_000, value: staleIdentity });
 
     expect(await queueOrTakeOpponent('easy', identity)).toBeNull();
     expect(await client.zScore(queueKey, staleIdentity)).toBeNull();
     expect(await client.zScore(queueKey, identity.key)).not.toBeNull();
 
+    const restrictedIdentity = {
+      key: `u:restricted-queue-${stamp}`,
+      userId: 123,
+      name: 'restricted-queue-test',
+      socketId: `restricted-queue-socket-${stamp}`,
+      matchmakingPool: 'restricted' as const,
+    };
+    expect(await queueOrTakeOpponent('easy', restrictedIdentity)).toBeNull();
+    expect(await client.zScore(queueKey, restrictedIdentity.key)).toBeNull();
+    expect(await client.zScore(restrictedQueueKey, restrictedIdentity.key)).not.toBeNull();
+    const secondRestrictedIdentity = {
+      ...restrictedIdentity,
+      key: `u:restricted-queue-second-${stamp}`,
+      userId: 124,
+      socketId: `restricted-queue-socket-second-${stamp}`,
+    };
+    expect(await queueOrTakeOpponent('easy', secondRestrictedIdentity)).toBeNull();
+    expect(await client.zScore(restrictedQueueKey, restrictedIdentity.key)).not.toBeNull();
+    expect(await client.zScore(restrictedQueueKey, secondRestrictedIdentity.key)).not.toBeNull();
+
     await client.del(redisKey(`match-queue:${identity.key}`));
     await cancelQueue(identity.key);
     expect(await client.zScore(queueKey, identity.key)).toBeNull();
     expect(await client.get(redisKey(`match-profile:${identity.key}`))).toBeNull();
+    await cancelQueue(restrictedIdentity.key);
+    await cancelQueue(secondRestrictedIdentity.key);
+    expect(await client.zScore(restrictedQueueKey, restrictedIdentity.key)).toBeNull();
+    expect(await client.zScore(restrictedQueueKey, secondRestrictedIdentity.key)).toBeNull();
   });
 
   it('uses only trusted proxy headers for socket IP limits', () => {

@@ -35,6 +35,8 @@ import {
   updatePlayer,
 } from '../services/playerMutations';
 import { createApiToken, listApiTokens, revokeApiToken } from '../services/apiTokens';
+import { cacheMatchmakingRestriction } from '../services/matchmakingRestriction';
+import { moveQueuedIdentityToPool } from '../services/roomStore';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -83,6 +85,7 @@ const userGameListQuerySchema = z.object({
 });
 const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
 const userLeaderboardVisibilitySchema = z.object({ hidden: z.boolean() });
+const userMatchmakingRestrictionSchema = z.object({ restricted: z.boolean() });
 const apiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(64),
   expiresInDays: z.number().int().min(1).max(365).default(90),
@@ -157,7 +160,7 @@ router.get(
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(parsed.page, totalPages);
     const users = await query.clone()
-      .select('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'created_at')
+      .select('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'matchmaking_restricted', 'created_at')
       .orderBy('created_at', 'desc')
       .orderBy('id', 'desc')
       .limit(pageSize)
@@ -169,6 +172,7 @@ router.get(
         displayId: user.display_id || userNameFromUsername(user.username),
         role: user.role,
         leaderboardHidden: Boolean(user.leaderboard_hidden),
+        matchmakingRestricted: Boolean(user.matchmaking_restricted),
         createdAt: user.created_at,
       })),
       total,
@@ -187,7 +191,7 @@ router.get(
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const user = await db('users')
       .where({ id })
-      .first('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'created_at');
+      .first('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'matchmaking_restricted', 'created_at');
     if (!user) throw new HttpError(404, 'USER_NOT_FOUND');
     res.json({
       user: {
@@ -196,6 +200,7 @@ router.get(
         displayId: user.display_id || userNameFromUsername(user.username),
         role: user.role,
         leaderboardHidden: Boolean(user.leaderboard_hidden),
+        matchmakingRestricted: Boolean(user.matchmaking_restricted),
         createdAt: user.created_at,
       },
       stats: await getPlayerPerformance({
@@ -693,6 +698,24 @@ router.patch(
       ...allLeaderboardCacheKeys()
     );
     res.json({ id, leaderboardHidden: hidden });
+  })
+);
+
+router.patch(
+  '/users/:id/matchmaking-restriction',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  validateBody(userMatchmakingRestrictionSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const { restricted } = req.body as z.infer<typeof userMatchmakingRestrictionSchema>;
+    const updated = await db('users').where({ id }).update({ matchmaking_restricted: restricted });
+    if (!updated) throw new HttpError(404, 'USER_NOT_FOUND');
+    await Promise.all([
+      cacheMatchmakingRestriction(id, restricted),
+      moveQueuedIdentityToPool(`u:${id}`, restricted ? 'restricted' : 'public'),
+    ]);
+    res.json({ id, matchmakingRestricted: restricted });
   })
 );
 

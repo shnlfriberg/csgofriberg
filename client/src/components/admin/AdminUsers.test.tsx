@@ -19,7 +19,7 @@ describe('AdminUsers', () => {
     vi.clearAllMocks();
     await i18n.changeLanguage('zh');
     vi.mocked(api.get).mockImplementation(async (url) => {
-      if (url === '/admin/users') return { data: { users: [{ id: 7, username: 'ranked-user', displayId: '用户#ABCDE', role: 'user', leaderboardHidden: false, createdAt: '2026-07-27T00:00:00.000Z' }], total: 1, page: 1, pageSize: 50, totalPages: 1 } } as never;
+      if (url === '/admin/users') return { data: { users: [{ id: 7, username: 'ranked-user', displayId: '用户#ABCDE', role: 'user', leaderboardHidden: false, matchmakingRestricted: false, createdAt: '2026-07-27T00:00:00.000Z' }], total: 1, page: 1, pageSize: 50, totalPages: 1 } } as never;
       if (url === '/admin/users/7/stats') return { data: { user: { id: 7 }, stats: { single: { games: 2, wins: 1, losses: 1, winRate: 0.5, avgGuesses: 2, bestGuesses: 2 }, multi: { games: 3, wins: 2, losses: 1, winRate: 0.667, recentAverageWinningGuesses: 1.5 } } } } as never;
       if (url === '/admin/users/7/leaderboards') return { data: { leaderboardHidden: false, entries: Array.from({ length: 6 }, (_, index) => ({ mode: index % 2 ? 'multi' : 'single', difficulty: ['beginner', 'easy', 'normal'][Math.floor(index / 2)], rank: index + 1, totalRanked: 10, total: 2, wins: 1, winRate: 0.5, avgGuesses: 2 })) } } as never;
       if (url === '/admin/users/7/analysis') return { data: { summary: { similarityIndex: 42, level: 'common', sampleSize: 1, confidence: 50, averageEntropyPercentile: 45, topDecileRate: 0, lowRegretRate: 0, analyzedRounds: 1, truncated: false }, limitations: { hasGuessTiming: false, usesCurrentPlayerData: true, statement: 'test' } } } as never;
@@ -65,5 +65,23 @@ describe('AdminUsers', () => {
 
     expect(api.patch).toHaveBeenCalledWith('/admin/users/7/leaderboard-visibility', { hidden: true });
     expect(screen.getAllByText('已隐藏').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('restricts multiplayer matchmaking from the analysis tab', async () => {
+    const user = userEvent.setup();
+    vi.mocked(api.patch).mockResolvedValueOnce({
+      data: { id: 7, matchmakingRestricted: true },
+    } as never);
+    renderWithProviders(<AdminUsers />);
+    await user.click(await screen.findByRole('button', { name: /详情/ }));
+    await user.click(screen.getByRole('tab', { name: '对局分析' }));
+    const toggle = await screen.findByRole('checkbox', { name: '正常匹配' });
+    expect(toggle).not.toBeChecked();
+
+    await user.click(toggle);
+
+    expect(api.patch).toHaveBeenCalledWith('/admin/users/7/matchmaking-restriction', { restricted: true });
+    expect(screen.getByRole('checkbox', { name: '已限制' })).toBeChecked();
+    expect(screen.queryByText(/隔离匹配池/)).not.toBeInTheDocument();
   });
 });

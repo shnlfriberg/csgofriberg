@@ -613,6 +613,7 @@
 .admin-user-ranking-grid article > span,
 .admin-user-ranking-grid article > small { color: var(--text-light); }
 .admin-analysis-summary { display: grid; grid-template-columns: 190px minmax(0, 1fr); gap: 18px; }
+.admin-user-restriction-control { margin-bottom: 14px; }
 .admin-analysis-index { display: grid; place-items: center; align-content: center; min-height: 150px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--card-soft); text-align: center; }
 .admin-analysis-index > strong { font-size: 2.8rem; line-height: 1; color: var(--primary-strong); }
 .admin-analysis-index > small { margin-top: 8px; color: var(--text-light); }

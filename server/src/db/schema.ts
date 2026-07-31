@@ -152,6 +152,7 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('role', 16).notNullable().defaultTo('user');
       t.integer('token_version').notNullable().defaultTo(0);
       t.boolean('leaderboard_hidden').notNullable().defaultTo(false);
+      t.boolean('matchmaking_restricted').notNullable().defaultTo(false);
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
     });
   }
@@ -164,6 +165,11 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   if (!(await instance.schema.hasColumn('users', 'leaderboard_hidden'))) {
     await instance.schema.alterTable('users', (t) => {
       t.boolean('leaderboard_hidden').notNullable().defaultTo(false);
+    });
+  }
+  if (!(await instance.schema.hasColumn('users', 'matchmaking_restricted'))) {
+    await instance.schema.alterTable('users', (t) => {
+      t.boolean('matchmaking_restricted').notNullable().defaultTo(false);
     });
   }
   await backfillUserDisplayIds(instance);

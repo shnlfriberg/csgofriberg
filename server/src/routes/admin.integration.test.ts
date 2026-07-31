@@ -11,6 +11,7 @@ import { guestNameFromKey, signToken, userNameFromUsername } from '../middleware
 import { initRedis } from '../redis';
 import { initPlayerCache } from '../services/playerCache';
 import { playerImportSchema } from '../services/playerMutations';
+import { isMatchmakingRestricted } from '../services/matchmakingRestriction';
 
 let server: http.Server;
 let baseUrl: string;
@@ -159,6 +160,7 @@ describe('admin user management', () => {
           displayId,
           role: 'user',
           leaderboardHidden: false,
+          matchmakingRestricted: false,
           createdAt: expect.any(String),
         }),
       ]);
@@ -171,6 +173,16 @@ describe('admin user management', () => {
       expect(hidden.response.status).toBe(200);
       expect(hidden.data).toEqual({ id: Number(targetUser.id), leaderboardHidden: true });
       expect(Boolean((await db('users').where({ id: targetUser.id }).first()).leaderboard_hidden)).toBe(true);
+
+      const restricted = await request(
+        `/api/admin/users/${targetUser.id}/matchmaking-restriction`,
+        adminSession,
+        { method: 'PATCH', body: { restricted: true } }
+      );
+      expect(restricted.response.status).toBe(200);
+      expect(restricted.data).toEqual({ id: Number(targetUser.id), matchmakingRestricted: true });
+      expect(Boolean((await db('users').where({ id: targetUser.id }).first()).matchmaking_restricted)).toBe(true);
+      expect(await isMatchmakingRestricted(Number(targetUser.id))).toBe(true);
 
       const leaderboards = await request(`/api/admin/users/${targetUser.id}/leaderboards`, adminSession);
       expect(leaderboards.response.status).toBe(200);
@@ -204,6 +216,14 @@ describe('admin user management', () => {
       );
       expect(invalidVisibility.response.status).toBe(400);
       expect(invalidVisibility.data).toEqual({ code: 'VALIDATION_FAILED' });
+
+      const invalidRestriction = await request(
+        `/api/admin/users/${targetUser.id}/matchmaking-restriction`,
+        adminSession,
+        { method: 'PATCH', body: { restricted: 'yes' } }
+      );
+      expect(invalidRestriction.response.status).toBe(400);
+      expect(invalidRestriction.data).toEqual({ code: 'VALIDATION_FAILED' });
 
       const stats = await request(`/api/admin/users/${targetUser.id}/stats`, adminSession);
       expect(stats.response.status).toBe(200);

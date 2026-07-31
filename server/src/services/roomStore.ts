@@ -7,6 +7,7 @@ import { DIFFICULTY_LEVELS } from '../difficulties';
 
 export type BoType = 1 | 3 | 5 | 7;
 export type DbType = string;
+export type MatchmakingPool = 'public' | 'restricted';
 export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'round_over' | 'finished';
 const MATCHMAKING_ENTRY_TTL_MS = 300_000;
 
@@ -19,6 +20,7 @@ export interface StoredIdentity {
 export interface QueuedIdentity extends StoredIdentity {
   socketId: string;
   anonymous?: boolean;
+  matchmakingPool?: MatchmakingPool;
 }
 
 export interface StoredPlayer extends StoredIdentity {
@@ -160,6 +162,14 @@ function normalizeGuessTimes(value: unknown, guessCount: number): Array<number |
   if (times.length > guessCount) times.length = guessCount;
   while (times.length < guessCount) times.push(null);
   return times;
+}
+
+function matchmakingQueueName(dbType: DbType, pool: MatchmakingPool = 'public'): string {
+  return pool === 'restricted' ? `restricted:${dbType}` : dbType;
+}
+
+function matchmakingQueueKey(dbType: DbType, pool: MatchmakingPool = 'public'): string {
+  return redisKey(`matchmaking:${matchmakingQueueName(dbType, pool)}`);
 }
 
 function normalizeRoom(room: StoredRoom): StoredRoom {
@@ -1163,8 +1173,33 @@ export async function queueOrTakeOpponent(
 ): Promise<QueuedIdentity | null> {
   const client = stateRedis();
   if (!client) return null;
-  const queueKey = redisKey(`matchmaking:${dbType}`);
+  const pool = identity.matchmakingPool ?? 'public';
+  const queueName = matchmakingQueueName(dbType, pool);
+  const queueKey = matchmakingQueueKey(dbType, pool);
   const profilePrefix = redisKey('match-profile:');
+  if (pool === 'restricted') {
+    await evalCachedStateScript(
+      'matchmaking-queue-restricted-v1',
+      `redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[6])
+       redis.call('ZADD', KEYS[1], ARGV[4], ARGV[1])
+       redis.call('SET', ARGV[2] .. ARGV[1], ARGV[5], 'EX', 300)
+       redis.call('SET', ARGV[3] .. ARGV[1], ARGV[7], 'EX', 300)
+       return 1`,
+      {
+        keys: [queueKey],
+        arguments: [
+          identity.key,
+          profilePrefix,
+          redisKey('match-queue:'),
+          String(Date.now()),
+          JSON.stringify(identity),
+          String(Date.now() - MATCHMAKING_ENTRY_TTL_MS),
+          queueName,
+        ],
+      }
+    );
+    return null;
+  }
   const result = await evalCachedStateScript(
     'matchmaking-take-or-queue-v1',
     `redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[8])
@@ -1197,7 +1232,7 @@ export async function queueOrTakeOpponent(
         String(Date.now()),
         JSON.stringify(identity),
         redisKey('match-queue:'),
-        dbType,
+        queueName,
         String(Date.now() - MATCHMAKING_ENTRY_TTL_MS),
       ],
     }
@@ -1208,6 +1243,8 @@ export async function queueOrTakeOpponent(
 export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity): Promise<void> {
   const client = stateRedis();
   if (!client) return;
+  const pool = identity.matchmakingPool ?? 'public';
+  const queueName = matchmakingQueueName(dbType, pool);
   await evalCachedStateScript(
     'matchmaking-requeue-v1',
     `redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[5])
@@ -1218,7 +1255,7 @@ export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity)
      return 1`,
     {
       keys: [
-        redisKey(`matchmaking:${dbType}`),
+        matchmakingQueueKey(dbType, pool),
         redisKey(`match-profile:${identity.key}`),
         redisKey(`connections:socket:${identity.socketId}`),
         redisKey(`match-queue:${identity.key}`),
@@ -1227,7 +1264,65 @@ export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity)
         identity.key,
         String(Date.now()),
         JSON.stringify(identity),
-        dbType,
+        queueName,
+        String(Date.now() - MATCHMAKING_ENTRY_TTL_MS),
+      ],
+    }
+  );
+}
+
+export async function moveQueuedIdentityToPool(
+  identity: string,
+  pool: MatchmakingPool
+): Promise<void> {
+  const client = stateRedis();
+  if (!client) return;
+  const queueIndex = redisKey(`match-queue:${identity}`);
+  const oldQueueName = await client.get(queueIndex);
+  if (!oldQueueName) return;
+  const dbType = oldQueueName.startsWith('restricted:')
+    ? oldQueueName.slice('restricted:'.length)
+    : oldQueueName;
+  if (!dbType) return;
+  const newQueueName = matchmakingQueueName(dbType, pool);
+  if (newQueueName === oldQueueName) return;
+
+  await evalCachedStateScript(
+    'matchmaking-move-pool-v1',
+    `if redis.call('GET', KEYS[4]) ~= ARGV[2] then return 0 end
+     local profile = redis.call('GET', KEYS[3])
+     if not profile then
+       redis.call('ZREM', KEYS[1], ARGV[1])
+       redis.call('DEL', KEYS[4])
+       return 0
+     end
+     local decodedOk, decoded = pcall(cjson.decode, profile)
+     if not decodedOk then
+       redis.call('ZREM', KEYS[1], ARGV[1])
+       redis.call('DEL', KEYS[3], KEYS[4])
+       return 0
+     end
+     local score = redis.call('ZSCORE', KEYS[1], ARGV[1]) or ARGV[5]
+     redis.call('ZREM', KEYS[1], ARGV[1])
+     redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[6])
+     decoded.matchmakingPool = ARGV[4]
+     redis.call('ZADD', KEYS[2], score, ARGV[1])
+     redis.call('SET', KEYS[3], cjson.encode(decoded), 'EX', 300)
+     redis.call('SET', KEYS[4], ARGV[3], 'EX', 300)
+     return 1`,
+    {
+      keys: [
+        redisKey(`matchmaking:${oldQueueName}`),
+        redisKey(`matchmaking:${newQueueName}`),
+        redisKey(`match-profile:${identity}`),
+        queueIndex,
+      ],
+      arguments: [
+        identity,
+        oldQueueName,
+        newQueueName,
+        pool,
+        String(Date.now()),
         String(Date.now() - MATCHMAKING_ENTRY_TTL_MS),
       ],
     }
@@ -1245,8 +1340,8 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
   if (!client) return;
   const queueIndex = redisKey(`match-queue:${identity}`);
   const profileKey = redisKey(`match-profile:${identity}`);
-  const dbType = await client.get(queueIndex);
-  const queueKey = dbType ? redisKey(`matchmaking:${dbType}`) : null;
+  const queueName = await client.get(queueIndex);
+  const queueKey = queueName ? redisKey(`matchmaking:${queueName}`) : null;
   if (!queueKey) {
     if (socketId) {
       const rawProfile = await client.get(profileKey);
@@ -1261,7 +1356,10 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
     }
     await Promise.all([
       ...DIFFICULTY_LEVELS.map((difficulty) =>
-        client.zRem(redisKey(`matchmaking:${difficulty.key}`), identity)
+        Promise.all([
+          client.zRem(matchmakingQueueKey(difficulty.key), identity),
+          client.zRem(matchmakingQueueKey(difficulty.key, 'restricted'), identity),
+        ])
       ),
       client.del(profileKey),
       client.del(queueIndex),
