@@ -35,4 +35,26 @@ describe('user game choice analysis', () => {
       entropyPercentile: expect.any(Number),
     });
   });
+
+  it('keeps repeated candidate-state rankings stable when reused across rounds', async () => {
+    const players = [player(1, 20, 'A'), player(2, 25, 'B'), player(3, 30, 'C'), player(4, 35, 'D')];
+    const rounds = [1, 2].map((recordId) => ({
+      source: 'multi' as const,
+      recordId,
+      mode: 'easy',
+      finishedAt: '',
+      round: recordId,
+      targetPlayerId: 4,
+      guessPlayerIds: [1, 4],
+    }));
+    const result = await analyzeGameChoices(
+      rounds,
+      new Map(players.map((item) => [item.id, item])),
+      new Map([['easy', players]]),
+      players
+    );
+
+    expect(result.summary.sampleSize).toBe(2);
+    expect(result.trajectories[0].steps[0]).toEqual(result.trajectories[1].steps[0]);
+  });
 });

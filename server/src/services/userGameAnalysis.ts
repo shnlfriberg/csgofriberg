@@ -4,6 +4,7 @@ import type { Player } from '../types';
 const MAX_BENCHMARK_GUESSES = 1000;
 const MAX_ANALYZED_STEPS = 60;
 const BENCHMARK_CHUNK_SIZE = 64;
+const FEEDBACK_SIGNATURE_COUNT = 6000;
 
 function yieldToEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
@@ -43,39 +44,47 @@ export interface AnalysisTrajectory {
   steps: AnalysisStep[];
 }
 
-function feedbackSignature(guess: Player, target: Player): string {
-  const numberPart = (guessValue: number, targetValue: number, closeRange: number) => {
-    if (guessValue === targetValue) return 'c';
-    return `${Math.abs(guessValue - targetValue) <= closeRange ? 'n' : 'w'}${targetValue > guessValue ? 'h' : 'l'}`;
-  };
-  const nationality = guess.nationality === target.nationality
-    ? 'c'
-    : guess.region && guess.region === target.region ? 'n' : 'w';
-  return [
-    guess.id === target.id ? '1' : '0',
-    nationality,
-    guess.team === target.team ? 'c' : 'w',
-    numberPart(guess.age, target.age, 3),
-    guess.role === target.role ? 'c' : 'w',
-    numberPart(guess.major_championships, target.major_championships, 1),
-    numberPart(guess.major_appearances, target.major_appearances, 1),
-    Boolean(guess.is_active) === Boolean(target.is_active) ? 'c' : 'w',
-  ].join('|');
+function numberFeedbackCode(guessValue: number, targetValue: number, closeRange: number): number {
+  if (guessValue === targetValue) return 0;
+  const isClose = Math.abs(guessValue - targetValue) <= closeRange;
+  return targetValue > guessValue ? (isClose ? 1 : 2) : (isClose ? 3 : 4);
 }
 
-function informationGain(guess: Player, candidates: Player[]): number {
-  if (candidates.length <= 1) return 0;
-  const partitions = new Map<string, number>();
-  for (const target of candidates) {
-    const signature = feedbackSignature(guess, target);
-    partitions.set(signature, (partitions.get(signature) ?? 0) + 1);
+function feedbackSignature(guess: Player, target: Player): number {
+  const nationality = guess.nationality === target.nationality
+    ? 2
+    : guess.region && guess.region === target.region ? 1 : 0;
+  let signature = guess.id === target.id ? 1 : 0;
+  signature = signature * 3 + nationality;
+  signature = signature * 2 + (guess.team === target.team ? 1 : 0);
+  signature = signature * 5 + numberFeedbackCode(guess.age, target.age, 3);
+  signature = signature * 2 + (guess.role === target.role ? 1 : 0);
+  signature = signature * 5 + numberFeedbackCode(guess.major_championships, target.major_championships, 1);
+  signature = signature * 5 + numberFeedbackCode(guess.major_appearances, target.major_appearances, 1);
+  return signature * 2 + (Boolean(guess.is_active) === Boolean(target.is_active) ? 1 : 0);
+}
+
+function informationGain(
+  signatureRow: Uint16Array,
+  candidateIndexes: number[],
+  partitionCounts: Uint16Array,
+  touchedSignatures: number[]
+): number {
+  if (candidateIndexes.length <= 1) return 0;
+  touchedSignatures.length = 0;
+  for (const candidateIndex of candidateIndexes) {
+    const signature = signatureRow[candidateIndex];
+    if (partitionCounts[signature] === 0) touchedSignatures.push(signature);
+    partitionCounts[signature] += 1;
   }
   let expectedRemainingEntropy = 0;
-  for (const count of partitions.values()) {
-    const probability = count / candidates.length;
+  for (const signature of touchedSignatures) {
+    const count = partitionCounts[signature];
+    const probability = count / candidateIndexes.length;
     expectedRemainingEntropy += probability * Math.log2(count);
+    partitionCounts[signature] = 0;
   }
-  return Math.log2(candidates.length) - expectedRemainingEntropy;
+  return Math.log2(candidateIndexes.length) - expectedRemainingEntropy;
 }
 
 function benchmarkGuesses(allGuesses: Player[], actual: Player): Player[] {
@@ -103,6 +112,63 @@ export async function analyzeGameChoices(
   const percentiles: number[] = [];
   const regretRatios: number[] = [];
   let truncated = false;
+  // Precompute each guess/target feedback once and reuse complete rankings when
+  // multiple rounds reach the same candidate state.
+  const universe = new Map<number, Player>();
+  for (const pool of difficultyPools.values()) {
+    for (const player of pool) universe.set(player.id, player);
+  }
+  for (const player of allEnabledPlayers) universe.set(player.id, player);
+  const universePlayers = [...universe.values()];
+  const playerIndexes = new Map(universePlayers.map((player, index) => [player.id, index]));
+  const signatureRows = new Map<number, Uint16Array>();
+  const benchmarkCache = new Map<number, Player[]>();
+  const scoreCache = new Map<string, Array<{ guess: Player; gain: number }>>();
+  const partitionCounts = new Uint16Array(FEEDBACK_SIGNATURE_COUNT);
+  const touchedSignatures: number[] = [];
+
+  const getSignatureRow = (guess: Player): Uint16Array => {
+    const cached = signatureRows.get(guess.id);
+    if (cached) return cached;
+    const row = new Uint16Array(universePlayers.length);
+    for (let index = 0; index < universePlayers.length; index++) {
+      row[index] = feedbackSignature(guess, universePlayers[index]);
+    }
+    signatureRows.set(guess.id, row);
+    return row;
+  };
+
+  const getBenchmark = (actual: Player): Player[] => {
+    const cached = benchmarkCache.get(actual.id);
+    if (cached) return cached;
+    const benchmark = benchmarkGuesses(allEnabledPlayers, actual);
+    benchmarkCache.set(actual.id, benchmark);
+    return benchmark;
+  };
+
+  const scoreBenchmark = async (
+    benchmark: Player[],
+    candidates: Player[],
+    candidateIndexes: number[]
+  ): Promise<Array<{ guess: Player; gain: number }>> => {
+    const key = `${benchmark.map((player) => player.id).join(',')}|${candidates.map((player) => player.id).join(',')}`;
+    const cached = scoreCache.get(key);
+    if (cached) return cached;
+    const scored: Array<{ guess: Player; gain: number }> = [];
+    for (let benchmarkIndex = 0; benchmarkIndex < benchmark.length; benchmarkIndex++) {
+      const guess = benchmark[benchmarkIndex];
+      scored.push({
+        guess,
+        gain: informationGain(getSignatureRow(guess), candidateIndexes, partitionCounts, touchedSignatures),
+      });
+      if ((benchmarkIndex + 1) % BENCHMARK_CHUNK_SIZE === 0) {
+        await yieldToEventLoop();
+      }
+    }
+    scored.sort((a, b) => b.gain - a.gain || a.guess.id - b.guess.id);
+    scoreCache.set(key, scored);
+    return scored;
+  };
 
   for (const round of rounds) {
     if (percentiles.length >= MAX_ANALYZED_STEPS) {
@@ -113,6 +179,7 @@ export async function analyzeGameChoices(
     const initialPool = difficultyPools.get(round.mode) ?? [];
     if (!target || !initialPool.length) continue;
     let candidates = initialPool.slice();
+    let candidateIndexes = candidates.map((player) => playerIndexes.get(player.id) as number);
     const steps: AnalysisStep[] = [];
     for (let index = 0; index < round.guessPlayerIds.length; index++) {
       if (percentiles.length >= MAX_ANALYZED_STEPS) {
@@ -121,24 +188,24 @@ export async function analyzeGameChoices(
       }
       const actual = playersById.get(round.guessPlayerIds[index]);
       if (!actual || candidates.length <= 1 || actual.id === target.id) break;
-      const actualSignature = feedbackSignature(actual, target);
-      const actualGain = informationGain(actual, candidates);
-      const benchmark = benchmarkGuesses(allEnabledPlayers, actual);
-      const scored: Array<{ guess: Player; gain: number }> = [];
-      for (let benchmarkIndex = 0; benchmarkIndex < benchmark.length; benchmarkIndex++) {
-        const guess = benchmark[benchmarkIndex];
-        scored.push({ guess, gain: informationGain(guess, candidates) });
-        if ((benchmarkIndex + 1) % BENCHMARK_CHUNK_SIZE === 0) {
-          await yieldToEventLoop();
-        }
-      }
-      scored.sort((a, b) => b.gain - a.gain || a.guess.id - b.guess.id);
+      const actualRow = getSignatureRow(actual);
+      const targetIndex = playerIndexes.get(target.id);
+      const actualSignature = targetIndex == null
+        ? feedbackSignature(actual, target)
+        : actualRow[targetIndex];
+      const actualGain = informationGain(actualRow, candidateIndexes, partitionCounts, touchedSignatures);
+      const benchmark = getBenchmark(actual);
+      const scored = await scoreBenchmark(benchmark, candidates, candidateIndexes);
       const best = scored[0] ?? { guess: actual, gain: actualGain };
       const belowOrEqual = scored.filter((item) => item.gain <= actualGain + 1e-9).length;
       const percentile = scored.length ? belowOrEqual / scored.length : 0;
-      const nextCandidates = candidates.filter(
-        (candidate) => feedbackSignature(actual, candidate) === actualSignature
-      );
+      const nextCandidates: Player[] = [];
+      const nextCandidateIndexes: number[] = [];
+      for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
+        if (actualRow[candidateIndexes[candidateIndex]] !== actualSignature) continue;
+        nextCandidates.push(candidates[candidateIndex]);
+        nextCandidateIndexes.push(candidateIndexes[candidateIndex]);
+      }
       steps.push({
         guessNumber: index + 1,
         guessPlayerId: actual.id,
@@ -154,6 +221,7 @@ export async function analyzeGameChoices(
       percentiles.push(percentile);
       regretRatios.push(best.gain > 0 ? Math.max(0, 1 - actualGain / best.gain) : 0);
       candidates = nextCandidates;
+      candidateIndexes = nextCandidateIndexes;
     }
     if (steps.length) {
       trajectories.push({
