@@ -24,6 +24,7 @@ import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import LanguageSelect from '../components/LanguageSelect';
 import HomeSpecialThanks from '../components/HomeSpecialThanks';
+import HomeFriendLinks from '../components/HomeFriendLinks';
 import PersonalSettings from '../components/PersonalSettings';
 import wanjiqiImage from '../assets/wjq.jpg';
 
@@ -212,6 +213,7 @@ export default function Home() {
             {t('home.announcements')}
           </Link>
           <HomeSpecialThanks />
+          <HomeFriendLinks />
           <a
             href="https://space.bilibili.com/290893104"
             className="btn btn-bilibili"

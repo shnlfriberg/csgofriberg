@@ -69,8 +69,8 @@ const room: RoomState = {
   matchStartsAt: null,
   spectatorCount: 0,
   players: [
-    { key: 'g:me', name: 'Me', ready: true, connected: true, score: 2, guessCount: 0, guesses: [] },
-    { key: 'g:opponent', name: 'Opponent', ready: true, connected: true, score: 0, guessCount: 0, guesses: [] },
+    { key: 'g:me', name: 'Me', ready: true, connected: true, score: 2, skipped: false, guessCount: 0, guesses: [] },
+    { key: 'g:opponent', name: 'Opponent', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [] },
   ],
   roundResult: null,
   matchResult: {
@@ -231,5 +231,53 @@ describe('MultiRoom replay', () => {
     const cooldownButton = await screen.findByRole('button', { name: /冷却 \d+ 秒/ });
     expect(cooldownButton).toBeDisabled();
     expect(screen.queryByText(/已退出准备/)).not.toBeInTheDocument();
+  });
+
+  it('marks the player as skipped and disables further round actions', async () => {
+    const user = userEvent.setup();
+    const activeRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      round: 1,
+      roundId: 1,
+      roundEndsAt: Date.now() + 60_000,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({
+        ...player,
+        score: 0,
+        skipped: false,
+        guessCount: 0,
+        guesses: [],
+      })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: activeRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+      if (event === 'game:skip-round' && typeof ack === 'function') {
+        ack({
+          ok: true,
+          room: {
+            ...activeRoom,
+            stateVersion: activeRoom.stateVersion + 1,
+            players: activeRoom.players.map((player) => player.key === 'g:me'
+              ? { ...player, skipped: true }
+              : player),
+          },
+        });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    await user.click(await screen.findByRole('button', { name: '跳过本轮' }));
+    expect(screen.getByRole('alertdialog', { name: '跳过本轮？' })).toHaveTextContent(
+      '对方会看到你的跳过状态'
+    );
+    await user.click(screen.getByRole('button', { name: '确认跳过本轮' }));
+
+    expect(socket.emit).toHaveBeenCalledWith('game:skip-round', { roundId: 1 }, expect.any(Function));
+    expect(await screen.findByRole('button', { name: '已跳过' })).toBeDisabled();
   });
 });

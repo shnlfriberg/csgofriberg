@@ -28,6 +28,7 @@ export interface StoredPlayer extends StoredIdentity {
   guesses: GuessFeedback[];
   guessTimes: Array<number | null>;
   lastGuessAt: number | null;
+  skipped: boolean;
   connected: boolean;
   disconnectDeadline: number | null;
 }
@@ -41,7 +42,7 @@ export interface StoredSpectator extends StoredIdentity {
 export interface StoredRoundResult {
   round: number;
   winnerKey: string | null;
-  reason: 'guessed' | 'exhausted' | 'timeout' | 'surrender';
+  reason: 'guessed' | 'exhausted' | 'timeout' | 'skipped' | 'surrender';
   matchOver: boolean;
   nextRoundAt: number | null;
 }
@@ -199,6 +200,7 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
     if (!Array.isArray(player.guesses)) player.guesses = [];
     player.guessTimes = normalizeGuessTimes(player.guessTimes, player.guesses.length);
     player.lastGuessAt ??= null;
+    player.skipped ??= false;
   }
   for (const spectator of room.spectators) {
     spectator.connected ??= true;
@@ -418,6 +420,7 @@ if meta[4] and meta[4] ~= '' and tonumber(meta[4]) <= tonumber(ARGV[9]) then
   return cjson.encode({kind='error', code='NO_ACTIVE_ROUND', reason='deadline_passed'})
 end
 if player.socketId ~= ARGV[2] then return cjson.encode({kind='error', code='STALE_CONNECTION'}) end
+if player.skipped == true then return cjson.encode({kind='error', code='ROUND_SKIPPED'}) end
 if #guesses >= tonumber(ARGV[7]) then return cjson.encode({kind='error', code='GUESS_LIMIT_REACHED'}) end
 for _, previous in ipairs(guesses) do
   if tonumber(previous.playerId) == tonumber(ARGV[4]) then
@@ -455,16 +458,18 @@ player.lastGuessAt = tonumber(ARGV[9])
 player.guessTimes = guessTimes
 if feedback.correct == true then player.score = tonumber(player.score or 0) + 1 end
 redis.call('HSET', KEYS[7], identity, cjson.encode(player))
-local allExhausted = true
+local allDone = true
+local anySkipped = false
 local playerStates = redis.call('HGETALL', KEYS[7])
 for index = 2, #playerStates, 2 do
   local stateOk, candidate = pcall(cjson.decode, playerStates[index])
-  if not stateOk or tonumber(candidate.guessCount or 0) < tonumber(ARGV[7]) then
-    allExhausted = false
+  if stateOk and candidate.skipped == true then anySkipped = true end
+  if not stateOk or (candidate.skipped ~= true and tonumber(candidate.guessCount or 0) < tonumber(ARGV[7])) then
+    allDone = false
     break
   end
 end
-local shouldFinish = feedback.correct == true or allExhausted
+local shouldFinish = feedback.correct == true or allDone
 local matchOver = false
 local status = meta[1]
 local roundEndsAt = meta[4] or ''
@@ -484,7 +489,7 @@ if shouldFinish then
   roundResult = cjson.encode({
     round=tonumber(meta[3]),
     winnerKey=feedback.correct == true and identity or cjson.null,
-    reason=feedback.correct == true and 'guessed' or 'exhausted',
+    reason=feedback.correct == true and 'guessed' or (anySkipped and 'skipped' or 'exhausted'),
     matchOver=matchOver,
     nextRoundAt=nextRoundAt == '' and cjson.null or tonumber(nextRoundAt)
   })
@@ -586,6 +591,7 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
         return { kind: 'error', code: 'NO_ACTIVE_ROUND', reason: 'deadline_passed' };
       }
       if (player.socketId !== input.socketId) return { kind: 'error', code: 'STALE_CONNECTION' };
+      if (player.skipped) return { kind: 'error', code: 'ROUND_SKIPPED' };
       if (player.guesses.length >= input.maxGuesses) {
         return { kind: 'error', code: 'GUESS_LIMIT_REACHED' };
       }
@@ -608,9 +614,10 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
       player.guessTimes.push(guessTime);
       player.lastGuessAt = now;
       room.eventResults[eventKey] = player.guesses.length - 1;
-      const shouldFinish = input.feedback.correct || room.players.every(
-        (candidate) => candidate.guesses.length >= input.maxGuesses
+      const allDone = room.players.every(
+        (candidate) => candidate.skipped || candidate.guesses.length >= input.maxGuesses
       );
+      const shouldFinish = input.feedback.correct || allDone;
       let matchOver = false;
       if (shouldFinish) {
         if (input.feedback.correct) player.score += 1;
@@ -631,7 +638,9 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
         room.roundResult = {
           round: room.round,
           winnerKey: input.feedback.correct ? input.identity : null,
-          reason: input.feedback.correct ? 'guessed' : 'exhausted',
+          reason: input.feedback.correct
+            ? 'guessed'
+            : room.players.some((candidate) => candidate.skipped) ? 'skipped' : 'exhausted',
           matchOver,
           nextRoundAt: room.nextRoundAt,
         };
@@ -684,14 +693,14 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
     String(input.minGuessIntervalMs),
     String(input.roundDurationMs),
   ];
-  let result = await evalStateScript('apply-room-guess-hash-v3', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
+  let result = await evalStateScript('apply-room-guess-hash-v4', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
   if (typeof result !== 'string') throw new Error('INVALID_GUESS_RESULT');
   let parsed = JSON.parse(result) as ApplyRoomGuessResult;
   if (parsed.kind === 'error' && parsed.code === 'HOT_STATE_MISSING') {
     const room = await getRoom(input.roomId);
     if (!room) return { kind: 'error', code: 'NO_ACTIVE_ROUND', reason: 'room_missing' };
     await saveRoom(room);
-    result = await evalStateScript('apply-room-guess-hash-v3', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
+    result = await evalStateScript('apply-room-guess-hash-v4', APPLY_ROOM_GUESS_HASH_SCRIPT, keys, args);
     if (typeof result !== 'string') throw new Error('INVALID_GUESS_RESULT');
     parsed = JSON.parse(result) as ApplyRoomGuessResult;
   }
@@ -796,7 +805,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
   }
   const result = await evalCachedStateScript(
-    'room-save-v4',
+    'room-save-v5',
     `local incoming = cjson.decode(ARGV[1])
      local identityCount = tonumber(ARGV[6])
      local metaKey = KEYS[4 + identityCount]
@@ -864,7 +873,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
           socketId=player.socketId, ready=player.ready, score=player.score,
           connected=player.connected, disconnectDeadline=player.disconnectDeadline,
           guessCount=#playerGuesses, guessTimes=player.guessTimes or {},
-          lastGuessAt=player.lastGuessAt
+          lastGuessAt=player.lastGuessAt, skipped=player.skipped == true
        }
        redis.call('HSET', playersKey, player.key, cjson.encode(metadata))
        redis.call('HSET', guessesKey, player.key,

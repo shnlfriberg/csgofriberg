@@ -151,6 +151,7 @@
   .thanks-dialog-list { grid-template-columns: 1fr; gap: 10px; padding: 12px 14px 16px; }
   .thanks-dialog-list li > a { grid-template-columns: 48px minmax(0, 1fr); min-height: 76px; padding: 12px; }
   .thanks-dialog-avatar { width: 48px; height: 48px; }
+  .friend-links-dialog-list { padding: 12px 14px 16px; }
   .game-rules-backdrop { padding: 10px; }
   .game-rules-dialog { max-height: calc(100dvh - 20px); }
   .game-rules-dialog-heading {

@@ -64,6 +64,7 @@ export interface RoomPlayer {
   ready: boolean;
   connected: boolean;
   score: number;
+  skipped: boolean;
   guessCount: number;
   guesses: MultiplayerGuessFeedback[];
 }

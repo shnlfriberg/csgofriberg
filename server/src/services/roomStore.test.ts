@@ -31,7 +31,7 @@ function makeRoom(id: string): StoredRoom {
     players: [{
       key: 'u:1', userId: 1, name: 'one', socketId: 's1', ready: true,
       score: 0, guesses: [], lastGuessAt: null, connected: true, disconnectDeadline: null,
-      guessTimes: [],
+      guessTimes: [], skipped: false,
     }],
     spectators: [],
     targetPlayerId: null,

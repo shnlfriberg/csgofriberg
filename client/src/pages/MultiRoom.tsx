@@ -12,7 +12,7 @@ import {
   Eye,
   EyeOff,
   Timer,
-  Flag,
+  SkipForward,
   RotateCcw,
   X,
   CircleAlert,
@@ -127,6 +127,7 @@ const ROUND_OVER_REASON: Record<string, string> = {
   guessed: 'multi.roundReasons.guessed',
   exhausted: 'multi.roundReasons.exhausted',
   timeout: 'multi.roundReasons.timeout',
+  skipped: 'multi.roundReasons.skipped',
   surrender: 'multi.roundReasons.surrender',
 };
 
@@ -212,6 +213,7 @@ function PlayerBoard({
             {t('multi.offline')}
           </span>
         )}
+        {player.skipped && <span className="badge"><SkipForward size={12} />{t('multi.roundSkipped')}</span>}
       </h3>
       {player.guesses.length ? (
         <GuessBoard guesses={player.guesses} />
@@ -233,7 +235,7 @@ export default function MultiRoom() {
   const [showRoomCode, setShowRoomCode] = useState(false);
   const [myKey, setMyKey] = useState('');
   const [roundExpired, setRoundExpired] = useState(false);
-  const [surrendering, setSurrendering] = useState(false);
+  const [skipBusy, setSkipBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [rematchBusy, setRematchBusy] = useState(false);
   const [rematchNotice, setRematchNotice] = useState('');
@@ -393,6 +395,7 @@ export default function MultiRoom() {
                 ...player,
                 ready: player.key === current.hostKey,
                 score: 0,
+                skipped: false,
                 guessCount: 0,
                 guesses: [],
               })),
@@ -655,18 +658,19 @@ export default function MultiRoom() {
     });
   };
 
-  const surrenderRound = async () => {
+  const skipRound = async () => {
     const current = roomRef.current;
-    if (!current || current.status !== 'playing' || surrendering) return;
+    const currentMe = current?.players.find((player) => player.key === myKeyRef.current);
+    if (!current || current.status !== 'playing' || !currentMe || currentMe.skipped || skipBusy) return;
     if (!await confirm({
-      title: t('multi.surrenderTitle'),
-      message: t('multi.surrenderMessage'),
-      confirmLabel: t('multi.surrenderConfirm'),
-      tone: 'danger',
+      title: t('multi.skipTitle'),
+      message: t('multi.skipMessage'),
+      confirmLabel: t('multi.skipConfirm'),
+      tone: 'warning',
     })) return;
-    setSurrendering(true);
-    getSocket().emit('game:surrender-round', { roundId: current.roundId }, (res: any) => {
-      setSurrendering(false);
+    setSkipBusy(true);
+    getSocket().emit('game:skip-round', { roundId: current.roundId }, (res: any) => {
+      setSkipBusy(false);
       if (res?.room) applyRoomSnapshot(res.room);
       if (res?.code === 'NO_ACTIVE_ROUND' || res?.code === 'STALE_ROUND') {
         syncRoom();
@@ -857,11 +861,11 @@ export default function MultiRoom() {
           {playing && me && (
             <button
               className="btn btn-ghost btn-sm"
-              disabled={roundExpired || surrendering}
-              onClick={() => void surrenderRound()}
+              disabled={roundExpired || skipBusy || me.skipped}
+              onClick={() => void skipRound()}
             >
-              <Flag size={15} />
-              <span className="btn-text">{surrendering ? t('multi.processing') : t('multi.surrenderRound')}</span>
+              <SkipForward size={15} />
+              <span className="btn-text">{skipBusy ? t('multi.processing') : me.skipped ? t('multi.roundSkipped') : t('multi.skipRound')}</span>
             </button>
           )}
           {room.status === 'finished' && matchOver && !matchOverVisible && (
@@ -905,7 +909,7 @@ export default function MultiRoom() {
             onPick={(p) => submitGuess(p.id)}
             onFocusChange={setInputFocused}
             statusText={<GuessCooldownStatus until={guessCooldownUntil} />}
-            disabled={roundExpired || me.guessCount >= room.maxGuesses}
+            disabled={roundExpired || me.skipped || me.guessCount >= room.maxGuesses}
           />
         ) : undefined
       }

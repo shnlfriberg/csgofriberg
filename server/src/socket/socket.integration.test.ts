@@ -6,7 +6,8 @@ import { io as clientIo, Socket as ClientSocket } from 'socket.io-client';
 import { initDb } from '../db/init';
 import { db } from '../db/knex';
 import { initRedis, redis, redisKey } from '../redis';
-import { initPlayerCache } from '../services/playerCache';
+import { getDifficultyPlayers, getPlayer, initPlayerCache } from '../services/playerCache';
+import { compareGuess } from '../services/gameService';
 import { resolveSocketIp, setRecoveryWindow, setupSocket } from './index';
 import { browserFingerprint, POW_COOKIE } from '../services/pow';
 import jwt from 'jsonwebtoken';
@@ -1389,10 +1390,10 @@ describe('multiplayer socket integration', () => {
     }
   });
 
-  it('allows surrendering only the active round and scores it once', async () => {
+  it('shows a single-player skip to both players without awarding a score', async () => {
     const stamp = Date.now();
-    const keyA = `surrender-a-${stamp}`;
-    const keyB = `surrender-b-${stamp}`;
+    const keyA = `skip-a-${stamp}`;
+    const keyB = `skip-b-${stamp}`;
     const a = await connect(withPowCookie(`csgofriberg_guest=${jwt.sign(
       { key: keyA, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' }
     )}`));
@@ -1406,39 +1407,35 @@ describe('multiplayer socket integration', () => {
       await emit(b, 'room:ready', { ready: true });
       await emit(a, 'game:start');
       const active = await emit(a, 'room:sync');
-      let matchOverEvents = 0;
-      b.on('match:over', () => { matchOverEvents += 1; });
-      const roundOverPromise = onceEvent(b, 'round:over');
-      const results = await Promise.all([
-        emit(a, 'game:surrender-round', { roundId: active.room.roundId }),
-        emit(a, 'game:surrender-round', { roundId: active.room.roundId }),
-      ]);
-      const roundOver = await roundOverPromise;
-      expect(results.filter((result) => result.ok)).toHaveLength(1);
-      expect(results.some((result) => result.code === 'NO_ACTIVE_ROUND')).toBe(true);
-      expect(Object.keys(roundOver).sort()).toEqual(['room', 'serverNow']);
-      expect(roundOver.serverNow).toEqual(expect.any(Number));
-      expect(matchOverEvents).toBe(0);
+      const patchPromise = onceEvent(b, 'room:patch');
+      const skipped = await emit(a, 'game:skip-round', { roundId: active.room.roundId });
+      const patch = await patchPromise;
+      expect(skipped).toMatchObject({ ok: true, room: { status: 'playing' } });
+      expect(patch.players.updated).toEqual([{ key: `g:${keyA}`, skipped: true }]);
 
       const synced = await emit(b, 'room:sync');
-      expect(synced.room.status).toBe('round_over');
-      expect(synced.room.roundResult).toMatchObject({
-        winnerKey: `g:${keyB}`,
-        reason: 'surrender',
-        nextRoundAt: expect.any(Number),
+      expect(synced.room.status).toBe('playing');
+      expect(synced.room.players.find((player: any) => player.key === `g:${keyA}`)).toMatchObject({
+        skipped: true,
+        score: 0,
       });
-      expect(synced.room.players.find((player: any) => player.key === `g:${keyB}`).score).toBe(1);
-      expect(synced.room.players.find((player: any) => player.key === `g:${keyA}`).score).toBe(0);
+      expect(synced.room.players.find((player: any) => player.key === `g:${keyB}`).score).toBe(0);
+      const guessPlayer = getDifficultyPlayers('easy')[0];
+      expect((await emit(a, 'game:guess', {
+        playerId: guessPlayer.id,
+        roundId: active.room.roundId,
+        eventId: `skip-${stamp}-0001`,
+      })).code).toBe('ROUND_SKIPPED');
     } finally {
       a.disconnect();
       b.disconnect();
     }
   });
 
-  it('clears the surrendering player room mapping after leaving the match', async () => {
+  it('clears a skipped player room mapping after leaving the match', async () => {
     const stamp = Date.now();
-    const keyA = `surrender-leave-a-${stamp}`;
-    const keyB = `surrender-leave-b-${stamp}`;
+    const keyA = `skip-leave-a-${stamp}`;
+    const keyB = `skip-leave-b-${stamp}`;
     const identityA = `g:${keyA}`;
     const a = await connect(withPowCookie(`csgofriberg_guest=${jwt.sign(
       { key: keyA, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' }
@@ -1454,7 +1451,7 @@ describe('multiplayer socket integration', () => {
       await emit(a, 'game:start');
       const active = await emit(a, 'room:sync');
 
-      expect((await emit(a, 'game:surrender-round', { roundId: active.room.roundId })).ok).toBe(true);
+      expect((await emit(a, 'game:skip-round', { roundId: active.room.roundId })).ok).toBe(true);
       expect((await emit(a, 'room:leave')).ok).toBe(true);
 
       const finished = await emit(b, 'room:sync');
@@ -1471,10 +1468,10 @@ describe('multiplayer socket integration', () => {
     }
   });
 
-  it('finishes a BO1 match when the active round is surrendered', async () => {
+  it('reveals the answer and records a draw after both players skip', async () => {
     const stamp = Date.now();
-    const keyA = `surrender-bo1-a-${stamp}`;
-    const keyB = `surrender-bo1-b-${stamp}`;
+    const keyA = `skip-both-a-${stamp}`;
+    const keyB = `skip-both-b-${stamp}`;
     const a = await connect(withPowCookie(`csgofriberg_guest=${jwt.sign(
       { key: keyA, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' }
     )}`));
@@ -1488,13 +1485,71 @@ describe('multiplayer socket integration', () => {
       await emit(b, 'room:ready', { ready: true });
       await emit(a, 'game:start');
       const active = await emit(a, 'room:sync');
-      expect((await emit(a, 'game:surrender-round', { roundId: active.room.roundId })).ok).toBe(true);
-      const synced = await emit(b, 'room:sync');
-      expect(synced.room.status).toBe('finished');
-      expect(synced.room.matchResult).toMatchObject({
-        winnerKey: `g:${keyB}`,
-        reason: 'score',
+      expect((await emit(a, 'game:skip-round', { roundId: active.room.roundId })).ok).toBe(true);
+      const roundOverPromise = onceEvent(a, 'round:over');
+      expect((await emit(b, 'game:skip-round', { roundId: active.room.roundId })).ok).toBe(true);
+      const roundOver = await roundOverPromise;
+      expect(roundOver.room.roundResult).toMatchObject({
+        winnerKey: null,
+        reason: 'skipped',
+        answer: { nickname: expect.any(String) },
       });
+      const synced = await emit(b, 'room:sync');
+      expect(synced.room.status).toBe('round_over');
+      expect(synced.room.matchResult).toBeNull();
+      expect(synced.room.players.map((player: any) => player.score)).toEqual([0, 0]);
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
+  it('records a draw when one player skips and the other uses every guess', async () => {
+    const stamp = Date.now();
+    const keyA = `skip-limit-a-${stamp}`;
+    const keyB = `skip-limit-b-${stamp}`;
+    const identityB = `g:${keyB}`;
+    const a = await connect(withPowCookie(`csgofriberg_guest=${jwt.sign(
+      { key: keyA, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' }
+    )}`));
+    const b = await connect(withPowCookie(`csgofriberg_guest=${jwt.sign(
+      { key: keyB, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' }
+    )}`));
+    try {
+      const created = await emit(a, 'room:create', { dbType: 'easy', boType: 3 });
+      createdRoomIds.push(created.room.id);
+      await emit(b, 'room:join', { roomId: created.room.id });
+      await emit(b, 'room:ready', { ready: true });
+      await emit(a, 'game:start');
+      const active = await emit(a, 'room:sync');
+      expect((await emit(a, 'game:skip-round', { roundId: active.room.roundId })).ok).toBe(true);
+
+      const stored = await getRoom(created.room.id);
+      const target = getPlayer(stored!.targetPlayerId!)!;
+      const wrongPlayers = getDifficultyPlayers('easy')
+        .filter((player) => player.id !== target.id)
+        .slice(0, 8);
+      expect(wrongPlayers).toHaveLength(8);
+      await withRoomLock(created.room.id, (locked) => {
+        const player = locked.players.find((candidate) => candidate.key === identityB)!;
+        player.guesses = wrongPlayers.slice(0, 7).map((guess) => compareGuess(guess, target));
+        player.guessTimes = player.guesses.map(() => null);
+        player.lastGuessAt = null;
+      });
+
+      const roundOverPromise = onceEvent(a, 'round:over');
+      expect((await emit(b, 'game:guess', {
+        playerId: wrongPlayers[7].id,
+        roundId: active.room.roundId,
+        eventId: `skip-limit-${stamp}-0001`,
+      }))).toMatchObject({ cooldownMs: expect.any(Number) });
+      const roundOver = await roundOverPromise;
+      expect(roundOver.room.roundResult).toMatchObject({
+        winnerKey: null,
+        reason: 'skipped',
+        answer: { nickname: target.nickname },
+      });
+      expect(roundOver.room.players.map((player: any) => player.score)).toEqual([0, 0]);
     } finally {
       a.disconnect();
       b.disconnect();

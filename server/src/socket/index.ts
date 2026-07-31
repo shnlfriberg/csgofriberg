@@ -332,6 +332,7 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
         ready: p.ready,
         connected: p.connected,
         score: p.score,
+        skipped: p.skipped,
         guessCount: guesses.length,
         guesses: viewerIsSpectator || roundIsComplete || p.key === viewerKey
           ? guesses.map(visibleGuess)
@@ -433,6 +434,7 @@ function makePlayer(identity: StoredIdentity, socketId: string, ready: boolean):
     guesses: [],
     guessTimes: [],
     lastGuessAt: null,
+    skipped: false,
     connected: true,
     disconnectDeadline: null,
   };
@@ -558,6 +560,7 @@ function resetForRematch(room: StoredRoom): void {
     player.guesses = [];
     player.guessTimes = [];
     player.lastGuessAt = null;
+    player.skipped = false;
     player.disconnectDeadline = null;
   }
 }
@@ -624,6 +627,7 @@ async function startRound(io: Server, roomId: string) {
       player.guesses = [];
       player.guessTimes = [];
       player.lastGuessAt = null;
+      player.skipped = false;
     }
     return { room };
   }, (value) => Boolean(
@@ -696,60 +700,53 @@ async function finishRound(
   setLocalTimer(`next:${roomId}`, NEXT_ROUND_DELAY_MS, () => startRound(io, roomId));
 }
 
-async function surrenderRound(
+async function skipRound(
   io: Server,
   roomId: string,
-  loserKey: string,
+  playerKey: string,
   socketId: string,
   expectedRound: number
-): Promise<{ room: StoredRoom; matchOver: boolean } | 'stale' | null> {
+): Promise<{ room: StoredRoom; roundFinished: boolean; alreadySkipped: boolean } | 'stale' | null> {
   const result = await withRoomLock(roomId, (room) => {
     if (room.status !== 'playing' || room.round !== expectedRound) return null;
-    const loser = room.players.find((player) => player.key === loserKey);
-    if (!loser || loser.socketId !== socketId) return { stale: true as const };
-    const winner = room.players.find((player) => player.key !== loserKey);
-    if (!winner) return null;
+    const player = room.players.find((candidate) => candidate.key === playerKey);
+    if (!player || player.socketId !== socketId) return { stale: true as const };
+    if (player.skipped) {
+      return { room, roundFinished: false, alreadySkipped: true };
+    }
 
-    winner.score += 1;
-    room.roundEndsAt = null;
-    const matchOver = winner.score >= winsNeeded(room.boType);
-    if (matchOver) {
-      room.status = 'finished';
-      room.nextRoundAt = null;
-      room.matchResult = { winnerKey: winner.key, reason: 'score', forfeitedKey: null };
-    } else {
+    player.skipped = true;
+    const roundFinished = room.players.every(
+      (candidate) => candidate.skipped || candidate.guesses.length >= MAX_GUESSES
+    );
+    if (roundFinished) {
+      room.roundEndsAt = null;
       room.status = 'round_over';
       room.nextRoundAt = Date.now() + NEXT_ROUND_DELAY_MS;
+      room.roundResult = {
+        round: room.round,
+        winnerKey: null,
+        reason: 'skipped',
+        matchOver: false,
+        nextRoundAt: room.nextRoundAt,
+      };
+      appendReplayRound(room);
     }
-    room.roundResult = {
-      round: room.round,
-      winnerKey: winner.key,
-      reason: 'surrender',
-      matchOver,
-      nextRoundAt: room.nextRoundAt,
-    };
-    appendReplayRound(room);
-    return { room, matchOver };
-  }, (value) => Boolean(value && !('stale' in value)));
+    return { room, roundFinished, alreadySkipped: false };
+  }, (value) => Boolean(value && !('stale' in value) && !value.alreadySkipped));
 
   if (!result) return null;
   if ('stale' in result) return 'stale';
-  const winnerKey = result.room.roundResult?.winnerKey ?? null;
-  if (result.matchOver) {
-    emitRoomViews(io, result.room, 'match:over', (viewerKey) => ({
-      room: publicRoom(result.room, viewerKey),
-      serverNow: Date.now(),
-    }));
-    void persistMatch(result.room, winnerKey).catch((err) => console.error('[match:persist]', err));
-    setLocalTimer(`cleanup:${roomId}`, FINISHED_ROOM_TTL_MS, () => {
-      return cleanupRoom(roomId);
-    });
-  } else {
+  if (result.roundFinished) {
     emitRoomViews(io, result.room, 'round:over', (viewerKey) => ({
       room: publicRoom(result.room, viewerKey),
       serverNow: Date.now(),
     }));
     setLocalTimer(`next:${roomId}`, NEXT_ROUND_DELAY_MS, () => startRound(io, roomId));
+  } else if (!result.alreadySkipped) {
+    emitRoomPatch(io, result.room, {
+      players: { updated: [{ key: playerKey, skipped: true }] },
+    });
   }
   return result;
 }
@@ -1778,15 +1775,15 @@ export function setupSocket(io: Server) {
       }
     }, gameGuessPayloadSchema);
 
-    safeOn(socket, 'game:surrender-round', async (payload: z.infer<typeof activeRoundPayloadSchema>, ack) => {
+    const handleSkipRound = async (payload: z.infer<typeof activeRoundPayloadSchema>, ack?: (value: any) => void) => {
       await restorePromise;
-      if (!(await socketAllowed('surrender', me.key, 5, 60))) {
+      if (!(await socketAllowed('skip-round', me.key, 5, 60))) {
         return ack?.({ code: 'RATE_LIMITED' });
       }
       const roomId = String(socket.data.roomId || await getRoomIdForIdentity(me.key) || '');
       if (!roomId) return ack?.({ code: 'NO_ACTIVE_ROUND' });
       const { roundId } = payload;
-      const result = await surrenderRound(io, roomId, me.key, socket.id, roundId);
+      const result = await skipRound(io, roomId, me.key, socket.id, roundId);
       if (result === 'stale') return ack?.({ code: 'STALE_CONNECTION' });
       if (!result) {
         const latest = await getRoom(roomId);
@@ -1795,8 +1792,11 @@ export function setupSocket(io: Server) {
           room: latest ? publicRoom(latest, me.key) : undefined,
         });
       }
-      ack?.({ ok: true });
-    }, activeRoundPayloadSchema);
+      ack?.({ ok: true, room: publicRoom(result.room, me.key) });
+    };
+    safeOn(socket, 'game:skip-round', handleSkipRound, activeRoundPayloadSchema);
+    // Rolling-upgrade compatibility for clients that still send the old event name.
+    safeOn(socket, 'game:surrender-round', handleSkipRound, activeRoundPayloadSchema);
 
     safeOn(socket, 'room:leave', async (_payload, ack) => {
       await restorePromise;
