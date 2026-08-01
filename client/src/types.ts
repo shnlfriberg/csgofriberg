@@ -43,6 +43,8 @@ export interface UserInfo {
   id: number;
   username: string;
   role: 'user' | 'admin';
+  email?: string | null;
+  emailVerified?: boolean;
 }
 
 export interface PlayerInfo {

@@ -76,6 +76,7 @@
   .btn { min-height: 40px; padding: 9px 14px; }
   .btn-lg { min-height: 44px; padding: 11px 19px; }
   .input, select.input, textarea.input { min-height: 42px; padding: 10px 12px; }
+  .auth-password-fields { grid-template-columns: 1fr; }
 
   .leaderboard-card {
     overflow-x: hidden;
@@ -248,6 +249,7 @@
   .opt-label { min-width: 100%; }
   .opt-btn { min-height: 36px; padding-inline: 14px; }
   .spectator-option { margin-left: 0; }
+  .verified-match-option { margin-left: 0; }
   .join-room-form { grid-template-columns: 1fr 1fr; }
   .join-room-form .input { grid-column: 1 / -1; }
   .join-room-form .btn { width: 100%; }
@@ -317,6 +319,10 @@
   .overlay-card { max-height: calc(100dvh - 20px); padding: 22px 16px; border-radius: 18px; }
   .confirm-dialog { grid-template-columns: 36px minmax(0, 1fr); gap: 10px; padding: 18px 16px; border-radius: 16px; }
   .confirm-icon { width: 36px; height: 36px; }
+  .settings-dialog { grid-template-columns: 44px minmax(0, 1fr); gap: 14px; padding: 22px 18px; }
+  .settings-dialog-icon { width: 44px; height: 44px; }
+  .settings-dialog .confirm-heading h2 { font-size: 1.18rem; }
+  .settings-email .btn { width: 100%; }
   .replay-dialog { max-height: calc(100dvh - 20px); padding: 0; border-radius: 16px; }
   .replay-heading, .replay-dialog-body { padding: 18px 14px; }
   .replay-heading { padding-bottom: 14px; }

@@ -372,15 +372,24 @@
 .confirm-content > p { margin: 10px 0 20px; color: var(--text-sec); line-height: 1.6; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .confirm-actions .btn { display: inline-flex; align-items: center; gap: 7px; }
+.settings-dialog {
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 20px;
+  width: min(560px, 100%);
+  padding: 28px;
+}
+.settings-dialog .confirm-content { min-width: 0; }
+.settings-dialog .confirm-heading h2 { font-size: 1.3rem; }
+.settings-dialog-icon { width: 56px; height: 56px; }
 .settings-dialog-icon { color: var(--primary); background: var(--primary-soft); }
 .settings-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  min-height: 58px;
-  margin-top: 16px;
-  padding: 14px 0 2px;
+  min-height: 72px;
+  margin-top: 22px;
+  padding: 18px 0 4px;
   border-top: 1px solid var(--border);
   color: var(--text);
   cursor: pointer;
@@ -420,6 +429,19 @@
 .settings-switch:checked { border-color: var(--primary); background: var(--primary); }
 .settings-switch:checked::after { transform: translateX(20px); background: #fff; }
 .settings-switch:focus-visible { outline: 3px solid var(--primary-soft); outline-offset: 2px; }
+.settings-email {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+.settings-email .settings-option-label { font-size: 1.05rem; }
+.settings-email .input { min-height: 46px; font-size: 1rem; }
+.settings-email .btn { min-height: 44px; justify-self: start; }
+.verified-match-dialog { width: min(540px, 100%); }
+.verified-match-dialog-icon { color: var(--primary); background: var(--primary-soft); }
+.confirm-content > .verified-match-info-text { margin: 14px 0 22px; line-height: 1.75; }
 .announcement-popup-dialog { width: min(560px, 100%); }
 .confirm-content > .announcement-popup-content {
   max-height: min(52dvh, 420px);

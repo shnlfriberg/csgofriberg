@@ -15,6 +15,7 @@ export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const setUser = useAuth((s) => s.setUser);
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const res = await api.post(`/auth/${mode}`, { username, password });
+      const res = await api.post(`/auth/${mode}`, { username, password, ...(mode === 'register' && email ? { email } : {}) });
       markAuthenticated();
       setUser(res.data.user);
       closeSocket();
@@ -60,22 +61,43 @@ export default function Login() {
             autoComplete="username"
             onChange={(e) => setUsername(e.target.value)}
           />
-          <input
-            className="input"
-            type="password"
-            placeholder={t('auth.password')}
-            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
-          {mode === 'register' && (
+          {mode === 'register' ? (
+            <div className="auth-password-fields">
+              <input
+                className="input"
+                type="password"
+                placeholder={t('auth.password')}
+                autoComplete="new-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+              <input
+                className="input"
+                type="password"
+                placeholder={t('auth.confirmPassword')}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+          ) : (
             <input
               className="input"
               type="password"
-              placeholder={t('auth.confirmPassword')}
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder={t('auth.password')}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          )}
+          {mode === 'register' && (
+            <input
+              className="input"
+              type="email"
+              placeholder={t('auth.emailOptional')}
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
           )}
           <button className="btn" disabled={loading}>
@@ -86,6 +108,7 @@ export default function Login() {
             className="btn btn-ghost"
             onClick={() => {
               setConfirmPassword('');
+              setEmail('');
               setMode(mode === 'login' ? 'register' : 'login');
             }}
           >

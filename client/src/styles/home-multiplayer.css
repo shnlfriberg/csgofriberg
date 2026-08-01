@@ -645,6 +645,28 @@
   accent-color: var(--primary);
   cursor: pointer;
 }
+.verified-match-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 8px 0 0 92px;
+}
+.verified-match-option .spectator-option { margin: 0; }
+.verified-match-help {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-light);
+  cursor: pointer;
+}
+.verified-match-help:hover { background: var(--card-soft); color: var(--primary); }
+.verified-match-help:focus-visible { outline: 3px solid var(--primary-soft); outline-offset: 2px; }
 .room-code-display {
   font-family: Consolas, 'JetBrains Mono', monospace;
   font-size: clamp(2rem, 6vw, 2.8rem);
