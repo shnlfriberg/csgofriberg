@@ -566,7 +566,7 @@
 }
 .admin-user-detail-tabs {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   margin: 16px 0 0;
   padding: 4px;
@@ -574,6 +574,7 @@
   border-radius: var(--radius-sm);
   background: var(--card-soft);
 }
+.admin-guest-detail-tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .admin-user-detail-tabs button {
   display: inline-flex;
   align-items: center;
@@ -592,6 +593,7 @@
   cursor: pointer;
 }
 .admin-user-detail-tabs button.active { background: var(--card); color: var(--text); box-shadow: var(--shadow-sm); }
+.admin-quick-management { display: grid; gap: 12px; }
 .admin-user-detail-content { flex: 1 1 auto; min-height: 0; margin-top: 16px; padding-right: 4px; overflow-y: auto; }
 .admin-user-detail-loading { padding: 72px 0; text-align: center; }
 .admin-user-leaderboard-control {
