@@ -32,7 +32,7 @@ router.get(
   '/',
   rateLimit({
     name: 'player-search',
-    limit: 60,
+    limit: 10,
     windowSeconds: 60,
     failClosed: true,
   }),
