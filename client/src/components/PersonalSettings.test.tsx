@@ -62,4 +62,23 @@ describe('PersonalSettings', () => {
     });
     expect(api.post).toHaveBeenCalledWith('/auth/email/request', { email: 'tester@example.com' });
   });
+
+  it('masks the local part of a verified email address', async () => {
+    const user = {
+      id: 8,
+      username: 'tester',
+      role: 'user' as const,
+      email: 'alice@example.com',
+      emailVerified: true,
+    };
+    useAuth.setState({ user, initialized: true });
+    vi.mocked(api.get).mockResolvedValue({ data: { user } } as never);
+    renderWithProviders(<PersonalSettings />);
+
+    fireEvent.click(screen.getByRole('button', { name: '个人设置' }));
+
+    const emailInput = await screen.findByDisplayValue('a**@example.com');
+    expect(emailInput).toBeDisabled();
+    expect(screen.queryByDisplayValue('alice@example.com')).not.toBeInTheDocument();
+  });
 });

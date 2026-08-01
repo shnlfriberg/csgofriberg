@@ -8,6 +8,13 @@ import { api, errMsg } from '../api/client';
 import { useAuth } from '../store/auth';
 import { toast } from './Toast';
 
+function maskVerifiedEmail(email: string | null | undefined): string {
+  if (!email) return '';
+  const separator = email.indexOf('@');
+  if (separator <= 0) return email;
+  return `${email.slice(0, 1)}**${email.slice(separator)}`;
+}
+
 export default function PersonalSettings() {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -173,7 +180,7 @@ export default function PersonalSettings() {
                     finally { setEmailLoading(false); }
                   }}>
                     <span className="settings-option-label">{t('settings.email')}</span>
-                    <input className="input" type="email" value={user.emailVerified ? user.email || '' : email || user.email || ''} disabled={user.emailVerified} onChange={(event) => setEmail(event.target.value)} placeholder={t('settings.emailPlaceholder')} />
+                    <input className="input" type="email" value={user.emailVerified ? maskVerifiedEmail(user.email) : email || user.email || ''} disabled={user.emailVerified} onChange={(event) => setEmail(event.target.value)} placeholder={t('settings.emailPlaceholder')} />
                     <span className="muted">{user.emailVerified ? t('settings.emailLocked') : t('settings.emailUnverified')}</span>
                     <button className="btn btn-sm" type="submit" disabled={user.emailVerified || emailLoading || emailCooldownSeconds > 0 || !email.trim()}>
                       {emailCooldownSeconds > 0
