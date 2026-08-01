@@ -15,9 +15,15 @@ function maskVerifiedEmail(email: string | null | undefined): string {
   return `${email.slice(0, 1)}**${email.slice(separator)}`;
 }
 
-export default function PersonalSettings() {
+interface PersonalSettingsProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export default function PersonalSettings({ open: openProp, onOpenChange }: PersonalSettingsProps = {}) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
   const motionEnabled = useSyncExternalStore(subscribeMotion, getMotionEnabled, () => true);
   const user = useAuth((state) => state.user);
   const setUser = useAuth((state) => state.setUser);
@@ -30,10 +36,15 @@ export default function PersonalSettings() {
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  const setOpen = useCallback((next: boolean) => {
+    if (openProp === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  }, [onOpenChange, openProp]);
+
   const close = useCallback(() => {
     setOpen(false);
     requestAnimationFrame(() => triggerRef.current?.focus());
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
     if (!open) return;

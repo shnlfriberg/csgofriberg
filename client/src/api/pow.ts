@@ -14,11 +14,58 @@ interface ChallengeResponse {
   algorithm?: string;
 }
 
-let validUntil = 0;
-let activeRequest: Promise<void> | null = null;
-let refreshTimer: number | null = null;
+export type PowProfile = 'default' | 'register';
 
-function noteValidity(expiresInMs: unknown, legacyExpiresAt?: unknown): boolean {
+export interface PowProgress {
+  active: boolean;
+  percent: number;
+}
+
+let validUntil = 0;
+let activeRequest: { profile: PowProfile; promise: Promise<void> } | null = null;
+let refreshTimer: number | null = null;
+let progressTimer: number | null = null;
+let progressStartedAt = 0;
+let powProgress: PowProgress = { active: false, percent: 0 };
+const progressListeners = new Set<() => void>();
+
+export function subscribePowProgress(listener: () => void): () => void {
+  progressListeners.add(listener);
+  return () => progressListeners.delete(listener);
+}
+
+export function getPowProgress(): PowProgress {
+  return powProgress;
+}
+
+function setPowProgress(next: PowProgress): void {
+  powProgress = next;
+  progressListeners.forEach((listener) => listener());
+}
+
+function startRegisterProgress(): void {
+  if (progressTimer !== null) window.clearInterval(progressTimer);
+  progressStartedAt = performance.now();
+  setPowProgress({ active: true, percent: 3 });
+  progressTimer = window.setInterval(() => {
+    const elapsed = performance.now() - progressStartedAt;
+    const percent = Math.min(92, 3 + (elapsed / 3_000) * 89);
+    setPowProgress({ active: true, percent });
+  }, 100);
+}
+
+function stopRegisterProgress(): void {
+  if (progressTimer !== null) {
+    window.clearInterval(progressTimer);
+    progressTimer = null;
+  }
+  setPowProgress({ active: false, percent: 100 });
+}
+
+function noteValidity(
+  expiresInMs: unknown,
+  legacyExpiresAt?: unknown
+): boolean {
   const duration = Number(expiresInMs);
   const legacyExpiry = Number(legacyExpiresAt);
   const validityMs = Number.isFinite(duration) && duration > 0
@@ -73,10 +120,14 @@ async function solveChallenge(challenge: string, difficulty: number): Promise<st
   }
 }
 
-async function refreshPow(): Promise<void> {
-  const challengeResponse = await powApi.post<ChallengeResponse>('/challenge', undefined, {
-    headers: { 'Cache-Control': 'no-cache' },
-  });
+async function refreshPow(profile: PowProfile): Promise<void> {
+  const challengeResponse = await powApi.post<ChallengeResponse>(
+    '/challenge',
+    profile === 'register' ? { profile } : undefined,
+    {
+      headers: { 'Cache-Control': 'no-cache' },
+    }
+  );
   const data = challengeResponse.data;
   if (data.valid && data.expiresAt) {
     noteValidity(data.expiresInMs, data.expiresAt);
@@ -91,7 +142,7 @@ async function refreshPow(): Promise<void> {
   ) throw new Error('POW_CHALLENGE_INVALID');
 
   const nonce = await solveChallenge(data.challenge, data.difficulty);
-  const verifyResponse = await powApi.post<{ expiresAt: number; expiresInMs?: number }>('/verify', {
+  const verifyResponse = await powApi.post<{ expiresAt: number; expiresInMs?: number; difficulty?: number }>('/verify', {
     id: data.id,
     nonce,
   });
@@ -99,22 +150,40 @@ async function refreshPow(): Promise<void> {
   scheduleRefresh();
 }
 
-export function ensurePow(force = false): Promise<void> {
-  if (activeRequest) return activeRequest;
-  if (!force && validUntil > performance.now()) {
+export function ensurePow(
+  options: boolean | { force?: boolean; profile?: PowProfile } = false
+): Promise<void> {
+  const force = typeof options === 'boolean' ? options : Boolean(options.force);
+  const profile: PowProfile = typeof options === 'boolean' ? 'default' : options.profile ?? 'default';
+  if (activeRequest) {
+    if (activeRequest.profile === 'register' || profile === 'default') return activeRequest.promise;
+    return activeRequest.promise.then(() => ensurePow({ force: true, profile }));
+  }
+  if (profile === 'default' && !force && validUntil > performance.now()) {
     scheduleRefresh();
     return Promise.resolve();
   }
-  if (force) validUntil = 0;
-  activeRequest = refreshPow()
-    .catch((error) => {
+  if (force) {
+    validUntil = 0;
+  }
+  const promise = (async () => {
+    if (profile === 'register') startRegisterProgress();
+    try {
+      await refreshPow(profile);
+    } catch (error) {
       validUntil = 0;
       throw error;
-    })
-    .finally(() => {
-      activeRequest = null;
-    });
-  return activeRequest;
+    } finally {
+      if (profile === 'register') stopRegisterProgress();
+    }
+  })();
+  activeRequest = { profile, promise };
+  void promise.then(() => {
+    if (activeRequest?.promise === promise) activeRequest = null;
+  }, () => {
+    if (activeRequest?.promise === promise) activeRequest = null;
+  });
+  return promise;
 }
 
 export function notePowExpiry(expiresAt: unknown, expiresInMs?: unknown): void {

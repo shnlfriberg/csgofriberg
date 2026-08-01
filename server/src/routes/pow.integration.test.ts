@@ -7,6 +7,7 @@ import authRoutes from './auth';
 import { requirePow } from '../middleware/pow';
 import { errorHandler } from '../middleware/common';
 import { initRedis, redis, redisKey } from '../redis';
+import { config } from '../config';
 import { hasLeadingZeroBits, modifiedSha256, POW_COOKIE } from '../services/pow';
 
 let server: http.Server;
@@ -103,6 +104,20 @@ describe('proof of work gateway', () => {
     expect(session.response.status).toBe(200);
     expect(Number(session.response.headers.get('x-pow-expires-in'))).toBeGreaterThan(0);
     expect(setCookies(session.response).join(';')).toContain('csgofriberg_guest=');
+
+    const registerChallenge = await request('/api/pow/challenge', {
+      method: 'POST',
+      body: JSON.stringify({ profile: 'register' }),
+    });
+    expect(registerChallenge.response.status).toBe(200);
+    expect(registerChallenge.data.difficulty).toBe(config.powRegisterDifficulty);
+    const blockedRegister = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'pow-register-check', password: 'Strong-password-123' }),
+      headers: { Cookie: powCookie! },
+    });
+    expect(blockedRegister.response.status).toBe(428);
+    expect(blockedRegister.data.code).toBe('POW_REQUIRED');
   });
 
   it('binds a challenge to the requesting browser fingerprint', async () => {

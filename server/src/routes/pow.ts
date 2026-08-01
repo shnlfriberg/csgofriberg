@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { asyncHandler, validateBody } from '../middleware/common';
+import { config } from '../config';
 import { rateLimit } from '../middleware/rateLimit';
 import {
   consumeAndVerifyChallenge,
@@ -16,21 +17,33 @@ const verifySchema = z.object({
   id: z.string().uuid(),
   nonce: z.string().regex(/^\d{1,20}$/),
 });
+const challengeSchema = z.object({
+  profile: z.enum(['default', 'register']).optional(),
+}).default({});
 
 router.post(
   '/challenge',
   rateLimit({ name: 'pow:challenge', limit: 20, windowSeconds: 60, failClosed: true }),
+  validateBody(challengeSchema),
   asyncHandler(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
+    const requiredDifficulty = req.body.profile === 'register'
+      ? config.powRegisterDifficulty
+      : config.powDifficulty;
     const current = getRequestPow(req);
-    if (current && current.expiresAt > Date.now() + 30_000) {
+    if (
+      current &&
+      current.difficulty >= requiredDifficulty &&
+      current.expiresAt > Date.now() + 30_000
+    ) {
       return res.json({
         valid: true,
         expiresAt: current.expiresAt,
         expiresInMs: Math.max(0, current.expiresAt - Date.now()),
+        difficulty: current.difficulty,
       });
     }
-    res.json(await createChallenge(req.headers['user-agent']));
+    res.json(await createChallenge(req.headers['user-agent'], requiredDifficulty));
   })
 );
 

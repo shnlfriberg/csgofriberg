@@ -86,14 +86,17 @@ export function hasLeadingZeroBits(digest: Uint8Array, difficulty: number): bool
   return remaining === 0 || (digest[wholeBytes] & (0xff << (8 - remaining))) === 0;
 }
 
-export async function createChallenge(userAgent: string | undefined) {
+export async function createChallenge(
+  userAgent: string | undefined,
+  difficulty = config.powDifficulty
+) {
   const client = redis();
   if (!client) throw new Error('REDIS_UNAVAILABLE');
   const id = crypto.randomUUID();
   const challenge = crypto.randomBytes(32).toString('base64url');
   const stored: StoredChallenge = {
     challenge,
-    difficulty: config.powDifficulty,
+    difficulty,
     fingerprint: browserFingerprint(userAgent),
   };
   await client.set(redisKey(`pow:challenge:${id}`), JSON.stringify(stored), {

@@ -6,7 +6,9 @@ import { hasAuthHint, refreshAuthenticatedSession } from './authSession';
 export const api = axios.create({ baseURL: '/api', withCredentials: true });
 
 api.interceptors.request.use(async (request) => {
-  await ensurePow();
+  const isRegisterRequest = request.method?.toLowerCase() === 'post' &&
+    String(request.url ?? '').replace(/^.*\/api/, '') === '/auth/register';
+  await ensurePow(isRegisterRequest ? { profile: 'register' } : undefined);
   if (hasAuthHint()) request.headers.set('X-Auth-Expected', '1');
   else request.headers.delete('X-Auth-Expected');
   return request;
@@ -29,7 +31,10 @@ api.interceptors.response.use(
     const code = String(error.response?.data?.code ?? '');
     if (code === 'POW_REQUIRED' && config && !config._powRetried) {
       config._powRetried = true;
-      await ensurePow(true);
+      const isRegisterRequest = String(config?.url ?? '').replace(/^.*\/api/, '') === '/auth/register';
+      await ensurePow(isRegisterRequest
+        ? { force: true, profile: 'register' }
+        : true);
       return api.request(config);
     }
     if (

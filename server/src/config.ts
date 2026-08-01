@@ -21,6 +21,10 @@ const configuredBcryptRounds = Number(process.env.BCRYPT_ROUNDS || 8);
 const configuredAdminImportBodyLimitBytes = Number(
   process.env.ADMIN_IMPORT_BODY_LIMIT_BYTES || 2 * 1024 * 1024
 );
+const configuredPowDifficulty = Number(process.env.POW_DIFFICULTY || 17);
+const configuredPowRegisterDifficulty = Number(
+  process.env.POW_REGISTER_DIFFICULTY || Math.min(24, configuredPowDifficulty + 2)
+);
 const configuredEmailAllowedSuffixes = (process.env.EMAIL_ALLOWED_SUFFIXES || '')
   .split(',')
   .map((suffix) => suffix.trim().toLowerCase().replace(/^@/, ''))
@@ -82,7 +86,8 @@ export const config = {
   },
   disconnectForfeitMs: Math.max(100, Number(process.env.DISCONNECT_FORFEIT_MS || 30_000)),
   matchReadyTimeoutMs: 30_000,
-  powDifficulty: Number(process.env.POW_DIFFICULTY || 17),
+  powDifficulty: configuredPowDifficulty,
+  powRegisterDifficulty: configuredPowRegisterDifficulty,
   powChallengeTtlSeconds: Number(process.env.POW_CHALLENGE_TTL_SECONDS || 120),
   powTokenTtlSeconds: Number(process.env.POW_TOKEN_TTL_SECONDS || 600),
   showLeaderboard: process.env.SHOW_LEADERBOARD !== 'false',
@@ -99,6 +104,16 @@ export const config = {
 export function validateProductionConfig(): void {
   if (!Number.isInteger(config.powDifficulty) || config.powDifficulty < 16 || config.powDifficulty > 24) {
     throw new Error('POW_DIFFICULTY_MUST_BE_BETWEEN_16_AND_24');
+  }
+  if (
+    !Number.isInteger(config.powRegisterDifficulty) ||
+    config.powRegisterDifficulty < 16 ||
+    config.powRegisterDifficulty > 24
+  ) {
+    throw new Error('POW_REGISTER_DIFFICULTY_MUST_BE_BETWEEN_16_AND_24');
+  }
+  if (config.powRegisterDifficulty <= config.powDifficulty) {
+    throw new Error('POW_REGISTER_DIFFICULTY_MUST_EXCEED_POW_DIFFICULTY');
   }
   if (process.env.NODE_ENV !== 'production') return;
   if (

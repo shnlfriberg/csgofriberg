@@ -7,6 +7,7 @@ import {
   BarChart3,
   Trophy,
   Megaphone,
+  MailWarning,
   LogIn,
   LogOut,
   Wrench,
@@ -63,6 +64,7 @@ export default function Home() {
   const confirm = useConfirm();
   const [loggingOut, setLoggingOut] = useState(false);
   const [showLeaderboard, setShowLeaderboard] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const guestName = useSyncExternalStore(subscribeGuestName, getGuestName, () => '访客');
 
   useEffect(() => {
@@ -116,7 +118,21 @@ export default function Home() {
         </div>
         <span className="btns">
           <LanguageSelect />
-          <PersonalSettings />
+          <span className="personal-settings-anchor">
+            <PersonalSettings open={settingsOpen} onOpenChange={setSettingsOpen} />
+            {initialized && user?.email && !user.emailVerified && (
+              <button
+                type="button"
+                className="email-verification-reminder"
+                onClick={() => setSettingsOpen(true)}
+                aria-label={t('home.emailVerificationReminder')}
+                data-umami-event="home-email-verification-reminder"
+              >
+                <MailWarning size={15} aria-hidden="true" />
+                <span>{t('home.emailVerificationReminder')}</span>
+              </button>
+            )}
+          </span>
           <ThemeToggle />
           {!initialized ? (
             <span className="auth-pending" aria-label={t('home.restoring')} />

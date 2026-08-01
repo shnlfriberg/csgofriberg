@@ -1,4 +1,4 @@
-import { FormEvent, useState } from 'react';
+import { CSSProperties, FormEvent, useState, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { KeyRound } from 'lucide-react';
 import Page from '../components/Page';
@@ -8,6 +8,9 @@ import { closeSocket, getSocket } from '../api/socket';
 import { markAuthenticated } from '../api/session';
 import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
+import { getPowProgress, subscribePowProgress } from '../api/pow';
+
+const INACTIVE_POW_PROGRESS = { active: false, percent: 0 };
 
 export default function Login() {
   const { t } = useTranslation();
@@ -17,6 +20,11 @@ export default function Login() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const powProgress = useSyncExternalStore(
+    subscribePowProgress,
+    getPowProgress,
+    () => INACTIVE_POW_PROGRESS
+  );
   const setUser = useAuth((s) => s.setUser);
   const navigate = useNavigate();
 
@@ -100,8 +108,19 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
             />
           )}
-          <button className="btn" disabled={loading}>
-            {mode === 'login' ? t('auth.login') : t('auth.register')}
+          <button className="btn" disabled={loading} aria-busy={loading}>
+            {mode === 'register' && loading && powProgress.active ? (
+              <span className="auth-pow-status">
+                <span
+                  className="auth-pow-ring"
+                  style={{ '--pow-progress': `${powProgress.percent}%` } as CSSProperties}
+                  aria-hidden="true"
+                >
+                  <span>{Math.round(powProgress.percent)}%</span>
+                </span>
+                {t('auth.registerPowComputing')}
+              </span>
+            ) : mode === 'login' ? t('auth.login') : t('auth.register')}
           </button>
           <button
             type="button"

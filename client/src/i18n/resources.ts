@@ -76,6 +76,7 @@ export const resources = {
         logoutMessage: '退出后将切换为访客身份，未完成的联机连接会被关闭。',
         logoutConfirm: '退出账号',
         loginRegister: '登录 / 注册', singleMode: '单人模式', singleModeDescription: '选择难度后开始一局单人猜测',
+        emailVerificationReminder: '邮箱尚未验证，点击设置完成验证',
         search: '查选手',
         searchDescription: '队伍、国家或地区与 Major 履历',
         multiplayer: '多人联机',
@@ -134,7 +135,7 @@ export const resources = {
       },
       auth: {
         login: '登录', register: '注册', username: '用户名', password: '密码（至少 10 位）',
-        confirmPassword: '确认密码', emailOptional: '邮箱（可选）', mismatch: '两次输入的密码不一致',
+        confirmPassword: '确认密码', emailOptional: '邮箱（可选）', registerPowComputing: '正在进行安全校验', mismatch: '两次输入的密码不一致',
         description: '登录仅用于跨设备保存战绩与进度，所有模式无需登录即可游玩',
         toRegister: '没有账号？去注册', toLogin: '已有账号？去登录',
         claimFailed: '登录成功，但匿名战绩同步失败：{{message}}',
@@ -307,6 +308,7 @@ export const resources = {
         restoring: 'Restoring your session', admin: 'Admin', adminPanel: 'Admin panel', manage: 'Manage', logout: 'Log out', logoutTitle: 'Log out?',
         logoutMessage: 'You will switch to a guest session and any active multiplayer connection will be closed.', logoutConfirm: 'Log out',
         loginRegister: 'Log in / Sign up', singleMode: 'Solo mode', singleModeDescription: 'Choose a difficulty before starting a solo game',
+        emailVerificationReminder: 'Your email is not verified. Open settings to finish.',
         search: 'Player search', searchDescription: 'Teams, countries or regions, and Major history', multiplayer: 'Multiplayer',
         multiplayerDescription: 'Create a room or find a match', stats: 'Stats / Replays', leaderboard: 'Leaderboard', announcements: 'Updates', bilibili: 'Bilibili: 怂皇的一天', github: 'GitHub', specialThanks: 'Special Thanks', closeSpecialThanks: 'Close special thanks', friendLinks: 'Friends', closeFriendLinks: 'Close friends', noFriendLinks: 'No friend links yet',
       },
@@ -334,7 +336,7 @@ export const resources = {
       },
       auth: {
         login: 'Log in', register: 'Sign up', username: 'Username', password: 'Password (at least 10 characters)', confirmPassword: 'Confirm password', emailOptional: 'Email (optional)',
-        mismatch: 'The passwords do not match', description: 'Login is only needed to sync results and progress across devices. Every mode is available to guests.',
+        registerPowComputing: 'Running security check', mismatch: 'The passwords do not match', description: 'Login is only needed to sync results and progress across devices. Every mode is available to guests.',
         toRegister: 'No account? Sign up', toLogin: 'Already have an account? Log in', claimFailed: 'Logged in, but guest results could not be synced: {{message}}',
       },
       player: {
@@ -495,6 +497,7 @@ export const resources = {
         restoring: 'ログイン状態を復元中', admin: '管理者', adminPanel: '管理画面', manage: '管理', logout: 'ログアウト', logoutTitle: 'ログアウトしますか？',
         logoutMessage: 'ゲスト状態に切り替わり、進行中のマルチプレイ接続は終了します。', logoutConfirm: 'ログアウト', loginRegister: 'ログイン / 登録', singleMode: 'ソロモード', singleModeDescription: '難易度を選んでソロゲームを開始',
         search: '選手検索', searchDescription: 'チーム、国・地域、Major 経歴',
+        emailVerificationReminder: 'メールが未確認です。設定を開いて確認を完了してください。',
         multiplayer: 'マルチプレイ', multiplayerDescription: 'ルーム作成またはランダムマッチ', stats: '統計 / リプレイ', leaderboard: 'ランキング', announcements: '更新情報', bilibili: 'Bilibili：怂皇的一天', github: 'GitHub', specialThanks: '特別感謝', closeSpecialThanks: '特別感謝を閉じる', friendLinks: '相互リンク', closeFriendLinks: '相互リンクを閉じる', noFriendLinks: '相互リンクはまだありません',
       },
       rules: {
@@ -521,7 +524,7 @@ export const resources = {
       },
       auth: {
         login: 'ログイン', register: '登録', username: 'ユーザー名', password: 'パスワード（10 文字以上）', confirmPassword: 'パスワード確認', emailOptional: 'メール（任意）',
-        mismatch: 'パスワードが一致しません', description: 'ログインは端末間で戦績と進行状況を同期するためだけに使用します。すべてのモードはゲストでも遊べます。',
+        registerPowComputing: 'セキュリティ確認中', mismatch: 'パスワードが一致しません', description: 'ログインは端末間で戦績と進行状況を同期するためだけに使用します。すべてのモードはゲストでも遊べます。',
         toRegister: 'アカウントがない場合は登録', toLogin: 'アカウントをお持ちの場合はログイン', claimFailed: 'ログインしましたが、ゲスト戦績を同期できませんでした：{{message}}',
       },
       player: {

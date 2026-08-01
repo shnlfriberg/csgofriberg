@@ -66,4 +66,27 @@ describe('PoW worker fallback', () => {
       withCredentials: true,
     });
   });
+
+  it('requests the stronger register profile and exposes a fake progress state', async () => {
+    post
+      .mockResolvedValueOnce({
+        data: {
+          id: 'register-challenge-id',
+          challenge: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+          difficulty: 19,
+          algorithm: 'csgofriberg-pow-v1',
+        },
+      })
+      .mockResolvedValueOnce({ data: { expiresAt: Date.now() + 30_000, expiresInMs: 30_000, difficulty: 19 } });
+
+    const { ensurePow, getPowProgress, subscribePowProgress } = await import('./pow');
+    const states: boolean[] = [];
+    const unsubscribe = subscribePowProgress(() => states.push(getPowProgress().active));
+    await ensurePow({ profile: 'register' });
+    unsubscribe();
+
+    expect(states).toContain(true);
+    expect(getPowProgress().active).toBe(false);
+    expect(post).toHaveBeenNthCalledWith(1, '/challenge', { profile: 'register' }, expect.any(Object));
+  });
 });
