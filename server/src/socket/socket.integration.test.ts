@@ -1551,9 +1551,13 @@ describe('multiplayer socket integration', () => {
 
       const stored = await getRoom(created.room.id);
       const target = getPlayer(stored!.targetPlayerId!)!;
-      const wrongPlayers = getDifficultyPlayers('easy')
+      const wrongPool = getDifficultyPlayers('easy')
         .filter((player) => player.id !== target.id)
-        .slice(0, 8);
+      expect(wrongPool.length).toBeGreaterThan(1);
+      const finalWrong = wrongPool[wrongPool.length - 1];
+      const wrongPlayers = Array.from({ length: 8 }, (_, index) => (
+        index === 7 ? finalWrong : wrongPool[index % (wrongPool.length - 1)]
+      ));
       expect(wrongPlayers).toHaveLength(8);
       await withRoomLock(created.room.id, (locked) => {
         const player = locked.players.find((candidate) => candidate.key === identityB)!;
