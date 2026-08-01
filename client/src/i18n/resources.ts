@@ -168,7 +168,7 @@ export const resources = {
         age: '{{age}} 岁', empty: '在下方输入框中输入选手名称即可查询', fuzzy: '支持模糊搜索：输入部分名称即可匹配',
       },
       multi: {
-        verifiedOnlyInfo: { title: '仅匹配已验证邮箱用户', open: '了解仅匹配已验证邮箱用户', content: '您可以在首页的个人设置中绑定邮箱后启用此功能，启用后只会匹配同样完成邮箱验证的用户。' },
+        verifiedOnlyInfo: { title: '仅匹配已验证邮箱用户', open: '了解仅匹配已验证邮箱用户', content: '登录后，您可以在首页的个人设置中绑定邮箱后启用此功能，启用后只会匹配同样完成邮箱验证的用户。' },
         title: '多人联机', roomTitle: '多人房间 · BO{{bo}}', roomLoadingTitle: '多人房间', loadingRoom: '正在获取房间状态...',
         found: '已找到对手', enterAfter: '秒后进入比赛', endMatchTitle: '结束当前比赛？', endMatchMessage: '比赛尚未结束，现在退出会被判负。', endMatchConfirm: '结束并判负',
         replaceTitle: '退出当前房间并{{action}}？', replaceOngoing: '当前比赛尚未结束，退出会被判负。确认后将自动{{action}}。',
@@ -360,7 +360,7 @@ export const resources = {
       singleLobby: { title: 'Choose a solo difficulty', subtitle: 'Choose a difficulty to start. Your choice is saved in this browser.', available: 'Available', start: 'Start game', recommended: 'Recommended' },
       search: { title: 'Player Search', placeholder: 'Enter a player nickname (fuzzy search)...', button: 'Search', age: 'Age {{age}}', empty: 'Enter a player name below to search', fuzzy: 'Fuzzy search is supported: enter part of a name' },
       multi: {
-        verifiedOnlyInfo: { title: 'Match verified-email users only', open: 'About verified-email matchmaking', content: 'Bind and verify an email in Personal settings on the home page to enable this option. Once enabled, you will only match other users who have also verified their email.' },
+        verifiedOnlyInfo: { title: 'Match verified-email users only', open: 'About verified-email matchmaking', content: 'After logging in, bind and verify an email in Personal settings on the home page to enable this option. Once enabled, you will only match other users who have also verified their email.' },
         title: 'Multiplayer', roomTitle: 'Multiplayer Room · BO{{bo}}', roomLoadingTitle: 'Multiplayer Room', loadingRoom: 'Loading room state...', found: 'Opponent found', enterAfter: 'seconds until the match starts',
         endMatchTitle: 'End the current match?', endMatchMessage: 'The match is still active. Leaving now records a loss.', endMatchConfirm: 'Leave and lose',
         replaceTitle: 'Leave the current room and {{action}}?', replaceOngoing: 'The match is still active and leaving records a loss. You will then {{action}}.', replaceWaiting: 'You are still in room {{room}}. Leave it first, then {{action}}.',
@@ -547,7 +547,7 @@ export const resources = {
       singleLobby: { title: 'ソロ難易度を選択', subtitle: '難易度を選んで開始します。選択はこのブラウザに保存されます。', available: '利用可', start: 'ゲーム開始', recommended: 'おすすめ' },
       search: { title: '選手検索', placeholder: '選手名を入力（あいまい検索対応）...', button: '検索', age: '{{age}} 歳', empty: '下の入力欄に選手名を入力してください', fuzzy: '名前の一部だけでも検索できます' },
       multi: {
-        verifiedOnlyInfo: { title: '確認済みメールのユーザーのみとマッチ', open: '確認済みメールのマッチングについて', content: 'ホーム画面の個人設定でメールを登録・確認すると、この機能を有効にできます。有効にすると、同じくメール確認を完了したユーザーとのみマッチします。' },
+        verifiedOnlyInfo: { title: '確認済みメールのユーザーのみとマッチ', open: '確認済みメールのマッチングについて', content: 'ログイン後、ホーム画面の個人設定でメールを登録・確認すると、この機能を有効にできます。有効にすると、同じくメール確認を完了したユーザーとのみマッチします。' },
         title: 'マルチプレイ', roomTitle: 'マルチルーム · BO{{bo}}', roomLoadingTitle: 'マルチルーム', loadingRoom: 'ルーム状態を取得中...', found: '対戦相手が見つかりました', enterAfter: '秒後に開始',
         endMatchTitle: '現在の対局を終了しますか？', endMatchMessage: '対局はまだ終了していません。退出すると敗北になります。', endMatchConfirm: '退出して敗北',
         replaceTitle: '現在のルームを退出して{{action}}しますか？', replaceOngoing: '対局中に退出すると敗北になります。確認後に{{action}}します。', replaceWaiting: '現在ルーム {{room}} に参加中です。退出してから{{action}}します。',
