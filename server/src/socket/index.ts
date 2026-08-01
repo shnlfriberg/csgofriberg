@@ -67,6 +67,7 @@ import {
   recordMatchmakingExit,
 } from '../services/matchmakingCooldown';
 import { isMatchmakingRestricted } from '../services/matchmakingRestriction';
+import { isGuestBanned, isGuestMatchmakingRestricted, recordGuestSeen } from '../services/guestAccounts';
 import { pickTargetAvoidingRecent, rememberTargetSelection } from '../services/targetSelection';
 
 const NEXT_ROUND_DELAY_MS = 6_000;
@@ -124,6 +125,7 @@ const activeRoundPayloadSchema = z.object({ roundId: z.number().int().positive()
 const matchStartPayloadSchema = z.object({
   dbType: difficultyKeySchema,
   anonymous: z.boolean().default(false),
+  verifiedOnly: z.boolean().default(false),
 });
 
 function validForwardedIp(value: string | undefined): string | null {
@@ -1258,8 +1260,11 @@ export function setupSocket(io: Server) {
           key: `u:${user.id}`,
           userId: user.id,
           name: userNameFromUsername(user.username),
+          emailVerified: user.emailVerified,
         };
       } else if (guest) {
+        if (await isGuestBanned(guest.key)) return next(new Error('USER_BANNED'));
+        void recordGuestSeen(guest.key, guest.name).catch(() => undefined);
         identity = {
           key: `g:${guest.key}`,
           userId: null,
@@ -1967,10 +1972,18 @@ export function setupSocket(io: Server) {
         ...me,
         socketId: socket.id,
         anonymous: payload.anonymous,
-        matchmakingPool: me.userId && await isMatchmakingRestricted(me.userId)
-          ? 'restricted'
-          : 'public',
+        verifiedOnly: payload.verifiedOnly,
+        matchmakingPool: (me.userId
+          ? await isMatchmakingRestricted(me.userId)
+          : await isGuestMatchmakingRestricted(me.key.slice(2)))
+          ? (payload.verifiedOnly ? 'verified-restricted' : 'restricted')
+          : payload.verifiedOnly
+            ? (me.emailVerified ? 'verified' : 'public')
+            : 'public',
       };
+      if (payload.verifiedOnly && (!me.userId || !me.emailVerified)) {
+        return ack?.({ code: 'EMAIL_VERIFICATION_REQUIRED' });
+      }
       let opponent = isRedisAvailable() ? await queueOrTakeOpponent(dbType, queuedMe) : null;
       if (isRedisAvailable() && !opponent) return ack?.({ queued: true });
       if (!isRedisAvailable() && !opponent) {

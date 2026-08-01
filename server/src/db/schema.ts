@@ -153,6 +153,9 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.integer('token_version').notNullable().defaultTo(0);
       t.boolean('leaderboard_hidden').notNullable().defaultTo(false);
       t.boolean('matchmaking_restricted').notNullable().defaultTo(false);
+      t.string('email', 320).nullable().unique();
+      t.timestamp('email_verified_at').nullable();
+      t.timestamp('banned_at').nullable();
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
     });
   }
@@ -171,6 +174,46 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     await instance.schema.alterTable('users', (t) => {
       t.boolean('matchmaking_restricted').notNullable().defaultTo(false);
     });
+  }
+  if (!(await instance.schema.hasColumn('users', 'email'))) {
+    await instance.schema.alterTable('users', (t) => t.string('email', 320).nullable());
+  }
+  if (!(await instance.schema.hasColumn('users', 'email_verified_at'))) {
+    await instance.schema.alterTable('users', (t) => t.timestamp('email_verified_at').nullable());
+  }
+  if (!(await instance.schema.hasColumn('users', 'banned_at'))) {
+    await instance.schema.alterTable('users', (t) => t.timestamp('banned_at').nullable());
+  }
+  await instance.raw('create unique index if not exists "users_email_unique" on "users" ("email") where "email" is not null');
+  if (!(await instance.schema.hasTable('email_verifications'))) {
+    await instance.schema.createTable('email_verifications', (t) => {
+      t.increments('id').primary();
+      t.integer('user_id').notNullable().references('id').inTable('users').onDelete('CASCADE');
+      t.string('email', 320).notNullable();
+      t.string('token_hash', 128).notNullable().unique();
+      t.timestamp('expires_at').notNullable();
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+      t.index(['user_id', 'expires_at']);
+    });
+  }
+  if (!(await instance.schema.hasTable('guest_accounts'))) {
+    await instance.schema.createTable('guest_accounts', (t) => {
+      t.increments('id').primary();
+      t.string('guest_key', 64).notNullable().unique();
+      t.string('guest_key_hash', 128).notNullable().unique();
+      t.string('display_id', 16).notNullable();
+      t.timestamp('banned_at').nullable();
+      t.boolean('matchmaking_restricted').notNullable().defaultTo(false);
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+      t.timestamp('last_seen_at').notNullable().defaultTo(instance.fn.now());
+      t.index(['banned_at', 'last_seen_at']);
+    });
+  }
+  if (!(await instance.schema.hasColumn('guest_accounts', 'guest_key'))) {
+    await instance.schema.alterTable('guest_accounts', (t) => t.string('guest_key', 64).nullable());
+  }
+  if (!(await instance.schema.hasColumn('guest_accounts', 'matchmaking_restricted'))) {
+    await instance.schema.alterTable('guest_accounts', (t) => t.boolean('matchmaking_restricted').notNullable().defaultTo(false));
   }
   await backfillUserDisplayIds(instance);
   const usersIndexConcurrently = instance.client.config.client === 'pg' ? ' concurrently' : '';

@@ -6,6 +6,9 @@ export interface User {
   role: 'user' | 'admin';
   token_version: number;
   matchmaking_restricted: boolean | number;
+  email: string | null;
+  email_verified_at: string | null;
+  banned_at: string | null;
   created_at: string;
 }
 

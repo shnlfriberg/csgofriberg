@@ -7,7 +7,7 @@ import { DIFFICULTY_LEVELS } from '../difficulties';
 
 export type BoType = 1 | 3 | 5 | 7;
 export type DbType = string;
-export type MatchmakingPool = 'public' | 'restricted';
+export type MatchmakingPool = 'public' | 'restricted' | 'verified' | 'verified-restricted';
 export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'round_over' | 'finished';
 const MATCHMAKING_ENTRY_TTL_MS = 300_000;
 
@@ -15,11 +15,13 @@ export interface StoredIdentity {
   key: string;
   userId: number | null;
   name: string;
+  emailVerified?: boolean;
 }
 
 export interface QueuedIdentity extends StoredIdentity {
   socketId: string;
   anonymous?: boolean;
+  verifiedOnly?: boolean;
   matchmakingPool?: MatchmakingPool;
 }
 
@@ -165,7 +167,7 @@ function normalizeGuessTimes(value: unknown, guessCount: number): Array<number |
 }
 
 function matchmakingQueueName(dbType: DbType, pool: MatchmakingPool = 'public'): string {
-  return pool === 'restricted' ? `restricted:${dbType}` : dbType;
+  return pool === 'public' ? dbType : `${pool}:${dbType}`;
 }
 
 function matchmakingQueueKey(dbType: DbType, pool: MatchmakingPool = 'public'): string {
@@ -1280,9 +1282,8 @@ export async function moveQueuedIdentityToPool(
   const queueIndex = redisKey(`match-queue:${identity}`);
   const oldQueueName = await client.get(queueIndex);
   if (!oldQueueName) return;
-  const dbType = oldQueueName.startsWith('restricted:')
-    ? oldQueueName.slice('restricted:'.length)
-    : oldQueueName;
+  const prefix = oldQueueName.match(/^(restricted|verified-restricted|verified):/);
+  const dbType = prefix ? oldQueueName.slice(prefix[0].length) : oldQueueName;
   if (!dbType) return;
   const newQueueName = matchmakingQueueName(dbType, pool);
   if (newQueueName === oldQueueName) return;
@@ -1304,11 +1305,20 @@ export async function moveQueuedIdentityToPool(
      end
      local score = redis.call('ZSCORE', KEYS[1], ARGV[1]) or ARGV[5]
      redis.call('ZREM', KEYS[1], ARGV[1])
-     redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', ARGV[6])
-     decoded.matchmakingPool = ARGV[4]
-     redis.call('ZADD', KEYS[2], score, ARGV[1])
+     local targetPool = ARGV[4]
+     if targetPool == 'public' and decoded.verifiedOnly and decoded.emailVerified then targetPool = 'verified' end
+     if targetPool == 'restricted' and decoded.verifiedOnly and decoded.emailVerified then targetPool = 'verified-restricted' end
+     decoded.matchmakingPool = targetPool
+     local destination = KEYS[2]
+     local finalQueue = ARGV[3]
+     if targetPool ~= ARGV[4] then
+       destination = KEYS[5] .. targetPool .. ':' .. ARGV[7]
+       finalQueue = targetPool .. ':' .. ARGV[7]
+     end
+     redis.call('ZREMRANGEBYSCORE', destination, '-inf', ARGV[6])
+     redis.call('ZADD', destination, score, ARGV[1])
      redis.call('SET', KEYS[3], cjson.encode(decoded), 'EX', 300)
-     redis.call('SET', KEYS[4], ARGV[3], 'EX', 300)
+     redis.call('SET', KEYS[4], finalQueue, 'EX', 300)
      return 1`,
     {
       keys: [
@@ -1316,6 +1326,7 @@ export async function moveQueuedIdentityToPool(
         redisKey(`matchmaking:${newQueueName}`),
         redisKey(`match-profile:${identity}`),
         queueIndex,
+        redisKey('matchmaking:'),
       ],
       arguments: [
         identity,
@@ -1324,6 +1335,7 @@ export async function moveQueuedIdentityToPool(
         pool,
         String(Date.now()),
         String(Date.now() - MATCHMAKING_ENTRY_TTL_MS),
+        dbType,
       ],
     }
   );
@@ -1359,6 +1371,8 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
         Promise.all([
           client.zRem(matchmakingQueueKey(difficulty.key), identity),
           client.zRem(matchmakingQueueKey(difficulty.key, 'restricted'), identity),
+          client.zRem(matchmakingQueueKey(difficulty.key, 'verified'), identity),
+          client.zRem(matchmakingQueueKey(difficulty.key, 'verified-restricted'), identity),
         ])
       ),
       client.del(profileKey),

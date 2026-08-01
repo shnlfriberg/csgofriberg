@@ -21,6 +21,10 @@ const configuredBcryptRounds = Number(process.env.BCRYPT_ROUNDS || 8);
 const configuredAdminImportBodyLimitBytes = Number(
   process.env.ADMIN_IMPORT_BODY_LIMIT_BYTES || 2 * 1024 * 1024
 );
+const configuredEmailAllowedSuffixes = (process.env.EMAIL_ALLOWED_SUFFIXES || '')
+  .split(',')
+  .map((suffix) => suffix.trim().toLowerCase().replace(/^@/, ''))
+  .filter(Boolean);
 
 export const config = {
   port: Number(process.env.PORT || 3000),
@@ -53,6 +57,18 @@ export const config = {
     Number.isInteger(configuredAdminImportBodyLimitBytes) && configuredAdminImportBodyLimitBytes >= 64 * 1024
       ? configuredAdminImportBodyLimitBytes
       : 2 * 1024 * 1024,
+  email: {
+    host: process.env.EMAIL_SMTP_HOST?.trim() || '',
+    port: Number(process.env.EMAIL_SMTP_PORT || 587),
+    secure: process.env.EMAIL_SMTP_SECURE === 'true',
+    startTls: process.env.EMAIL_SMTP_STARTTLS !== 'false',
+    username: process.env.EMAIL_SMTP_USERNAME?.trim() || '',
+    password: process.env.EMAIL_SMTP_PASSWORD || '',
+    from: process.env.EMAIL_FROM?.trim() || '',
+    verifyBaseUrl: process.env.EMAIL_VERIFY_BASE_URL?.trim() || '',
+    allowedSuffixes: configuredEmailAllowedSuffixes,
+    verifyTtlSeconds: Math.max(300, Number(process.env.EMAIL_VERIFY_TTL_SECONDS || 1800)),
+  },
   disconnectForfeitMs: Math.max(100, Number(process.env.DISCONNECT_FORFEIT_MS || 30_000)),
   matchReadyTimeoutMs: 30_000,
   powDifficulty: Number(process.env.POW_DIFFICULTY || 17),

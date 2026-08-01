@@ -6,6 +6,7 @@ import { db } from '../db/knex';
 import { User } from '../types';
 import { redis, redisKey } from '../redis';
 import { guestNameFromKey, userNameFromUsername } from '../services/identityDisplay';
+import { isGuestBanned } from '../services/guestAccounts';
 
 export { guestNameFromKey, userNameFromUsername } from '../services/identityDisplay';
 
@@ -54,6 +55,8 @@ export interface AuthPayload {
   id: number;
   username: string;
   role: 'user' | 'admin';
+  email: string | null;
+  emailVerified: boolean;
 }
 
 export interface GuestIdentity {
@@ -190,6 +193,8 @@ async function resolveTokenUser(
           id: user.id,
           username: user.username,
           role: user.role,
+          email: user.email ?? null,
+          emailVerified: Boolean(user.emailVerified),
           tokenVersion: user.tokenVersion,
         };
       }
@@ -198,12 +203,14 @@ async function resolveTokenUser(
     }
   }
   const user = await db<User>('users').where({ id: userId }).first();
-  if (!user || Number(user.token_version) !== Number(payload.ver)) return null;
+  if (!user || Number(user.token_version) !== Number(payload.ver) || user.banned_at) return null;
   if (client) {
     const cached: CachedAuthUser = {
       id: user.id,
       username: user.username,
       role: user.role,
+      email: user.email ?? null,
+      emailVerified: Boolean(user.email_verified_at),
       tokenVersion: Number(user.token_version),
     };
     try {
@@ -217,6 +224,8 @@ async function resolveTokenUser(
     username: user.username,
     role: user.role,
     tokenVersion: Number(user.token_version),
+    email: user.email ?? null,
+    emailVerified: Boolean(user.email_verified_at),
   };
 }
 
@@ -285,7 +294,7 @@ export async function refreshAuthCookies(
   const user = await authenticateRefreshCookie(cookieHeader);
   if (!user) return null;
   setAuthCookies(res, { id: user.id, token_version: user.tokenVersion });
-  return { id: user.id, username: user.username, role: user.role };
+  return { id: user.id, username: user.username, role: user.role, email: user.email, emailVerified: user.emailVerified };
 }
 
 export async function restoreAuthSession(
@@ -298,7 +307,7 @@ export async function restoreAuthSession(
     if (issueMissingRefresh && !hasRefreshCookie(cookieHeader)) {
       setAuthCookies(res, { id: user.id, token_version: user.tokenVersion });
     }
-    return { id: user.id, username: user.username, role: user.role };
+    return { id: user.id, username: user.username, role: user.role, email: user.email, emailVerified: user.emailVerified };
   }
   return refreshAuthCookies(cookieHeader, res);
 }
@@ -312,7 +321,7 @@ export async function invalidateAuthUser(userId: number): Promise<void> {
 async function attachIdentity(
   req: Request,
   res: Response
-): Promise<'authenticated' | 'guest' | 'expired'> {
+): Promise<'authenticated' | 'guest' | 'expired' | 'banned'> {
   const user = await restoreAuthSession(
     req.headers.cookie,
     res,
@@ -322,11 +331,15 @@ async function attachIdentity(
     req.user = user;
   } else if (req.headers['x-auth-expected'] === '1') {
     return 'expired';
+  } else if (hasAuthSessionCookie(req.headers.cookie)) {
+    // Do not silently downgrade a revoked/banned authenticated session to a guest.
+    return 'expired';
   }
   const guest = user
     ? getGuestFromCookie(req.headers.cookie)
     : ensureGuestCookie(req, res);
   if (!guest) return user ? 'authenticated' : 'guest';
+  if (await isGuestBanned(guest.key)) return 'banned';
   req.guestKey = guest.key;
   req.guestName = guest.name;
   return user ? 'authenticated' : 'guest';
@@ -335,12 +348,14 @@ async function attachIdentity(
 export function optionalAuth(req: Request, res: Response, next: NextFunction) {
   void attachIdentity(req, res).then((result) => {
     if (result === 'expired') return res.status(401).json({ code: 'AUTH_EXPIRED' });
+    if (result === 'banned') return res.status(403).json({ code: 'USER_BANNED' });
     next();
   }, next);
 }
 
 export function requireAuth(req: Request, res: Response, next: NextFunction) {
   void attachIdentity(req, res).then((result) => {
+    if (result === 'banned') return res.status(403).json({ code: 'USER_BANNED' });
     if (!req.user) {
       return res.status(401).json({ code: result === 'expired' ? 'AUTH_EXPIRED' : 'AUTH_REQUIRED' });
     }

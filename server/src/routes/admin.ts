@@ -7,6 +7,7 @@ import {
   requireAuth,
   requireAdmin,
   userNameFromUsername,
+  invalidateAuthUser,
 } from '../middleware/auth';
 import {
   validateBody,
@@ -36,13 +37,14 @@ import {
 } from '../services/playerMutations';
 import { createApiToken, listApiTokens, revokeApiToken } from '../services/apiTokens';
 import { cacheMatchmakingRestriction } from '../services/matchmakingRestriction';
-import { moveQueuedIdentityToPool } from '../services/roomStore';
+import { cancelQueue, moveQueuedIdentityToPool } from '../services/roomStore';
+import { redis, redisKey } from '../redis';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
 const adminReadLimit = rateLimit({
   name: 'admin-read',
-  limit: 60,
+  limit: 120,
   windowSeconds: 60,
   key: requestIdentity,
   failClosed: true,
@@ -86,6 +88,7 @@ const userGameListQuerySchema = z.object({
 const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
 const userLeaderboardVisibilitySchema = z.object({ hidden: z.boolean() });
 const userMatchmakingRestrictionSchema = z.object({ restricted: z.boolean() });
+const banSchema = z.object({ banned: z.boolean() });
 const apiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(64),
   expiresInDays: z.number().int().min(1).max(365).default(90),
@@ -152,7 +155,8 @@ router.get(
     if (search) {
       query.where((builder) => {
         builder.whereILike('username', `%${search}%`)
-          .orWhereILike('display_id', `%${search}%`);
+          .orWhereILike('display_id', `%${search}%`)
+          .orWhereILike('email', `%${search}%`);
       });
     }
     const countRow = await query.clone().count({ count: 'id' }).first();
@@ -160,7 +164,7 @@ router.get(
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
     const page = Math.min(parsed.page, totalPages);
     const users = await query.clone()
-      .select('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'matchmaking_restricted', 'created_at')
+      .select('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'matchmaking_restricted', 'email', 'email_verified_at', 'banned_at', 'created_at')
       .orderBy('created_at', 'desc')
       .orderBy('id', 'desc')
       .limit(pageSize)
@@ -173,6 +177,9 @@ router.get(
         role: user.role,
         leaderboardHidden: Boolean(user.leaderboard_hidden),
         matchmakingRestricted: Boolean(user.matchmaking_restricted),
+        email: user.email ?? null,
+        emailVerified: Boolean(user.email_verified_at),
+        banned: Boolean(user.banned_at),
         createdAt: user.created_at,
       })),
       total,
@@ -191,7 +198,7 @@ router.get(
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const user = await db('users')
       .where({ id })
-      .first('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'matchmaking_restricted', 'created_at');
+      .first('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'matchmaking_restricted', 'email', 'email_verified_at', 'banned_at', 'created_at');
     if (!user) throw new HttpError(404, 'USER_NOT_FOUND');
     res.json({
       user: {
@@ -201,6 +208,9 @@ router.get(
         role: user.role,
         leaderboardHidden: Boolean(user.leaderboard_hidden),
         matchmakingRestricted: Boolean(user.matchmaking_restricted),
+        email: user.email ?? null,
+        emailVerified: Boolean(user.email_verified_at),
+        banned: Boolean(user.banned_at),
         createdAt: user.created_at,
       },
       stats: await getPlayerPerformance({
@@ -595,6 +605,60 @@ router.get(
 );
 
 router.get(
+  '/guests/:id/analysis',
+  adminReadLimit,
+  validateParams(idParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const guest = await db('guest_accounts').where({ id }).first('guest_key');
+    if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
+    const identityKey = `g:${guest.guest_key}`;
+    const multiRows = await db('match_records as m')
+      .join('match_players as mp', 'mp.match_id', 'm.id')
+      .where('mp.player_key', identityKey)
+      .orderBy('m.created_at', 'desc')
+      .limit(10)
+      .select('m.id', 'm.db_type as mode', 'm.replay', 'm.created_at as finishedAt', 'mp.player_key as playerKey');
+    const inputs: AnalysisRoundInput[] = [];
+    const relevantPlayerIds = new Set<number>();
+    for (const row of multiRows) {
+      let rounds: unknown = [];
+      try { rounds = JSON.parse(String(row.replay)); } catch { rounds = []; }
+      if (!Array.isArray(rounds)) continue;
+      for (const value of rounds.slice(0, 30)) {
+        if (!value || typeof value !== 'object') continue;
+        const stored = value as Record<string, unknown>;
+        const guessesByPlayer = stored.guessesByPlayer;
+        const guessIds = guessesByPlayer && typeof guessesByPlayer === 'object'
+          ? safeGuessIds((guessesByPlayer as Record<string, unknown>)[String(row.playerKey || identityKey)])
+          : [];
+        const targetPlayerId = Number(stored.targetPlayerId);
+        if (!Number.isInteger(targetPlayerId) || targetPlayerId <= 0) continue;
+        relevantPlayerIds.add(targetPlayerId);
+        guessIds.forEach((playerId) => relevantPlayerIds.add(playerId));
+        inputs.push({
+          source: 'multi', recordId: Number(row.id), mode: String(row.mode),
+          finishedAt: String(row.finishedAt), round: Number(stored.round), targetPlayerId, guessPlayerIds: guessIds,
+        });
+      }
+    }
+    inputs.sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt) || b.recordId - a.recordId);
+    const allEnabledPlayers = getEnabledPlayers();
+    const playersById = new Map(allEnabledPlayers.map((player) => [player.id, player]));
+    for (const playerId of relevantPlayerIds) {
+      const player = getPlayer(playerId);
+      if (player) playersById.set(playerId, player);
+    }
+    const difficultyPools = new Map(DIFFICULTY_LEVELS.map((difficulty) => [difficulty.key, getDifficultyPlayers(difficulty.key)]));
+    const analysis = await analyzeGameChoices(inputs, playersById, difficultyPools, allEnabledPlayers);
+    res.json({
+      summary: analysis.summary,
+      limitations: { hasGuessTiming: false, usesCurrentPlayerData: true, statement: 'RISK_SIGNAL_NOT_PROOF' },
+    });
+  })
+);
+
+router.get(
   '/players/export',
   adminReadLimit,
   asyncHandler(async (_req, res) => {
@@ -715,6 +779,130 @@ router.patch(
       cacheMatchmakingRestriction(id, restricted),
       moveQueuedIdentityToPool(`u:${id}`, restricted ? 'restricted' : 'public'),
     ]);
+    res.json({ id, matchmakingRestricted: restricted });
+  })
+);
+
+router.patch(
+  '/users/:id/ban',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  validateBody(banSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const { banned } = req.body as z.infer<typeof banSchema>;
+    if (banned && id === req.user!.id) throw new HttpError(400, 'CANNOT_BAN_SELF');
+    const updated = await db('users').where({ id }).update({
+      banned_at: banned ? db.fn.now() : null,
+      ...(banned ? { token_version: db.raw('token_version + 1') } : {}),
+    });
+    if (!updated) throw new HttpError(404, 'USER_NOT_FOUND');
+    await Promise.all([invalidateAuthUser(id), cancelQueue(`u:${id}`)]);
+    const io = req.app.get('io') as Server | undefined;
+    if (banned) io?.in(`identity:u:${id}`).disconnectSockets(true);
+    res.json({ id, banned });
+  })
+);
+
+router.get(
+  '/guests',
+  adminReadLimit,
+  validateQuery(userListQuerySchema),
+  asyncHandler(async (req, res) => {
+    const parsed = req.query as unknown as z.infer<typeof userListQuerySchema>;
+    const query = db('guest_accounts');
+    if (parsed.search) query.whereILike('display_id', `%${parsed.search}%`);
+    const countRow = await query.clone().count({ count: 'id' }).first();
+    const total = Number(countRow?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / parsed.pageSize));
+    const page = Math.min(parsed.page, totalPages);
+    const guests = await query.clone().orderBy('last_seen_at', 'desc').limit(parsed.pageSize).offset((page - 1) * parsed.pageSize);
+    res.json({
+      guests: guests.map((guest) => ({ id: Number(guest.id), displayId: guest.display_id, banned: Boolean(guest.banned_at), matchmakingRestricted: Boolean(guest.matchmaking_restricted), createdAt: guest.created_at, lastSeenAt: guest.last_seen_at })),
+      total, page, pageSize: parsed.pageSize, totalPages,
+    });
+  })
+);
+
+router.get(
+  '/guests/:id/stats',
+  adminReadLimit,
+  validateParams(idParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const guest = await db('guest_accounts').where({ id }).first();
+    if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
+    res.json({ guest: { id, displayId: guest.display_id, banned: Boolean(guest.banned_at), matchmakingRestricted: Boolean(guest.matchmaking_restricted) }, stats: await getPlayerPerformance({ key: `g:${guest.guest_key}`, userId: null, name: guest.display_id }) });
+  })
+);
+
+router.get(
+  '/guests/:id/games',
+  adminReadLimit,
+  validateParams(idParamsSchema),
+  validateQuery(userGameListQuerySchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const parsed = req.query as unknown as z.infer<typeof userGameListQuerySchema>;
+    const guest = await db('guest_accounts').where({ id }).first('guest_key', 'display_id');
+    if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
+    const offset = (parsed.page - 1) * parsed.pageSize;
+    if (parsed.type === 'single') {
+      const rows = await db('games as g').join('players as p', 'p.id', 'g.target_player_id')
+        .where('g.guest_key', guest.guest_key).whereNot('g.status', 'playing')
+        .orderBy('g.finished_at', 'desc').orderBy('g.id', 'desc').offset(offset).limit(parsed.pageSize + 1)
+        .select('g.id', 'g.mode', 'g.status', 'g.guess_count as guessCount', 'g.finished_at as finishedAt', 'p.nickname as answer');
+      return res.json({ type: parsed.type, page: parsed.page, pageSize: parsed.pageSize, hasNext: rows.length > parsed.pageSize, items: rows.slice(0, parsed.pageSize).map((row) => ({ type: 'single', ...row })) });
+    }
+    const identityKey = `g:${guest.guest_key}`;
+    const rows = await db('match_players as me').join('match_records as m', 'm.id', 'me.match_id')
+      .where('me.player_key', identityKey).orderBy('m.created_at', 'desc').orderBy('m.id', 'desc').offset(offset).limit(parsed.pageSize + 1)
+      .select('m.id', 'm.db_type as mode', 'm.bo_type as boType', 'm.created_at as finishedAt', 'me.score as meScore', 'me.is_winner as meWinner');
+    const visibleRows = rows.slice(0, parsed.pageSize);
+    const matchIds = visibleRows.map((row) => Number(row.id));
+    const opponents = matchIds.length ? await db('match_players as opponent').leftJoin('users as opponent_user', 'opponent_user.id', 'opponent.user_id')
+      .whereIn('opponent.match_id', matchIds).whereNot('opponent.player_key', identityKey)
+      .select('opponent.match_id as matchId', 'opponent.player_key as key', 'opponent.player_name as name', 'opponent.score', 'opponent.is_winner as isWinner', 'opponent_user.username') : [];
+    const opponentByMatch = new Map(opponents.map((row) => [Number(row.matchId), row]));
+    return res.json({ type: parsed.type, page: parsed.page, pageSize: parsed.pageSize, hasNext: rows.length > parsed.pageSize, items: visibleRows.map((row) => {
+      const opponent = opponentByMatch.get(Number(row.id));
+      return { type: 'multi', id: Number(row.id), mode: row.mode, boType: Number(row.boType), finishedAt: row.finishedAt, result: Boolean(row.meWinner) ? 'won' : Boolean(opponent?.isWinner) ? 'lost' : 'draw', me: { score: Number(row.meScore) }, opponent: opponent ? { displayId: matchPlayerDisplayId(opponent), score: Number(opponent.score) } : null };
+    }) });
+  })
+);
+
+router.patch(
+  '/guests/:id/ban',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  validateBody(banSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const { banned } = req.body as z.infer<typeof banSchema>;
+    const guest = await db('guest_accounts').where({ id }).first('guest_key', 'guest_key_hash');
+    if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
+    await db('guest_accounts').where({ id }).update({ banned_at: banned ? db.fn.now() : null });
+    const client = redis();
+    if (client) await client.del(redisKey(`guest-ban:${guest.guest_key_hash}`));
+    await cancelQueue(`g:${guest.guest_key}`);
+    const io = req.app.get('io') as Server | undefined;
+    if (banned) io?.in(`identity:g:${guest.guest_key}`).disconnectSockets(true);
+    res.json({ id, banned });
+  })
+);
+
+router.patch(
+  '/guests/:id/matchmaking-restriction',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  validateBody(userMatchmakingRestrictionSchema),
+  asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const { restricted } = req.body as z.infer<typeof userMatchmakingRestrictionSchema>;
+    const guest = await db('guest_accounts').where({ id }).first('guest_key');
+    if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
+    await db('guest_accounts').where({ id }).update({ matchmaking_restricted: restricted });
+    await moveQueuedIdentityToPool(`g:${guest.guest_key}`, restricted ? 'restricted' : 'public');
     res.json({ id, matchmakingRestricted: restricted });
   })
 );
