@@ -101,6 +101,16 @@ const userMatchReplayParamsSchema = z.object({
   userId: z.coerce.number().int().positive(),
   matchId: z.coerce.number().int().positive(),
 });
+const reportListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(10).max(100).default(50),
+  status: z.enum(['all', 'pending', 'resolved', 'dismissed']).default('all'),
+});
+const reportParamsSchema = z.object({ reportId: z.coerce.number().int().positive() });
+const reportUpdateSchema = z.object({
+  status: z.enum(['pending', 'resolved', 'dismissed']),
+  adminNote: z.string().trim().max(500).default(''),
+});
 
 function matchPlayerDisplayId(row: { key?: unknown; name?: unknown; username?: unknown }): string {
   const key = typeof row.key === 'string' ? row.key : '';
@@ -143,6 +153,75 @@ function replayGuesses(target: Player, ids: number[]): GuessFeedback[] {
     return guess ? [compareGuess(guess, target)] : [];
   });
 }
+
+function reportIdentityDisplay(row: { key?: unknown; name?: unknown; username?: unknown }): string {
+  return matchPlayerDisplayId(row);
+}
+
+router.get(
+  '/reports',
+  adminReadLimit,
+  validateQuery(reportListQuerySchema),
+  asyncHandler(async (req, res) => {
+    const parsed = req.query as unknown as z.infer<typeof reportListQuerySchema>;
+    const base = db('match_reports as r').join('match_records as m', 'm.id', 'r.match_id');
+    if (parsed.status !== 'all') base.where('r.status', parsed.status);
+    const countRow = await base.clone().count({ count: 'r.id' }).first();
+    const total = Number(countRow?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / parsed.pageSize));
+    const page = Math.min(parsed.page, totalPages);
+    const rows = await base.clone()
+      .leftJoin('match_players as reporter', function () {
+        this.on('reporter.match_id', '=', 'r.match_id').andOn('reporter.player_key', '=', 'r.reporter_key');
+      })
+      .leftJoin('users as reporter_user', 'reporter_user.id', 'reporter.user_id')
+      .leftJoin('match_players as reported', function () {
+        this.on('reported.match_id', '=', 'r.match_id').andOn('reported.player_key', '=', 'r.reported_key');
+      })
+      .leftJoin('users as reported_user', 'reported_user.id', 'reported.user_id')
+      .orderBy('r.created_at', 'desc')
+      .orderBy('r.id', 'desc')
+      .offset((page - 1) * parsed.pageSize)
+      .limit(parsed.pageSize)
+      .select(
+        'r.id', 'r.match_id as matchId', 'r.reporter_key as reporterKey', 'r.reported_key as reportedKey',
+        'r.description', 'r.status', 'r.admin_note as adminNote', 'r.created_at as createdAt',
+        'r.handled_at as handledAt', 'm.room_id as roomId', 'm.db_type as mode', 'm.bo_type as boType',
+        'm.created_at as matchCreatedAt',
+        'reporter.player_name as reporterName', 'reporter_user.username as reporterUsername',
+        'reported.player_name as reportedName', 'reported_user.username as reportedUsername'
+      );
+    res.json({
+      reports: rows.map((row) => ({
+        id: Number(row.id), matchId: Number(row.matchId), roomId: row.roomId, mode: row.mode, boType: Number(row.boType),
+        reporter: reportIdentityDisplay({ key: row.reporterKey, name: row.reporterName, username: row.reporterUsername }),
+        reported: reportIdentityDisplay({ key: row.reportedKey, name: row.reportedName, username: row.reportedUsername }),
+        description: row.description ?? '', status: row.status, adminNote: row.adminNote ?? '',
+        createdAt: row.createdAt, handledAt: row.handledAt, matchCreatedAt: row.matchCreatedAt,
+      })),
+      total, page, pageSize: parsed.pageSize, totalPages,
+    });
+  })
+);
+
+router.patch(
+  '/reports/:reportId',
+  adminWriteLimit,
+  validateParams(reportParamsSchema),
+  validateBody(reportUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const { reportId } = req.params as unknown as z.infer<typeof reportParamsSchema>;
+    const body = req.body as z.infer<typeof reportUpdateSchema>;
+    const updated = await db('match_reports').where({ id: reportId }).update({
+      status: body.status,
+      admin_note: body.adminNote,
+      handled_by_user_id: req.user!.id,
+      handled_at: body.status === 'pending' ? null : db.fn.now(),
+    });
+    if (!updated) throw new HttpError(404, 'REPORT_NOT_FOUND');
+    res.json({ ok: true, id: reportId, status: body.status, adminNote: body.adminNote });
+  })
+);
 
 router.get(
   '/users',

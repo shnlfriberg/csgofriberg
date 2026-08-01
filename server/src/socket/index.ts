@@ -23,6 +23,7 @@ import {
   QueuedIdentity,
   StoredPlayer,
   StoredRoom,
+  StoredMatchReport,
   applyRoomGuess,
   acknowledgeSchedule,
   beginMaintenanceWindow,
@@ -117,6 +118,9 @@ const roomJoinPayloadSchema = z.object({
 });
 const rematchResponsePayloadSchema = z.object({ accept: z.boolean() });
 const roomReadyPayloadSchema = z.object({ ready: z.boolean().optional() }).default({});
+const matchReportPayloadSchema = z.object({
+  description: z.string().trim().max(50).default(''),
+});
 const gameGuessPayloadSchema = z.object({
   playerId: z.number().int().positive(),
   roundId: z.number().int().nonnegative(),
@@ -325,6 +329,7 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
           answer: answerView(room.targetPlayerId),
         }
       : null,
+    reportSubmitted: room.matchmaking && room.reports.some((report) => report.reporterKey === viewerKey),
     ...(matchReplay ? { matchReplay } : {}),
     players: room.players.map((p) => {
       const guesses = p.guesses.map((feedback) => {
@@ -506,6 +511,7 @@ async function persistMatch(
       name: identityDisplayName(player),
       score: player.score,
     })),
+    reports: room.reports,
     rounds: room.replayRounds,
   });
   await Promise.allSettled(room.players.map((player) => clearMatchmakingCooldown(player.key)));
@@ -558,6 +564,7 @@ function resetForRematch(room: StoredRoom): void {
   room.eventResults = {};
   room.roundResult = null;
   room.matchResult = null;
+  room.reports = [];
   room.rematchInviterKey = null;
   room.replayRounds = [];
   room.createdAt = now;
@@ -1463,6 +1470,7 @@ export function setupSocket(io: Server) {
         eventResults: {},
         roundResult: null,
         matchResult: null,
+        reports: [],
         replayRounds: [],
         revision: 0,
         createdAt: now,
@@ -1559,6 +1567,43 @@ export function setupSocket(io: Server) {
       }
       ack?.({ room: publicRoom(role.room, me.key), role: role.role });
     }, roomJoinPayloadSchema);
+
+    safeOn(socket, 'match:report', async (payload: z.infer<typeof matchReportPayloadSchema>, ack) => {
+      await restorePromise;
+      if (!(await socketAllowedWithIp(socket, 'match-report', me.key, 6, 60, 30))) {
+        return ack?.({ code: 'RATE_LIMITED' });
+      }
+      const room = await getRoomForIdentity(me.key, true);
+      if (!room || !room.matchmaking || room.status !== 'finished' || room.players.length !== 2) {
+        return ack?.({ code: 'REPORT_NOT_AVAILABLE' });
+      }
+      const result = await withRoomLock(room.id, (locked) => {
+        if (!locked.matchmaking || locked.status !== 'finished' || locked.players.length !== 2) {
+          return { code: 'REPORT_NOT_AVAILABLE' };
+        }
+        const reporter = locked.players.find((player) => player.key === me.key);
+        const reported = locked.players.find((player) => player.key !== me.key);
+        if (!reporter || !reported || reporter.socketId !== socket.id) {
+          return { code: 'REPORT_NOT_AVAILABLE' };
+        }
+        if (locked.reports.some((report) => report.reporterKey === me.key)) {
+          return { code: 'REPORT_ALREADY_SUBMITTED' };
+        }
+        const report: StoredMatchReport = {
+          reporterKey: me.key,
+          reportedKey: reported.key,
+          description: payload.description,
+          createdAt: Date.now(),
+        };
+        locked.reports.push(report);
+        return { room: locked };
+      }, (value) => 'room' in value);
+      if (!result || 'code' in result) return ack?.({ code: result?.code ?? 'REPORT_NOT_AVAILABLE' });
+      void persistMatch(result.room, result.room.matchResult?.winnerKey ?? null).catch((error) => {
+        console.error('[match:report-persist]', error);
+      });
+      ack?.({ ok: true, reportSubmitted: true });
+    }, matchReportPayloadSchema);
 
     safeOn(socket, 'match:rematch-invite', async (_payload, ack) => {
       await restorePromise;
@@ -2048,6 +2093,7 @@ export function setupSocket(io: Server) {
         eventResults: {},
         roundResult: null,
         matchResult: null,
+        reports: [],
         replayRounds: [],
         revision: 0,
         createdAt: now,

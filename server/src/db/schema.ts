@@ -518,6 +518,46 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     });
   }
 
+  if (!(await instance.schema.hasTable('match_reports'))) {
+    await instance.schema.createTable('match_reports', (t) => {
+      t.increments('id').primary();
+      t.integer('match_id').notNullable().references('id').inTable('match_records').onDelete('CASCADE');
+      t.string('reporter_key', 80).notNullable();
+      t.string('reported_key', 80).notNullable();
+      t.string('description', 50).notNullable().defaultTo('');
+      t.string('status', 16).notNullable().defaultTo('pending');
+      t.string('admin_note', 500).nullable();
+      t.integer('handled_by_user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
+      t.timestamp('handled_at').nullable();
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+  } else {
+    if (!(await instance.schema.hasColumn('match_reports', 'description'))) {
+      await instance.schema.alterTable('match_reports', (t) => t.string('description', 50).notNullable().defaultTo(''));
+    }
+    if (!(await instance.schema.hasColumn('match_reports', 'status'))) {
+      await instance.schema.alterTable('match_reports', (t) => t.string('status', 16).notNullable().defaultTo('pending'));
+    }
+    if (!(await instance.schema.hasColumn('match_reports', 'admin_note'))) {
+      await instance.schema.alterTable('match_reports', (t) => t.string('admin_note', 500).nullable());
+    }
+    if (!(await instance.schema.hasColumn('match_reports', 'handled_by_user_id'))) {
+      await instance.schema.alterTable('match_reports', (t) => t.integer('handled_by_user_id').nullable());
+    }
+    if (!(await instance.schema.hasColumn('match_reports', 'handled_at'))) {
+      await instance.schema.alterTable('match_reports', (t) => t.timestamp('handled_at').nullable());
+    }
+    if (!(await instance.schema.hasColumn('match_reports', 'created_at'))) {
+      await instance.schema.alterTable('match_reports', (t) => t.timestamp('created_at').notNullable().defaultTo(instance.fn.now()));
+    }
+  }
+  await instance.raw(
+    'create unique index if not exists "match_reports_match_reporter_unique" on "match_reports" ("match_id", "reporter_key")'
+  );
+  await instance.raw(
+    'create index if not exists "match_reports_status_created_idx" on "match_reports" ("status", "created_at")'
+  );
+
   if (instance.client.config.client === 'pg') {
     await instance.raw(
       'alter table "match_records" alter column "room_id" type varchar(64)'

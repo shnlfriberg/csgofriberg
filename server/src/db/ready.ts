@@ -37,6 +37,18 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'winning_guess_sum',
     'winning_rounds',
   ],
+  match_reports: [
+    'id',
+    'match_id',
+    'reporter_key',
+    'reported_key',
+    'description',
+    'status',
+    'admin_note',
+    'handled_by_user_id',
+    'handled_at',
+    'created_at',
+  ],
   announcements: ['id', 'title', 'content', 'is_popup'],
 };
 

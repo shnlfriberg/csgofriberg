@@ -174,6 +174,7 @@ export interface RoomState {
       majorAppearances: number;
     } | null;
   } | null;
+  reportSubmitted: boolean;
   matchReplay?: MatchReplay;
 }
 

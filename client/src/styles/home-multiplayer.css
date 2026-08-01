@@ -697,6 +697,30 @@
 }
 .room-create-options .spectator-option { margin: 0; }
 .matchmaking-requirement { margin: 8px 0 0; color: var(--warning); }
+.match-report-dialog { width: min(540px, 100%); }
+.match-report-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-end;
+  margin-left: auto;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-light);
+  font: inherit;
+  font-size: var(--fs-xs);
+  cursor: pointer;
+}
+.overlay-card .btns .match-report-link {
+  flex-basis: 100%;
+  justify-content: flex-end;
+}
+.match-report-link:hover { color: var(--warning); }
+.match-report-link:focus-visible { outline: 2px solid var(--warning); outline-offset: 3px; }
+.match-report-link:disabled { cursor: default; opacity: 0.55; }
+.match-report-input { width: 100%; resize: vertical; }
+.match-report-counter { margin-top: 4px; color: var(--text-light); font-size: var(--fs-xs); text-align: right; }
 .room-code-display {
   font-family: Consolas, 'JetBrains Mono', monospace;
   font-size: clamp(2rem, 6vw, 2.8rem);

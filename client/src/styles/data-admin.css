@@ -277,6 +277,19 @@
 .admin-users-table table { min-width: 880px; }
 .admin-users-table table th,
 .admin-users-table table td { text-align: center; vertical-align: middle; }
+.admin-reports-card { width: min(1320px, 100%); }
+.admin-reports-card .admin-list-toolbar { grid-template-columns: auto; justify-content: flex-end; }
+.admin-reports-card .admin-page-size .input { width: auto; min-width: 132px; }
+.admin-reports-table table { min-width: 1120px; }
+.admin-reports-table table th:nth-child(5),
+.admin-reports-table table td:nth-child(5) { width: 260px; }
+.admin-reports-table table td:nth-child(5) {
+  color: var(--text-sec);
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.admin-reports-table .btn { min-height: 32px; padding: 6px 10px; white-space: nowrap; }
 .admin-user-actions { display: flex; justify-content: center; gap: 6px; min-width: 110px; }
 .admin-user-actions .btn { min-height: 32px; padding: 6px 10px; white-space: nowrap; }
 .admin-user-leaderboard-toggle {
@@ -493,6 +506,25 @@
   margin-bottom: 18px;
 }
 .admin-player-dialog-heading h2 { margin: 0; font-size: 1.15rem; letter-spacing: 0; }
+.admin-report-dialog { width: min(620px, 100%); }
+.admin-report-dialog .admin-player-dialog-heading h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.admin-report-detail { display: grid; gap: 16px; }
+.admin-report-detail dl { display: grid; gap: 10px; margin: 0; }
+.admin-report-detail dl > div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.admin-report-detail dt { color: var(--text-light); font-size: var(--fs-xs); font-weight: 650; }
+.admin-report-detail dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.admin-report-detail > label { display: grid; gap: 6px; color: var(--text-sec); font-size: 0.86rem; font-weight: 600; }
+.admin-report-detail textarea { width: 100%; resize: vertical; }
 .admin-player-dialog-heading p { margin: 5px 0 0; color: var(--text-sec); font-size: 0.88rem; }
 .admin-player-form-grid {
   display: grid;

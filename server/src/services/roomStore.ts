@@ -57,6 +57,13 @@ export interface StoredMatchResult {
   forfeitedKey: string | null;
 }
 
+export interface StoredMatchReport {
+  reporterKey: string;
+  reportedKey: string;
+  description: string;
+  createdAt: number;
+}
+
 export interface StoredReplayRound {
   round: number;
   targetPlayerId: number;
@@ -90,6 +97,7 @@ export interface StoredRoom {
   eventResults: Record<string, number>;
   roundResult: StoredRoundResult | null;
   matchResult: StoredMatchResult | null;
+  reports: StoredMatchReport[];
   replayRounds: StoredReplayRound[];
   revision: number;
   createdAt: number;
@@ -193,6 +201,8 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   room.roundResult ??= null;
   room.matchResult ??= null;
   if (room.matchResult) room.matchResult.forfeitedKey ??= null;
+  if (!Array.isArray(room.reports)) room.reports = [];
+  if (room.reports.length > 2) room.reports = room.reports.slice(-2);
   if (!Array.isArray(room.replayRounds)) room.replayRounds = [];
   if (room.replayRounds.length > 30) room.replayRounds = room.replayRounds.slice(-30);
   for (const round of room.replayRounds) {

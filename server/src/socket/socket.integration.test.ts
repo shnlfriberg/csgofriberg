@@ -705,6 +705,98 @@ describe('multiplayer socket integration', () => {
     }
   });
 
+  it('rejects reports for manually created rooms after settlement', async () => {
+    const stamp = Date.now();
+    const keyA = `created-report-a-${stamp}`;
+    const keyB = `created-report-b-${stamp}`;
+    const tokenA = jwt.sign({ key: keyA, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const tokenB = jwt.sign({ key: keyB, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
+    const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
+    try {
+      const created = await emit(a, 'room:create', { dbType: 'easy', boType: 1 });
+      createdRoomIds.push(created.room.id);
+      await emit(b, 'room:join', { roomId: created.room.id });
+      await emit(b, 'room:ready', { ready: true });
+      expect((await emit(a, 'game:start')).ok).toBe(true);
+      const active = await getRoom(created.room.id);
+      const matchOver = onceEvent(a, 'match:over');
+      await emit(a, 'game:guess', {
+        playerId: active!.targetPlayerId,
+        roundId: active!.round,
+        eventId: `report-finish-${stamp}`,
+      });
+      await matchOver;
+
+      expect(await emit(a, 'match:report', { description: 'created room' }))
+        .toEqual({ code: 'REPORT_NOT_AVAILABLE' });
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
+  it('accepts one post-match report per player in matchmaking only', async () => {
+    const userA = await createVerifiedUser();
+    const userB = await createVerifiedUser();
+    const a = await connect(userA.cookie);
+    const b = await connect(userB.cookie);
+    try {
+      expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true }))
+        .toEqual({ queued: true });
+      const foundA = onceEvent(a, 'match:found');
+      const foundB = onceEvent(b, 'match:found');
+      expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true }))
+        .toEqual({ queued: false });
+      const [matchA] = await Promise.all([foundA, foundB]);
+      createdRoomIds.push(matchA.room.id);
+
+      expect(await emit(a, 'match:report', { description: 'too early' }))
+        .toEqual({ code: 'REPORT_NOT_AVAILABLE' });
+      const roundA = onceEvent(a, 'round:start');
+      const roundB = onceEvent(b, 'round:start');
+      expect(await emit(a, 'room:ready', { ready: true })).toEqual({ ok: true });
+      expect(await emit(b, 'room:ready', { ready: true })).toEqual({ ok: true });
+      await Promise.all([roundA, roundB]);
+      await withRoomLock(matchA.room.id, (room) => {
+        room.players.find((player) => player.key === userA.key)!.score = 1;
+        return { room };
+      });
+      const active = await getRoom(matchA.room.id);
+      const matchOver = onceEvent(a, 'match:over');
+      await emit(a, 'game:guess', {
+        playerId: active!.targetPlayerId,
+        roundId: active!.round,
+        eventId: `matchmaking-report-finish-${Date.now()}`,
+      });
+      await matchOver;
+
+      expect(await emit(a, 'match:report', { description: 'x'.repeat(51) }))
+        .toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(a, 'match:report', { description: ' suspected automation ' }))
+        .toEqual({ ok: true, reportSubmitted: true });
+      expect((await emit(a, 'room:sync')).room.reportSubmitted).toBe(true);
+      expect((await emit(b, 'room:sync')).room.reportSubmitted).toBe(false);
+      expect(await emit(a, 'match:report', { description: 'again' }))
+        .toEqual({ code: 'REPORT_ALREADY_SUBMITTED' });
+      expect(await emit(b, 'match:report', { description: '' }))
+        .toEqual({ ok: true, reportSubmitted: true });
+
+      const storedReports = (await getRoom(matchA.room.id))!.reports;
+      expect(storedReports.map((report) => ({
+        reporterKey: report.reporterKey,
+        reportedKey: report.reportedKey,
+        description: report.description,
+      }))).toEqual([
+        { reporterKey: userA.key, reportedKey: userB.key, description: 'suspected automation' },
+        { reporterKey: userB.key, reportedKey: userA.key, description: '' },
+      ]);
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
   it('starts a rematch in a created room only after invitation, acceptance, and guest readiness', async () => {
     const stamp = Date.now();
     const keyA = `rematch-a-${stamp}`;

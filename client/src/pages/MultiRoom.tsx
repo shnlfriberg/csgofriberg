@@ -16,6 +16,7 @@ import {
   RotateCcw,
   X,
   CircleAlert,
+  AlertTriangle,
   Trophy,
   ChevronLeft,
   ChevronRight,
@@ -38,6 +39,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { difficultyLabel } from '../utils/difficulty';
 import PlayerStatsDialog, { type PlayerStatsView } from '../components/PlayerStatsDialog';
+import ModalPortal from '../components/ModalPortal';
 
 interface RoundOver {
   winnerKey: string | null;
@@ -238,6 +240,10 @@ export default function MultiRoom() {
   const [skipBusy, setSkipBusy] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [rematchBusy, setRematchBusy] = useState(false);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportDescription, setReportDescription] = useState('');
+  const [reportBusy, setReportBusy] = useState(false);
+  const reportDialogRef = useRef<HTMLDivElement>(null);
   const [rematchNotice, setRematchNotice] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const [guessCooldownUntil, setGuessCooldownUntil] = useState(0);
@@ -772,6 +778,49 @@ export default function MultiRoom() {
     );
   };
 
+  const submitReport = () => {
+    if (reportBusy || !room?.matchmaking || !opponent) return;
+    setReportBusy(true);
+    getSocket().emit('match:report', { description: reportDescription.trim() }, (res: any) => {
+      setReportBusy(false);
+      if (res?.code) {
+        toast.error(translate(res.code));
+        return;
+      }
+      setReportOpen(false);
+      setReportDescription('');
+      applyRoomSnapshot({ ...room, reportSubmitted: true });
+      toast.success(t('multi.reportSubmitted'));
+    });
+  };
+
+  useEffect(() => {
+    if (!reportOpen) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusDialog = () => reportDialogRef.current?.querySelector<HTMLElement>('textarea, button, [href], input, select, [tabindex]:not([tabindex="-1"])')?.focus();
+    const frame = window.requestAnimationFrame(focusDialog);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setReportOpen(false);
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const focusable = reportDialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])');
+      if (!focusable?.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, [reportOpen]);
+
   useEffect(() => {
     if (!room?.matchmaking || room.status !== 'waiting' || !opponent) {
       setOpponentPreview(null);
@@ -1189,6 +1238,13 @@ export default function MultiRoom() {
                 <DoorOpen size={16} />
                 {leaving ? t('multi.leaving') : t('multi.returnLobby')}
               </button>
+              {room.matchmaking && !isSpectator && opponent && !room.reportSubmitted && (
+                <button className="match-report-link" type="button" disabled={reportBusy} onClick={() => setReportOpen(true)}>
+                  <AlertTriangle size={13} aria-hidden="true" />
+                  {t('multi.reportOpponent')}
+                </button>
+              )}
+              {room.matchmaking && room.reportSubmitted && <span className="badge amber">{t('multi.reportSubmitted')}</span>}
             </>
           }
         />
@@ -1196,6 +1252,35 @@ export default function MultiRoom() {
 
       {playerStats && (
         <PlayerStatsDialog view={playerStats} onClose={() => setPlayerStats(null)} />
+      )}
+      {reportOpen && room?.matchmaking && opponent && (
+        <ModalPortal>
+          <div className="confirm-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setReportOpen(false); }}>
+            <div ref={reportDialogRef} className="confirm-dialog match-report-dialog" role="dialog" aria-modal="true" aria-labelledby="match-report-title" tabIndex={-1}>
+              <div className="confirm-icon" aria-hidden="true"><AlertTriangle size={22} /></div>
+              <div className="confirm-content">
+                <div className="confirm-heading">
+                  <h2 id="match-report-title">{t('multi.reportTitle')}</h2>
+                  <button className="confirm-close" type="button" aria-label={t('common.close')} onClick={() => setReportOpen(false)}><X size={18} /></button>
+                </div>
+                <p>{t('multi.reportMessage', { player: opponent.name })}</p>
+                <textarea
+                  className="input match-report-input"
+                  value={reportDescription}
+                  maxLength={50}
+                  rows={3}
+                  placeholder={t('multi.reportPlaceholder')}
+                  onChange={(event) => setReportDescription(event.target.value.slice(0, 50))}
+                />
+                <div className="match-report-counter">{reportDescription.length}/50</div>
+                <div className="confirm-actions">
+                  <button className="btn btn-ghost" type="button" onClick={() => setReportOpen(false)}>{t('common.cancel')}</button>
+                  <button className="btn btn-warning" type="button" disabled={reportBusy} onClick={submitReport}><AlertTriangle size={15} />{t('multi.submitReport')}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
       )}
     </Page>
   );

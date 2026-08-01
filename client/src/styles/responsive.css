@@ -350,6 +350,7 @@
   .admin-announcement-row > .btn { align-self: flex-end; }
   .overlay-card .btns,
   .confirm-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .overlay-card .btns .match-report-link { grid-column: 1 / -1; justify-self: end; width: auto; }
   .announcement-popup-actions { display: flex; }
   .overlay-card .btns .btn,
   .confirm-actions .btn { width: 100%; }

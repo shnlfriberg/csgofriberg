@@ -87,6 +87,7 @@ const room: RoomState = {
       majorAppearances: answer.majorAppearances,
     },
   },
+  reportSubmitted: false,
   matchReplay: {
     id: 'record',
     mode: 'easy',
@@ -145,6 +146,67 @@ describe('MultiRoom replay', () => {
     expect(screen.getByText('第 2 / 2 轮')).toBeInTheDocument();
     expect(screen.getByText('Opponent Round 2')).toBeInTheDocument();
     expect(screen.queryByText('Opponent Round 1')).not.toBeInTheDocument();
+  });
+
+  it('shows the report entry only after matchmaking settlement and submits it once', async () => {
+    const user = userEvent.setup();
+    const matchmakingFinishedRoom = { ...room, matchmaking: true };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: matchmakingFinishedRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+      if (event === 'match:report' && typeof ack === 'function') {
+        ack({ ok: true, reportSubmitted: true });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    const reportEntry = await screen.findByRole('button', { name: '举报对方' });
+    expect(reportEntry.querySelector('svg')).not.toBeNull();
+    expect(reportEntry.parentElement?.lastElementChild).toBe(reportEntry);
+    await user.click(reportEntry);
+    const description = screen.getByPlaceholderText('请输入举报描述');
+    await user.type(description, '疑似使用自动化脚本');
+    await user.click(screen.getByRole('button', { name: '提交举报' }));
+
+    expect(socket.emit).toHaveBeenCalledWith(
+      'match:report',
+      { description: '疑似使用自动化脚本' },
+      expect.any(Function)
+    );
+    expect(await screen.findByText('已提交举报')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '举报对方' })).not.toBeInTheDocument();
+  });
+
+  it('does not show a report entry for created rooms even after settlement', async () => {
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    expect(await screen.findByRole('button', { name: '查看对局' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '举报对方' })).not.toBeInTheDocument();
+  });
+
+  it('does not show a report entry before the match is finished', async () => {
+    const activeRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      round: 1,
+      roundId: 1,
+      matchResult: null,
+      matchReplay: undefined,
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: activeRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    expect(await screen.findByPlaceholderText('输入选手昵称...')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '举报对方' })).not.toBeInTheDocument();
   });
 
   it('lets the matchmaking host ready up instead of showing a host start button', async () => {

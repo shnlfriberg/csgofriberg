@@ -23,6 +23,12 @@ export interface MatchResultPayload {
     name?: string;
     score: number;
   }[];
+  reports?: {
+    reporterKey: string;
+    reportedKey: string;
+    description: string;
+    createdAt: number;
+  }[];
   rounds: Array<{
     round: number;
     targetPlayerId: number;
@@ -55,6 +61,13 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
       winning_rounds: metrics?.winningRounds ?? 0,
     };
   };
+  const reportValues = (matchId: number | string) => (payload.reports ?? []).map((report) => ({
+    match_id: matchId,
+    reporter_key: report.reporterKey,
+    reported_key: report.reportedKey,
+    description: report.description,
+    created_at: new Date(report.createdAt),
+  }));
   const insertedMatch = await db.transaction(async (trx) => {
     const inserted = await trx('match_records')
       .insert({
@@ -71,27 +84,29 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
       .ignore()
       .returning('id');
     if (!inserted.length) {
+      const existing = await trx('match_records')
+        .where({ room_id: payload.recordId })
+        .first('id');
+      if (!existing) return false;
       if (payload.rounds.length) {
-        const existing = await trx('match_records')
-          .where({ room_id: payload.recordId })
-          .first('id');
-        if (existing) {
-          await trx('match_records')
-            .where({ id: existing.id })
-            .update({ replay: JSON.stringify(payload.rounds) });
-          for (const player of payload.participants) {
-            const values = participantValues(player);
-            await trx('match_players')
-              .where({ match_id: existing.id, player_key: player.key })
-              .update({
-                winning_guess_sum: values.winning_guess_sum,
-                winning_rounds: values.winning_rounds,
-              });
-          }
-          return true;
+        await trx('match_records')
+          .where({ id: existing.id })
+          .update({ replay: JSON.stringify(payload.rounds) });
+        for (const player of payload.participants) {
+          const values = participantValues(player);
+          await trx('match_players')
+            .where({ match_id: existing.id, player_key: player.key })
+            .update({
+              winning_guess_sum: values.winning_guess_sum,
+              winning_rounds: values.winning_rounds,
+            });
         }
       }
-      return false;
+      const reports = reportValues(existing.id);
+      if (reports.length) {
+        await trx('match_reports').insert(reports).onConflict(['match_id', 'reporter_key']).ignore();
+      }
+      return Boolean(payload.rounds.length || reports.length);
     }
     const matchId = typeof inserted[0] === 'object' ? inserted[0].id : inserted[0];
     await trx('match_players').insert(
@@ -100,6 +115,10 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
         ...participantValues(player),
       }))
     );
+    const reports = reportValues(matchId);
+    if (reports.length) {
+      await trx('match_reports').insert(reports).onConflict(['match_id', 'reporter_key']).ignore();
+    }
     return true;
   });
   if (insertedMatch) {

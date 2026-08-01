@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
-import { Gamepad2, Swords, Users, Wrench } from 'lucide-react';
+import { AlertTriangle, Gamepad2, Swords, Users, Wrench } from 'lucide-react';
 import Page from '../components/Page';
 import AdminPlayers from '../components/admin/AdminPlayers';
 import AdminAnnouncements from '../components/admin/AdminAnnouncements';
 import AdminResourceVersion from '../components/admin/AdminResourceVersion';
 import AdminUsers, { AdminGuests } from '../components/admin/AdminUsers';
 import AdminApiTokens from '../components/admin/AdminApiTokens';
+import AdminReports from '../components/admin/AdminReports';
 import { getSocket } from '../api/socket';
 import { PresenceStats } from '../types';
 import { useTranslation } from 'react-i18next';
 
-type Tab = 'players' | 'users' | 'guests' | 'announcements' | 'apiTokens' | 'resources';
+type Tab = 'players' | 'users' | 'guests' | 'reports' | 'announcements' | 'apiTokens' | 'resources';
 
 export default function Admin() {
   const { t } = useTranslation();
@@ -60,6 +61,10 @@ export default function Admin() {
         <button className={tab === 'guests' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('guests')}>
           {t('admin.guestsTab')}
         </button>
+        <button className={tab === 'reports' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('reports')}>
+          <AlertTriangle size={15} />
+          {t('admin.reportsTab')}
+        </button>
         <button className={tab === 'announcements' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('announcements')}>
           {t('admin.announcementsTab')}
         </button>
@@ -73,6 +78,7 @@ export default function Admin() {
       {tab === 'players' && <AdminPlayers />}
       {tab === 'users' && <AdminUsers />}
       {tab === 'guests' && <AdminGuests />}
+      {tab === 'reports' && <AdminReports />}
       {tab === 'announcements' && <AdminAnnouncements />}
       {tab === 'apiTokens' && <AdminApiTokens />}
       {tab === 'resources' && <AdminResourceVersion />}

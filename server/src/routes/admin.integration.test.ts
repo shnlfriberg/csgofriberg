@@ -300,6 +300,98 @@ describe('admin user management', () => {
     }
   });
 
+  it('lists and processes match reports', async () => {
+    const stamp = Date.now();
+    const adminUsername = `admin-reports-${stamp}`;
+    const reporterUsername = `reporter-${stamp}`;
+    const reportedGuestKey = `reported-${stamp}`;
+    const insertedUsers = await db('users').insert([
+      {
+        username: adminUsername,
+        display_id: userNameFromUsername(adminUsername),
+        password_hash: 'test',
+        role: 'admin',
+        token_version: 0,
+      },
+      {
+        username: reporterUsername,
+        display_id: userNameFromUsername(reporterUsername),
+        password_hash: 'test',
+        role: 'user',
+        token_version: 0,
+      },
+    ]).returning(['id', 'username', 'token_version']);
+    const admin = insertedUsers.find((user) => user.username === adminUsername)!;
+    const reporter = insertedUsers.find((user) => user.username === reporterUsername)!;
+    const roomId = `admin-report-room-${stamp}`;
+    const [insertedMatch] = await db('match_records').insert({
+      room_id: roomId,
+      db_type: 'easy',
+      bo_type: 3,
+      replay: '[]',
+    }).returning('id');
+    const matchId = Number(typeof insertedMatch === 'object' ? insertedMatch.id : insertedMatch);
+    try {
+      await db('match_players').insert([
+        {
+          match_id: matchId,
+          user_id: reporter.id,
+          player_key: `u:${reporter.id}`,
+          player_name: reporterUsername,
+        },
+        {
+          match_id: matchId,
+          player_key: `g:${reportedGuestKey}`,
+          player_name: guestNameFromKey(reportedGuestKey),
+        },
+      ]);
+      const [insertedReport] = await db('match_reports').insert({
+        match_id: matchId,
+        reporter_key: `u:${reporter.id}`,
+        reported_key: `g:${reportedGuestKey}`,
+        description: 'suspected automation',
+      }).returning('id');
+      const reportId = Number(typeof insertedReport === 'object' ? insertedReport.id : insertedReport);
+      const cookie = authCookie(admin);
+
+      const listed = await request('/api/admin/reports?status=pending&page=1&pageSize=10', cookie);
+      expect(listed.response.status).toBe(200);
+      expect(listed.data).toMatchObject({ total: 1, page: 1, totalPages: 1 });
+      expect(listed.data.reports).toEqual([
+        expect.objectContaining({
+          id: reportId,
+          matchId,
+          roomId,
+          mode: 'easy',
+          boType: 3,
+          reporter: userNameFromUsername(reporterUsername),
+          reported: guestNameFromKey(reportedGuestKey),
+          description: 'suspected automation',
+          status: 'pending',
+        }),
+      ]);
+
+      const updated = await request(`/api/admin/reports/${reportId}`, cookie, {
+        method: 'PATCH',
+        body: { status: 'resolved', adminNote: 'reviewed' },
+      });
+      expect(updated.response.status).toBe(200);
+      expect(updated.data).toEqual({ ok: true, id: reportId, status: 'resolved', adminNote: 'reviewed' });
+      expect(await db('match_reports').where({ id: reportId }).first())
+        .toMatchObject({ status: 'resolved', admin_note: 'reviewed', handled_by_user_id: admin.id });
+
+      const invalid = await request(`/api/admin/reports/${reportId}`, cookie, {
+        method: 'PATCH',
+        body: { status: 'closed', adminNote: '' },
+      });
+      expect(invalid.response.status).toBe(400);
+      expect(invalid.data).toEqual({ code: 'VALIDATION_FAILED' });
+    } finally {
+      await db('match_records').where({ id: matchId }).del();
+      await db('users').whereIn('username', [adminUsername, reporterUsername]).del();
+    }
+  });
+
   it('exports all player fields in the JSON import format for admins only', async () => {
     const stamp = Date.now();
     const adminUsername = `admin-export-admin-${stamp}`;
