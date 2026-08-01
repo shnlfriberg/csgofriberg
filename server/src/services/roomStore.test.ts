@@ -26,6 +26,7 @@ function makeRoom(id: string): StoredRoom {
     rematchAllowed: true,
     rematchInviterKey: null,
     allowSpectators: false,
+    verifiedOnly: false,
     anonymous: false,
     round: 0,
     players: [{

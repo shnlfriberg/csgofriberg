@@ -136,6 +136,7 @@ export interface RoomState {
   rematchAllowed: boolean;
   rematchInvite: { inviterKey: string } | null;
   allowSpectators: boolean;
+  verifiedOnly: boolean;
   anonymous: boolean;
   round: number;
   roundId: number;

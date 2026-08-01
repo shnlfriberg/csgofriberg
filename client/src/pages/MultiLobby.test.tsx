@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { Route } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderAtRoute } from '../test/render';
+import { useAuth } from '../store/auth';
 import MultiLobby from './MultiLobby';
 
 const socket = vi.hoisted(() => ({
@@ -16,6 +17,10 @@ vi.mock('../api/socket', () => ({ getSocket: () => socket }));
 
 describe('MultiLobby matchmaking', () => {
   beforeEach(() => {
+    useAuth.setState({
+      user: { id: 7, username: 'verified-user', role: 'user', email: 'verified@example.com', emailVerified: true },
+      initialized: true,
+    });
     socket.handlers.clear();
     socket.on.mockReset();
     socket.off.mockReset();
@@ -53,15 +58,17 @@ describe('MultiLobby matchmaking', () => {
     await user.click(easyButtons[0]);
     await user.click(screen.getByRole('button', { name: 'BO5' }));
     await user.click(screen.getByRole('checkbox', { name: '允许观战' }));
+    await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
     await user.click(easyButtons[1]);
 
     await waitFor(() => {
       expect(JSON.parse(localStorage.getItem('csgofriberg.multi-lobby-preferences') ?? '{}'))
         .toEqual({
-          createDifficulty: 'easy',
-          boType: 5,
-          allowSpectators: true,
-          matchmakingDifficulty: 'easy',
+        createDifficulty: 'easy',
+        boType: 5,
+        allowSpectators: true,
+        verifiedEmailOnly: true,
+        matchmakingDifficulty: 'easy',
         });
     });
 
@@ -72,5 +79,29 @@ describe('MultiLobby matchmaking', () => {
     expect(restoredEasyButtons[1]).toHaveClass('active');
     expect(screen.getByRole('button', { name: 'BO5' })).toHaveClass('active');
     expect(screen.getByRole('checkbox', { name: '允许观战' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' })).toBeChecked();
+  });
+
+  it('requires a verified email before starting quick match', () => {
+    useAuth.setState({
+      user: { id: 8, username: 'unverified-user', role: 'user', email: 'unverified@example.com', emailVerified: false },
+      initialized: true,
+    });
+    renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
+
+    expect(screen.getByText('随机匹配仅对已登录且完成邮箱验证的用户开放。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '开始匹配' })).toBeDisabled();
+  });
+
+  it('sends the verified-email restriction when creating a room', async () => {
+    const user = userEvent.setup();
+    renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
+
+    await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
+    await user.click(screen.getByRole('button', { name: '创建房间' }));
+
+    expect(socket.emit).toHaveBeenCalledWith('room:create', expect.objectContaining({
+      verifiedOnly: true,
+    }), expect.any(Function));
   });
 });

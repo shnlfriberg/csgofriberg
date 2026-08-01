@@ -249,7 +249,7 @@
   .opt-label { min-width: 100%; }
   .opt-btn { min-height: 36px; padding-inline: 14px; }
   .spectator-option { margin-left: 0; }
-  .verified-match-option { margin-left: 0; }
+  .room-create-options { margin-left: 0; }
   .join-room-form { grid-template-columns: 1fr 1fr; }
   .join-room-form .input { grid-column: 1 / -1; }
   .join-room-form .btn { width: 100%; }

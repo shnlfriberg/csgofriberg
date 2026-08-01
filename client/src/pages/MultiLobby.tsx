@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Globe,
@@ -11,8 +11,6 @@ import {
   Rocket,
   XCircle,
   Eye,
-  CircleHelp,
-  X,
 } from 'lucide-react';
 import Page from '../components/Page';
 import { getSocket } from '../api/socket';
@@ -25,7 +23,6 @@ import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
 import { difficultyLabel } from '../utils/difficulty';
 import { loadMultiLobbyPreferences, saveMultiLobbyPreferences } from '../store/multiLobbyPreferences';
 import { useAuth } from '../store/auth';
-import ModalPortal from '../components/ModalPortal';
 
 type DbType = string;
 const BO_OPTIONS = [1, 3, 5, 7];
@@ -72,14 +69,13 @@ export default function MultiLobby() {
   const [dbType, setDbType] = useState<DbType>(initialPreferences.createDifficulty);
   const [boType, setBoType] = useState(initialPreferences.boType);
   const [allowSpectators, setAllowSpectators] = useState(initialPreferences.allowSpectators);
+  const [verifiedEmailOnly, setVerifiedEmailOnly] = useState(initialPreferences.verifiedEmailOnly);
   const anonymous = true;
   const [mmDbType, setMmDbType] = useState<DbType>(initialPreferences.matchmakingDifficulty);
   const mmAnonymous = true;
   const user = useAuth((state) => state.user);
-  const [verifiedOnly, setVerifiedOnly] = useState(false);
-  const [verifiedInfoOpen, setVerifiedInfoOpen] = useState(false);
-  const verifiedInfoTitleId = useId();
-  const verifiedInfoCloseRef = useRef<HTMLButtonElement>(null);
+  const authInitialized = useAuth((state) => state.initialized);
+  const canUseMatchmaking = Boolean(user?.id && user.email && user.emailVerified);
   const [joinCode, setJoinCode] = useState('');
   const [createdRoom, setCreatedRoom] = useState<RoomState | null>(null);
   const [currentRoom, setCurrentRoom] = useState<RoomState | null>(null);
@@ -94,26 +90,8 @@ export default function MultiLobby() {
   const confirm = useConfirm();
   const searchingRef = useRef(false);
   const replacingRoomRef = useRef(false);
-  const matchOptionsRef = useRef({ dbType: mmDbType, anonymous: mmAnonymous, verifiedOnly });
-  matchOptionsRef.current = { dbType: mmDbType, anonymous: mmAnonymous, verifiedOnly };
-
-  useEffect(() => {
-    if (!verifiedInfoOpen) return;
-    const oldOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    verifiedInfoCloseRef.current?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        setVerifiedInfoOpen(false);
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      document.body.style.overflow = oldOverflow;
-      document.removeEventListener('keydown', onKeyDown);
-    };
-  }, [verifiedInfoOpen]);
+  const matchOptionsRef = useRef({ dbType: mmDbType, anonymous: mmAnonymous });
+  matchOptionsRef.current = { dbType: mmDbType, anonymous: mmAnonymous };
 
   useEffect(() => {
     const cooldownUntil = Number(
@@ -137,9 +115,10 @@ export default function MultiLobby() {
       createDifficulty: dbType,
       boType,
       allowSpectators,
+      verifiedEmailOnly,
       matchmakingDifficulty: mmDbType,
     });
-  }, [allowSpectators, boType, dbType, mmDbType]);
+  }, [allowSpectators, boType, dbType, mmDbType, verifiedEmailOnly]);
 
   useEffect(() => {
     if (!matchCooldownDeadline) {
@@ -283,7 +262,13 @@ export default function MultiLobby() {
         return;
       }
     }
-    getSocket().emit('room:create', { dbType, boType, allowSpectators, anonymous }, (res: any) => {
+    getSocket().emit('room:create', {
+      dbType,
+      boType,
+      allowSpectators,
+      verifiedOnly: verifiedEmailOnly,
+      anonymous,
+    }, (res: any) => {
       if (res?.code === 'ALREADY_IN_ROOM' && res.room) {
         setCreating(false);
         setCurrentRoom(res.room);
@@ -333,7 +318,7 @@ export default function MultiLobby() {
   const startMatch = () => {
     setSearching(true);
     searchingRef.current = true;
-    getSocket().emit('match:start', { dbType: mmDbType, anonymous: mmAnonymous, verifiedOnly }, (res: any) => {
+    getSocket().emit('match:start', { dbType: mmDbType, anonymous: mmAnonymous }, (res: any) => {
       if (res?.room) {
         setSearching(false);
         searchingRef.current = false;
@@ -423,7 +408,7 @@ export default function MultiLobby() {
             {copied ? t('multi.copied') : t('multi.copyCode')}
           </button>
           <p className="muted multi-lobby-created-meta">
-            {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')}
+            {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')} · {createdRoom.verifiedOnly ? t('multi.verifiedRoomOnly') : t('multi.anyoneCanJoin')}
             {' · '}{createdRoom.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}
           </p>
           <button className="btn btn-lg" onClick={() => navigate('/multi/room')}>
@@ -452,14 +437,24 @@ export default function MultiLobby() {
               onChange={setBoType}
               format={(v) => `BO${v}`}
             />
-            <label className="spectator-option">
-              <input
-                type="checkbox"
-                checked={allowSpectators}
-                onChange={(event) => setAllowSpectators(event.target.checked)}
-              />
-              <span>{t('multi.allowSpectating')}</span>
-            </label>
+            <div className="room-create-options">
+              <label className="spectator-option">
+                <input
+                  type="checkbox"
+                  checked={allowSpectators}
+                  onChange={(event) => setAllowSpectators(event.target.checked)}
+                />
+                <span>{t('multi.allowSpectating')}</span>
+              </label>
+              <label className="spectator-option">
+                <input
+                  type="checkbox"
+                  checked={verifiedEmailOnly}
+                  onChange={(event) => setVerifiedEmailOnly(event.target.checked)}
+                />
+                <span>{t('multi.verifiedRoomOnly')}</span>
+              </label>
+            </div>
             <div style={{ textAlign: 'center', marginTop: 14 }}>
               <button className="btn btn-lg" onClick={() => void create()} disabled={creating}>
                 {creating ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <Zap size={16} />}
@@ -474,6 +469,9 @@ export default function MultiLobby() {
               {t('multi.randomMatch')}
             </h3>
             <p className="muted">{t('multi.fixedBo3')}</p>
+            {authInitialized && !canUseMatchmaking && (
+              <p className="muted matchmaking-requirement">{t('multi.matchVerifiedRequired')}</p>
+            )}
             <OptionGroup
               label={t('multi.playerDatabase')}
               options={difficulties.map((item) => item.key) as DbType[]}
@@ -481,26 +479,6 @@ export default function MultiLobby() {
               onChange={setMmDbType}
               format={(v) => difficultyLabel(t, v)}
             />
-            <div className="verified-match-option">
-              <label className="spectator-option">
-                <input
-                  type="checkbox"
-                  checked={verifiedOnly}
-                  disabled={!user?.emailVerified}
-                  onChange={(event) => setVerifiedOnly(event.target.checked)}
-                />
-                <span>{t('multi.verifiedOnly')}</span>
-              </label>
-              <button
-                className="verified-match-help"
-                type="button"
-                aria-label={t('multi.verifiedOnlyInfo.open')}
-                title={t('multi.verifiedOnlyInfo.open')}
-                onClick={() => setVerifiedInfoOpen(true)}
-              >
-                <CircleHelp size={17} />
-              </button>
-            </div>
             {searching ? (
               <div style={{ textAlign: 'center', marginTop: 14 }}>
                 <div className="spinner matchmaking-spinner" />
@@ -512,7 +490,7 @@ export default function MultiLobby() {
               </div>
             ) : (
               <div style={{ textAlign: 'center', marginTop: 14 }}>
-                <button className="btn btn-accent btn-lg" onClick={startMatch} disabled={matchCooldownSeconds > 0}>
+                <button className="btn btn-accent btn-lg" onClick={startMatch} disabled={!authInitialized || matchCooldownSeconds > 0 || !canUseMatchmaking}>
                   <Dices size={16} />
                   {matchCooldownSeconds > 0
                     ? t('multi.matchmakingCooldownButton', { seconds: matchCooldownSeconds })
@@ -555,23 +533,8 @@ export default function MultiLobby() {
                 <Eye size={15} />
                 {t('multi.spectate')}
               </button>
-        </div>
-        {verifiedInfoOpen && <ModalPortal>
-          <div className="confirm-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setVerifiedInfoOpen(false); }}>
-            <div className="confirm-dialog verified-match-dialog" role="dialog" aria-modal="true" aria-labelledby={verifiedInfoTitleId}>
-              <div className="confirm-icon verified-match-dialog-icon" aria-hidden="true"><CircleHelp size={23} /></div>
-              <div className="confirm-content">
-                <div className="confirm-heading">
-                  <h2 id={verifiedInfoTitleId}>{t('multi.verifiedOnlyInfo.title')}</h2>
-                  <button ref={verifiedInfoCloseRef} className="confirm-close" type="button" aria-label={t('common.close')} onClick={() => setVerifiedInfoOpen(false)}><X size={18} /></button>
-                </div>
-                <p className="verified-match-info-text">{t('multi.verifiedOnlyInfo.content')}</p>
-                <div className="confirm-actions"><button className="btn" type="button" onClick={() => setVerifiedInfoOpen(false)}>{t('common.close')}</button></div>
-              </div>
             </div>
           </div>
-        </ModalPortal>}
-      </div>
         </div>
       )}
     </Page>

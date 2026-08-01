@@ -59,6 +59,7 @@ const room: RoomState = {
   rematchAllowed: false,
   rematchInvite: null,
   allowSpectators: true,
+  verifiedOnly: false,
   anonymous: false,
   round: 2,
   roundId: 2,

@@ -108,6 +108,7 @@ const roomCreatePayloadSchema = z.object({
   dbType: difficultyKeySchema,
   boType: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
   allowSpectators: z.boolean().default(false),
+  verifiedOnly: z.boolean().default(false),
   anonymous: z.boolean().default(false),
 });
 const roomJoinPayloadSchema = z.object({
@@ -299,6 +300,7 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
       ? { inviterKey: room.rematchInviterKey }
       : null,
     allowSpectators: room.allowSpectators,
+    verifiedOnly: room.verifiedOnly,
     anonymous: room.anonymous,
     round: room.round,
     winsNeeded: winsNeeded(room.boType),
@@ -1260,7 +1262,7 @@ export function setupSocket(io: Server) {
           key: `u:${user.id}`,
           userId: user.id,
           name: userNameFromUsername(user.username),
-          emailVerified: user.emailVerified,
+          emailVerified: Boolean(user.email && user.emailVerified),
         };
       } else if (guest) {
         if (await isGuestBanned(guest.key)) return next(new Error('USER_BANNED'));
@@ -1298,6 +1300,11 @@ export function setupSocket(io: Server) {
 
   io.on('connection', (socket) => {
     const me = socket.data.identity as StoredIdentity;
+    const refreshIdentityEmailState = async () => {
+      if (!me.userId) return;
+      const current = await authenticateCookie(socket.handshake.headers.cookie);
+      if (current?.id === me.userId) me.emailVerified = Boolean(current.email && current.emailVerified);
+    };
     socket.emit('identity:self', { key: me.key });
     void getResourceVersionNotice()
       .then((notice) => {
@@ -1416,6 +1423,7 @@ export function setupSocket(io: Server) {
 
     safeOn(socket, 'room:create', async (payload: z.infer<typeof roomCreatePayloadSchema>, ack) => {
       await restorePromise;
+      await refreshIdentityEmailState();
       if (!(await socketAllowed('create', me.key, 5, 60))) return ack?.({ code: 'RATE_LIMITED' });
       const existing = await getRoomForIdentity(me.key);
       if (existing) return ack?.({
@@ -1444,6 +1452,7 @@ export function setupSocket(io: Server) {
         rematchAllowed: true,
         rematchInviterKey: null,
         allowSpectators: payload.allowSpectators,
+        verifiedOnly: payload.verifiedOnly,
         anonymous: payload.anonymous,
         round: 0,
         players: [makePlayer(me, socket.id, true)],
@@ -1482,6 +1491,7 @@ export function setupSocket(io: Server) {
 
     safeOn(socket, 'room:join', async (payload: z.infer<typeof roomJoinPayloadSchema>, ack) => {
       await restorePromise;
+      await refreshIdentityEmailState();
       if (!(await socketAllowed('join', me.key, 20, 60))) return ack?.({ code: 'RATE_LIMITED' });
       const roomId = payload.roomId;
       const current = await getRoomForIdentity(me.key);
@@ -1503,6 +1513,9 @@ export function setupSocket(io: Server) {
           return { role: 'player' as const, room, existing: true };
         }
         const existingSpectator = room.spectators.find((p) => p.key === me.key);
+        if (room.verifiedOnly && me.key !== room.hostKey && !me.emailVerified) {
+          return { code: 'EMAIL_VERIFICATION_REQUIRED' };
+        }
         const asSpectator = Boolean(
           existingSpectator || payload.spectate || room.status !== 'waiting' || room.players.length >= 2
         );
@@ -1952,6 +1965,7 @@ export function setupSocket(io: Server) {
 
     safeOn(socket, 'match:start', async (payload: z.infer<typeof matchStartPayloadSchema>, ack) => {
       await restorePromise;
+      await refreshIdentityEmailState();
       if (!(await socketAllowed('match', me.key, 10, 60))) return ack?.({ code: 'RATE_LIMITED' });
       const currentRoom = await getRoomForIdentity(me.key);
       if (currentRoom) return ack?.({
@@ -1959,6 +1973,10 @@ export function setupSocket(io: Server) {
         room: publicRoom(currentRoom, me.key),
         serverNow: Date.now(),
       });
+      if (!me.userId || !me.emailVerified) {
+        await cancelQueue(me.key);
+        return ack?.({ code: 'EMAIL_VERIFICATION_REQUIRED' });
+      }
       const cooldown = await getMatchmakingCooldown(me.key);
       if (cooldown) return ack?.({
         code: 'MATCHMAKING_COOLDOWN',
@@ -1972,18 +1990,13 @@ export function setupSocket(io: Server) {
         ...me,
         socketId: socket.id,
         anonymous: payload.anonymous,
-        verifiedOnly: payload.verifiedOnly,
+        verifiedOnly: true,
         matchmakingPool: (me.userId
           ? await isMatchmakingRestricted(me.userId)
           : await isGuestMatchmakingRestricted(me.key.slice(2)))
-          ? (payload.verifiedOnly ? 'verified-restricted' : 'restricted')
-          : payload.verifiedOnly
-            ? (me.emailVerified ? 'verified' : 'public')
-            : 'public',
+          ? 'verified-restricted'
+          : 'verified',
       };
-      if (payload.verifiedOnly && (!me.userId || !me.emailVerified)) {
-        return ack?.({ code: 'EMAIL_VERIFICATION_REQUIRED' });
-      }
       let opponent = isRedisAvailable() ? await queueOrTakeOpponent(dbType, queuedMe) : null;
       if (isRedisAvailable() && !opponent) return ack?.({ queued: true });
       if (!isRedisAvailable() && !opponent) {
@@ -2024,6 +2037,7 @@ export function setupSocket(io: Server) {
         rematchAllowed: false,
         rematchInviterKey: null,
         allowSpectators: false,
+        verifiedOnly: true,
         anonymous: Boolean(queuedMe.anonymous || opponent.anonymous),
         round: 0,
         players: [makePlayer(opponent, opponent.socketId, false), makePlayer(me, socket.id, false)],

@@ -12,7 +12,7 @@ import { resolveSocketIp, setRecoveryWindow, setupSocket } from './index';
 import { browserFingerprint, POW_COOKIE } from '../services/pow';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { guestNameFromKey, signToken } from '../middleware/auth';
+import { guestNameFromKey, invalidateAuthUser, signToken } from '../middleware/auth';
 import { cancelQueue, getRoom, queueOrTakeOpponent, withRoomLock } from '../services/roomStore';
 import {
   clearMatchmakingCooldown,
@@ -25,6 +25,7 @@ let io: Server;
 let baseUrl: string;
 let stopSocket: (() => Promise<void>) | undefined;
 const createdRoomIds: string[] = [];
+const createdTestUserIds: number[] = [];
 const TEST_USER_AGENT = 'csgofriberg-socket-test';
 
 function connect(cookie: string, auth: Record<string, unknown> = {}): Promise<ClientSocket> {
@@ -68,6 +69,36 @@ function onceEvent(socket: ClientSocket, event: string, timeoutMs = 2_000): Prom
       resolve(payload);
     });
   });
+}
+
+async function createTestUser(verified: boolean): Promise<{ id: number; key: string; cookie: string }> {
+  const suffix = `${Date.now()}${Math.floor(Math.random() * 10_000)}`;
+  const username = `socket_test_${suffix}`;
+  const email = `${username}@example.com`;
+  const inserted = await db('users').insert({
+    username,
+    password_hash: 'test-password-hash',
+    role: 'user',
+    token_version: 0,
+    email,
+    email_verified_at: verified ? new Date().toISOString() : null,
+  }).returning('id');
+  const id = Number(typeof inserted[0] === 'object' ? inserted[0].id : inserted[0]);
+  createdTestUserIds.push(id);
+  const token = signToken({ id, token_version: 0 });
+  return {
+    id,
+    key: `u:${id}`,
+    cookie: withPowCookie(`csgofriberg_session=${token}`),
+  };
+}
+
+function createVerifiedUser() {
+  return createTestUser(true);
+}
+
+function createUnverifiedUser() {
+  return createTestUser(false);
 }
 
 describe('multiplayer socket integration', () => {
@@ -229,6 +260,48 @@ describe('multiplayer socket integration', () => {
     }
   });
 
+  it('requires verified email matchmaking and enforces verified-only rooms', async () => {
+    const guestKey = `match-policy-guest-${Date.now()}`;
+    const guestToken = jwt.sign({ key: guestKey, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const guest = await connect(withPowCookie(`csgofriberg_guest=${guestToken}`));
+    const unverified = await createUnverifiedUser();
+    const verified = await createVerifiedUser();
+    const unverifiedSocket = await connect(unverified.cookie);
+    const verifiedSocket = await connect(verified.cookie);
+    try {
+      expect(await emit(guest, 'match:start', { dbType: 'easy' }))
+        .toEqual({ code: 'EMAIL_VERIFICATION_REQUIRED' });
+      expect(await emit(unverifiedSocket, 'match:start', { dbType: 'easy' }))
+        .toEqual({ code: 'EMAIL_VERIFICATION_REQUIRED' });
+      expect(await emit(verifiedSocket, 'match:start', { dbType: 'easy' }))
+        .toEqual({ queued: true });
+      await emit(verifiedSocket, 'match:cancel');
+
+      const created = await emit(guest, 'room:create', {
+        dbType: 'easy',
+        boType: 1,
+        verifiedOnly: true,
+      });
+      expect(created.room).toMatchObject({ verifiedOnly: true });
+      createdRoomIds.push(created.room.id);
+
+      expect(await emit(unverifiedSocket, 'room:join', { roomId: created.room.id }))
+        .toEqual({ code: 'EMAIL_VERIFICATION_REQUIRED' });
+      expect(await emit(verifiedSocket, 'room:join', { roomId: created.room.id }))
+        .toMatchObject({ role: 'player', room: { verifiedOnly: true } });
+
+      await db('users').where({ id: unverified.id }).update({ email_verified_at: new Date().toISOString() });
+      await invalidateAuthUser(unverified.id);
+      expect(await emit(unverifiedSocket, 'match:start', { dbType: 'easy' }))
+        .toEqual({ queued: true });
+      await emit(unverifiedSocket, 'match:cancel');
+    } finally {
+      guest.disconnect();
+      unverifiedSocket.disconnect();
+      verifiedSocket.disconnect();
+    }
+  });
+
   it('only exposes room player stats to opponents and room spectators', async () => {
     const stamp = Date.now();
     const keyA = `stats-room-a-${stamp}`;
@@ -371,13 +444,10 @@ describe('multiplayer socket integration', () => {
   });
 
   it('starts a matched room only after both players are ready', async () => {
-    const stamp = Date.now();
-    const keyA = `match-ready-a-${stamp}`;
-    const keyB = `match-ready-b-${stamp}`;
-    const tokenA = jwt.sign({ key: keyA, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-    const tokenB = jwt.sign({ key: keyB, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-    const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
-    const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
+    const userA = await createVerifiedUser();
+    const userB = await createVerifiedUser();
+    const a = await connect(userA.cookie);
+    const b = await connect(userB.cookie);
     try {
       expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true }))
         .toEqual({ queued: true });
@@ -429,12 +499,10 @@ describe('multiplayer socket integration', () => {
   });
 
   it('destroys an expired ready check and penalizes only unready players', async () => {
-    const stamp = Date.now();
-    const keyA = `match-timeout-a-${stamp}`;
-    const keyB = `match-timeout-b-${stamp}`;
-    const token = (key: string) => jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-    const a = await connect(withPowCookie(`csgofriberg_guest=${token(keyA)}`));
-    const b = await connect(withPowCookie(`csgofriberg_guest=${token(keyB)}`));
+    const userA = await createVerifiedUser();
+    const userB = await createVerifiedUser();
+    const a = await connect(userA.cookie);
+    const b = await connect(userB.cookie);
     try {
       expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true })).toEqual({ queued: true });
       const foundA = onceEvent(a, 'match:found');
@@ -467,27 +535,27 @@ describe('multiplayer socket integration', () => {
 
   it('does not penalize a ready-check exit against an opponent averaging under three guesses', async () => {
     const stamp = Date.now();
-    const keyA = `match-leave-a-${stamp}`;
-    const keyB = `match-leave-b-${stamp}`;
+    const userA = await createVerifiedUser();
+    const userB = await createVerifiedUser();
+    const keyA = userA.key;
     const historyRoomId = `match-leave-history-${stamp}`;
-    const token = (key: string) => jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-    const a = await connect(withPowCookie(`csgofriberg_guest=${token(keyA)}`));
-    const b = await connect(withPowCookie(`csgofriberg_guest=${token(keyB)}`));
+    const a = await connect(userA.cookie);
+    const b = await connect(userB.cookie);
     try {
       const [target] = await db('players').select('id').limit(1);
       const [inserted] = await db('match_records').insert({
         room_id: historyRoomId,
         db_type: 'easy',
         bo_type: 1,
-        winner_key: `g:${keyA}`,
+        winner_key: keyA,
         finish_reason: 'score',
         replay: JSON.stringify([{
           round: 1,
           targetPlayerId: target.id,
-          winnerKey: `g:${keyA}`,
+          winnerKey: keyA,
           reason: 'guessed',
           guessesByPlayer: {
-            [`g:${keyA}`]: [target.id, target.id],
+            [keyA]: [target.id, target.id],
             [`g:history-opponent-${stamp}`]: [target.id, target.id, target.id],
           },
         }]),
@@ -496,8 +564,8 @@ describe('multiplayer socket integration', () => {
       await db('match_players').insert([
         {
           match_id: historyMatchId,
-          player_key: `g:${keyA}`,
-          player_name: guestNameFromKey(keyA),
+          player_key: keyA,
+          player_name: 'history-user',
           score: 1,
           is_winner: true,
         },
@@ -549,6 +617,7 @@ describe('multiplayer socket integration', () => {
     await stopSocket?.();
     if (io) io.close();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    if (createdTestUserIds.length) await db('users').whereIn('id', createdTestUserIds).del();
   });
 
   it('serializes starts and rejects stale or duplicate guesses', async () => {

@@ -5,6 +5,7 @@ export interface MultiLobbyPreferences {
   createDifficulty: string;
   boType: number;
   allowSpectators: boolean;
+  verifiedEmailOnly: boolean;
   matchmakingDifficulty: string;
 }
 
@@ -16,6 +17,7 @@ export function loadMultiLobbyPreferences(
     createDifficulty: fallbackDifficulty,
     boType: 3,
     allowSpectators: false,
+    verifiedEmailOnly: false,
     matchmakingDifficulty: fallbackDifficulty,
   };
   try {
@@ -34,6 +36,9 @@ export function loadMultiLobbyPreferences(
       allowSpectators: typeof stored.allowSpectators === 'boolean'
         ? stored.allowSpectators
         : defaults.allowSpectators,
+      verifiedEmailOnly: typeof stored.verifiedEmailOnly === 'boolean'
+        ? stored.verifiedEmailOnly
+        : defaults.verifiedEmailOnly,
       matchmakingDifficulty: typeof stored.matchmakingDifficulty === 'string'
         && difficultySet.has(stored.matchmakingDifficulty)
         ? stored.matchmakingDifficulty
