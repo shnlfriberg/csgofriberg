@@ -66,6 +66,11 @@ function dotStuff(value: string): string {
   return value.replace(/\r?\n/g, '\r\n').replace(/^\./gm, '..');
 }
 
+function encodeMimeHeader(value: string): string {
+  if (/^[\x20-\x7e]*$/.test(value)) return value;
+  return `=?UTF-8?B?${Buffer.from(value, 'utf8').toString('base64')}?=`;
+}
+
 export async function sendEmail(to: string, subject: string, body: string): Promise<void> {
   if (!config.email.host || !config.email.from) throw new Error('EMAIL_NOT_CONFIGURED');
   let socket: net.Socket | tls.TLSSocket = await new Promise<net.Socket | tls.TLSSocket>((resolve, reject) => {
@@ -99,8 +104,11 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
     const message = [
       `From: ${config.email.from}`,
       `To: ${to}`,
-      `Subject: ${subject}`,
-      'Content-Type: text/plain; charset=utf-8',
+      `Subject: ${encodeMimeHeader(subject)}`,
+      `Date: ${new Date().toUTCString()}`,
+      `Message-ID: <${crypto.randomUUID()}@${config.email.host}>`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=UTF-8',
       'Content-Transfer-Encoding: 8bit',
       '',
       body,
@@ -111,6 +119,33 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
   } finally {
     socket.end();
   }
+}
+
+export function buildVerificationEmail(input: {
+  link: string;
+  ttlSeconds: number;
+}): string {
+  const expiresInMinutes = Math.max(1, Math.ceil(input.ttlSeconds / 60));
+  return [
+    '您好：',
+    '',
+    '感谢您使用「弗一把」。',
+    '',
+    '您正在为账号绑定邮箱：',
+    '',
+    '请点击以下链接完成验证：',
+    input.link,
+    '',
+    `链接有效期：${expiresInMinutes} 分钟`,
+    '为保障账号安全，请勿将此链接转发给他人。',
+    '',
+    '如果您没有进行此操作，请忽略本邮件。',
+    '此邮件由系统自动发送，请勿直接回复。',
+    '',
+    '------------------------------',
+    '弗一把',
+    'CS:GO / CS2 Major 选手猜测游戏',
+  ].join('\n');
 }
 
 export async function claimEmailVerificationCooldown(userId: number): Promise<number> {
@@ -163,8 +198,11 @@ export async function issueEmailVerification(
   const link = `${base.replace(/\/$/, '')}/email-verify?token=${encodeURIComponent(token)}`;
   await sendEmail(
     email,
-    '弗一把邮箱验证',
-    `您好：\n\n您正在为“弗一把”绑定邮箱，请点击以下链接完成验证：\n\n${link}\n\n此链接将在 ${Math.round(config.email.verifyTtlSeconds / 60)} 分钟后失效。如果不是您本人操作，请忽略此邮件。`
+    '请验证您的邮箱地址｜弗一把',
+    buildVerificationEmail({
+      link,
+      ttlSeconds: config.email.verifyTtlSeconds,
+    })
   );
   return { retryAt };
 }

@@ -7,6 +7,7 @@ x-app-environment: &app-environment
   TRUST_PROXY: ${TRUST_PROXY:-true}
   JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
   GUEST_ID_SALT: ${GUEST_ID_SALT:?set GUEST_ID_SALT in .env}
+  DISPLAY_ID_FORBIDDEN_TOKENS: "${DISPLAY_ID_FORBIDDEN_TOKENS:-}"
   DB_CLIENT: pg
   DB_URL: postgres://${POSTGRES_USER:-csgofriberg}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-csgofriberg}
   DB_POOL_MIN: ${DB_POOL_MIN:-0}

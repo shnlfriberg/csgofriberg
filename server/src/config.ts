@@ -25,11 +25,22 @@ const configuredEmailAllowedSuffixes = (process.env.EMAIL_ALLOWED_SUFFIXES || ''
   .split(',')
   .map((suffix) => suffix.trim().toLowerCase().replace(/^@/, ''))
   .filter(Boolean);
+const configuredDisplayIdForbiddenTokens = (process.env.DISPLAY_ID_FORBIDDEN_TOKENS ?? '')
+  .split(',')
+  .map((token) => token.trim().toUpperCase())
+  .filter(Boolean);
+const invalidDisplayIdForbiddenToken = configuredDisplayIdForbiddenTokens.find(
+  (token) => !/^[0-9A-Z]{2,5}$/.test(token)
+);
+if (invalidDisplayIdForbiddenToken) {
+  throw new Error('DISPLAY_ID_FORBIDDEN_TOKENS_MUST_BE_2_TO_5_BASE36_CHARACTERS');
+}
 
 export const config = {
   port: Number(process.env.PORT || 3000),
   jwtSecret,
   guestIdSalt: configuredGuestIdSalt || jwtSecret,
+  displayIdForbiddenTokens: [...new Set(configuredDisplayIdForbiddenTokens)],
   dbClient: (process.env.DB_CLIENT || 'sqlite') as 'sqlite' | 'pg',
   dbUrl: process.env.DB_URL || './data/csgofriberg.sqlite3',
   dbPoolMin: Number(process.env.DB_POOL_MIN || 2),

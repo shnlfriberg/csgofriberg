@@ -1,11 +1,14 @@
 import { Knex } from 'knex';
 import { db } from './knex';
-import { userNameFromUsername } from '../services/identityDisplay';
+import crypto from 'crypto';
+import { config } from '../config';
+import { guestNameFromKey, userNameFromUsername } from '../services/identityDisplay';
 import { DIFFICULTY_LEVELS } from '../difficulties';
 import { winningGuessMetricsByPlayer } from '../services/matchGuessMetrics';
 
 const FIRST_GUESS_BACKFILL_BATCH_SIZE = 1000;
 const USER_DISPLAY_ID_BACKFILL_BATCH_SIZE = 1000;
+const DISPLAY_ID_FILTER_SYNC_BATCH_SIZE = 1000;
 const PLAYER_DIFFICULTIES_BACKFILL_MIGRATION = '20260724-player-difficulties-backfill';
 const MULTI_WINNING_GUESSES_BACKFILL_MIGRATION = '20260729-multi-winning-guesses-backfill';
 const MULTI_WINNING_GUESSES_BACKFILL_BATCH_SIZE = 200;
@@ -100,6 +103,61 @@ async function backfillFirstGuessPlayerIds(instance: Knex): Promise<void> {
       }
     });
   }
+}
+
+async function syncFilteredDisplayIds(instance: Knex): Promise<void> {
+  const revision = crypto
+    .createHash('sha256')
+    .update('display-id-filter-v1\0', 'ascii')
+    .update(config.displayIdForbiddenTokens.join('\0'), 'utf8')
+    .digest('hex')
+    .slice(0, 16);
+  const migrationName = `20260801-display-id-filter-${revision}`;
+  if (await instance('app_migrations').where({ name: migrationName }).first()) return;
+
+  let userCursor = 0;
+  while (true) {
+    const users = await instance('users')
+      .select('id', 'username', 'display_id')
+      .where('id', '>', userCursor)
+      .orderBy('id')
+      .limit(DISPLAY_ID_FILTER_SYNC_BATCH_SIZE);
+    if (!users.length) break;
+    userCursor = Number(users[users.length - 1].id);
+    await instance.transaction(async (trx) => {
+      for (const user of users) {
+        const displayId = userNameFromUsername(user.username);
+        if (user.display_id !== displayId) {
+          await trx('users').where({ id: user.id }).update({ display_id: displayId });
+        }
+      }
+    });
+  }
+
+  let guestCursor = 0;
+  while (true) {
+    const guests = await instance('guest_accounts')
+      .select('id', 'guest_key', 'display_id')
+      .where('id', '>', guestCursor)
+      .orderBy('id')
+      .limit(DISPLAY_ID_FILTER_SYNC_BATCH_SIZE);
+    if (!guests.length) break;
+    guestCursor = Number(guests[guests.length - 1].id);
+    await instance.transaction(async (trx) => {
+      for (const guest of guests) {
+        if (!guest.guest_key) continue;
+        const displayId = guestNameFromKey(guest.guest_key);
+        if (guest.display_id !== displayId) {
+          await trx('guest_accounts').where({ id: guest.id }).update({ display_id: displayId });
+        }
+      }
+    });
+  }
+
+  await instance('app_migrations')
+    .insert({ name: migrationName })
+    .onConflict('name')
+    .ignore();
 }
 
 async function backfillMultiWinningGuesses(instance: Knex): Promise<void> {
@@ -371,6 +429,7 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.index(['difficulty_key', 'player_id']);
     });
   }
+  await syncFilteredDisplayIds(instance);
   await backfillLegacyPlayerDifficulties(instance);
   if (await instance.schema.hasColumn('players', 'is_easy')) {
     await instance.schema.alterTable('players', (t) => t.dropColumn('is_easy'));

@@ -1,5 +1,4 @@
 import http from 'http';
-import crypto from 'crypto';
 import express from 'express';
 import jwt from 'jsonwebtoken';
 import { AddressInfo } from 'net';
@@ -10,7 +9,7 @@ import { initDb } from '../db/init';
 import { db } from '../db/knex';
 import { initRedis } from '../redis';
 import { config } from '../config';
-import { optionalAuth, userNameFromUsername } from '../middleware/auth';
+import { guestNameFromKey, optionalAuth, userNameFromUsername } from '../middleware/auth';
 
 let server: http.Server;
 let baseUrl: string;
@@ -93,15 +92,7 @@ describe('cookie authentication', () => {
       exp: number;
     };
     expect(result.data.guest.name).toMatch(/^访客#[0-9A-Z]{5}$/);
-    const guestIdValue = crypto
-      .createHmac('sha256', config.guestIdSalt)
-      .update('csgofriberg-guest-id-v1\0', 'ascii')
-      .update(guest.key, 'utf8')
-      .digest()
-      .readUInt32BE(0) % (36 ** 5);
-    expect(result.data.guest.name).toBe(
-      `访客#${guestIdValue.toString(36).padStart(5, '0').toUpperCase()}`
-    );
+    expect(result.data.guest.name).toBe(guestNameFromKey(guest.key));
     expect(guest.exp - guest.iat).toBe(3 * 365 * 24 * 60 * 60);
     const sessionId = `auth-test-${Date.now()}`;
     const [player] = await db('players').select('id').limit(1);
