@@ -63,6 +63,29 @@ describe('PersonalSettings', () => {
     expect(api.post).toHaveBeenCalledWith('/auth/email/request', { email: 'tester@example.com' });
   });
 
+  it('uses a registered email without requiring an input change', async () => {
+    const user = {
+      id: 9,
+      username: 'registered-user',
+      role: 'user' as const,
+      email: 'registered@example.com',
+      emailVerified: false,
+    };
+    useAuth.setState({ user, initialized: true });
+    vi.mocked(api.get).mockResolvedValue({ data: { user } } as never);
+    vi.mocked(api.post).mockResolvedValue({ data: { ok: true } } as never);
+    renderWithProviders(<PersonalSettings />);
+
+    fireEvent.click(screen.getByRole('button', { name: '个人设置' }));
+    const send = screen.getByRole('button', { name: '发送验证邮件' });
+    expect(send).toBeEnabled();
+    fireEvent.click(send);
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/auth/email/request', { email: 'registered@example.com' });
+    });
+  });
+
   it('masks the local part of a verified email address', async () => {
     const user = {
       id: 8,

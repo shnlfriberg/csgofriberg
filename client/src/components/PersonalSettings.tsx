@@ -112,6 +112,7 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
       : Math.max(0, retryAt - Date.now());
     setEmailCooldownUntil(Date.now() + remaining);
   }, []);
+  const emailToVerify = email.trim() || user?.email?.trim() || '';
 
   return (
     <>
@@ -175,12 +176,12 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
                 {user && (
                   <form className="settings-email" onSubmit={async (event) => {
                     event.preventDefault();
-                    if (!email.trim()) return;
+                    if (!emailToVerify) return;
                     setEmailLoading(true);
                     try {
-                      const response = await api.post('/auth/email/request', { email: email.trim() });
+                      const response = await api.post('/auth/email/request', { email: emailToVerify });
                       applyEmailCooldown(response.data);
-                      setUser({ ...user, email: email.trim().toLowerCase(), emailVerified: false });
+                      setUser({ ...user, email: emailToVerify.toLowerCase(), emailVerified: false });
                       toast.success(t('settings.emailSent'));
                     } catch (error) {
                       if (axios.isAxiosError(error) && error.response?.data?.code === 'EMAIL_VERIFICATION_COOLDOWN') {
@@ -193,7 +194,7 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
                     <span className="settings-option-label">{t('settings.email')}</span>
                     <input className="input" type="email" value={user.emailVerified ? maskVerifiedEmail(user.email) : email || user.email || ''} disabled={user.emailVerified} onChange={(event) => setEmail(event.target.value)} placeholder={t('settings.emailPlaceholder')} />
                     <span className="muted">{user.emailVerified ? t('settings.emailLocked') : t('settings.emailUnverified')}</span>
-                    <button className="btn btn-sm" type="submit" disabled={user.emailVerified || emailLoading || emailCooldownSeconds > 0 || !email.trim()}>
+                    <button className="btn btn-sm" type="submit" disabled={user.emailVerified || emailLoading || emailCooldownSeconds > 0 || !emailToVerify}>
                       {emailCooldownSeconds > 0
                         ? t('settings.sendVerificationCooldown', { seconds: emailCooldownSeconds })
                         : t('settings.sendVerification')}

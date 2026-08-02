@@ -136,7 +136,7 @@ export const resources = {
       auth: {
         login: '登录', register: '注册', username: '用户名', password: '密码（至少 10 位）',
         confirmPassword: '确认密码', emailOptional: '邮箱（可选）', registerPowComputing: '正在进行安全校验', mismatch: '两次输入的密码不一致',
-        description: '登录仅用于跨设备保存战绩与进度，所有模式无需登录即可游玩',
+        description: '单人和开房间无需登录即可游玩，随机匹配需要绑定并验证邮箱。',
         toRegister: '没有账号？去注册', toLogin: '已有账号？去登录',
         claimFailed: '登录成功，但匿名战绩同步失败：{{message}}',
       },
@@ -336,7 +336,7 @@ export const resources = {
       },
       auth: {
         login: 'Log in', register: 'Sign up', username: 'Username', password: 'Password (at least 10 characters)', confirmPassword: 'Confirm password', emailOptional: 'Email (optional)',
-        registerPowComputing: 'Running security check', mismatch: 'The passwords do not match', description: 'Login is only needed to sync results and progress across devices. Every mode is available to guests.',
+        registerPowComputing: 'Running security check', mismatch: 'The passwords do not match', description: 'Solo play and private rooms are available to guests; Quick Match requires a linked and verified email.',
         toRegister: 'No account? Sign up', toLogin: 'Already have an account? Log in', claimFailed: 'Logged in, but guest results could not be synced: {{message}}',
       },
       player: {
@@ -524,7 +524,7 @@ export const resources = {
       },
       auth: {
         login: 'ログイン', register: '登録', username: 'ユーザー名', password: 'パスワード（10 文字以上）', confirmPassword: 'パスワード確認', emailOptional: 'メール（任意）',
-        registerPowComputing: 'セキュリティ確認中', mismatch: 'パスワードが一致しません', description: 'ログインは端末間で戦績と進行状況を同期するためだけに使用します。すべてのモードはゲストでも遊べます。',
+        registerPowComputing: 'セキュリティ確認中', mismatch: 'パスワードが一致しません', description: 'ソロとルーム作成はゲストでも利用できますが、ランダムマッチにはメールの登録と確認が必要です。',
         toRegister: 'アカウントがない場合は登録', toLogin: 'アカウントをお持ちの場合はログイン', claimFailed: 'ログインしましたが、ゲスト戦績を同期できませんでした：{{message}}',
       },
       player: {
