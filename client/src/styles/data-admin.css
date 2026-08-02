@@ -317,9 +317,24 @@
 .admin-users-table table th,
 .admin-users-table table td { text-align: center; vertical-align: middle; }
 .admin-reports-card { width: min(1320px, 100%); }
-.admin-reports-card .admin-list-toolbar { grid-template-columns: auto; justify-content: flex-end; }
+.admin-reports-card .admin-list-toolbar {
+  grid-template-columns: minmax(240px, 1fr) repeat(3, auto) auto;
+  align-items: end;
+}
 .admin-reports-card .admin-page-size .input { width: auto; min-width: 132px; }
+.admin-report-selected-action { min-height: 42px; white-space: nowrap; }
+.admin-report-reported {
+  display: grid;
+  gap: 3px;
+}
+.admin-report-reported small {
+  color: var(--text-light);
+  font-size: var(--fs-xs);
+}
 .admin-reports-table table { min-width: 1120px; }
+.admin-reports-table table th:first-child,
+.admin-reports-table table td:first-child { width: 46px; }
+.admin-reports-table input[type='checkbox'] { width: 17px; height: 17px; }
 .admin-reports-table table th:nth-child(5),
 .admin-reports-table table td:nth-child(5) { width: 260px; }
 .admin-reports-table table td:nth-child(5) {

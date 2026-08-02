@@ -105,6 +105,7 @@ const reportListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(50),
   status: z.enum(['all', 'pending', 'resolved', 'dismissed']).default('all'),
+  reporterFilter: z.enum(['all', 'multiple', 'single']).default('all'),
   search: z.string().trim().max(64).default(''),
 });
 const reportParamsSchema = z.object({ reportId: z.coerce.number().int().positive() });
@@ -117,6 +118,9 @@ const reportUpdateSchema = z.object({
 const reportBatchUpdateSchema = reportUpdateSchema.extend({
   reportedKey: reportIdentityKeySchema,
 });
+const reportSelectedUpdateSchema = reportUpdateSchema.extend({
+  reportIds: z.array(z.number().int().positive()).min(1).max(100),
+});
 const reportWhitelistSchema = z.object({
   reportedKey: reportIdentityKeySchema,
   adminNote: z.string().trim().max(500).default(''),
@@ -124,6 +128,17 @@ const reportWhitelistSchema = z.object({
 const reportWhitelistParamsSchema = z.object({
   reportedKey: reportIdentityKeySchema,
 });
+const reportQuickDismissSchema = z.object({
+  adminNote: z.string().trim().min(1).max(500),
+  reportedKeys: z.array(reportIdentityKeySchema).min(1).max(100),
+});
+const reportLowRiskDismissSchema = z.object({
+  adminNote: z.string().trim().min(1).max(500),
+  reportedKeys: z.array(reportIdentityKeySchema).min(1).max(10),
+});
+
+const REPORT_LOW_RISK_MAX_SIMILARITY = 60;
+const REPORT_LOW_RISK_MIN_AVERAGE_GUESSES = 4.5;
 
 function matchPlayerDisplayId(row: { key?: unknown; name?: unknown; username?: unknown }): string {
   const key = typeof row.key === 'string' ? row.key : '';
@@ -191,6 +206,75 @@ function reportIdentityDisplay(row: { key?: unknown; name?: unknown; username?: 
   return matchPlayerDisplayId(row);
 }
 
+function pendingReporterFilterQuery(filter: 'multiple' | 'single') {
+  return db('match_reports')
+    .where('status', 'pending')
+    .select('reported_key')
+    .groupBy('reported_key')
+    .havingRaw(filter === 'multiple'
+      ? 'count(distinct reporter_key) >= 2'
+      : 'count(distinct reporter_key) = 1');
+}
+
+async function reportReviewSignals(identityKey: string) {
+  const multiRows = await db('match_records as m')
+    .join('match_players as mp', 'mp.match_id', 'm.id')
+    .where('mp.player_key', identityKey)
+    .orderBy('m.created_at', 'desc')
+    .limit(10)
+    .select('m.id', 'm.db_type as mode', 'm.replay', 'm.created_at as finishedAt', 'mp.player_key as playerKey');
+  const inputs: AnalysisRoundInput[] = [];
+  const relevantPlayerIds = new Set<number>();
+  const winningGuessCounts: number[] = [];
+  for (const row of multiRows) {
+    let rounds: unknown = [];
+    try { rounds = JSON.parse(String(row.replay)); } catch { rounds = []; }
+    if (!Array.isArray(rounds)) continue;
+    for (const value of rounds.slice(0, 30)) {
+      if (!value || typeof value !== 'object') continue;
+      const stored = value as Record<string, unknown>;
+      const guessesByPlayer = stored.guessesByPlayer;
+      const rawGuesses = guessesByPlayer && typeof guessesByPlayer === 'object'
+        ? (guessesByPlayer as Record<string, unknown>)[String(row.playerKey || identityKey)]
+        : [];
+      const guessIds = safeGuessIds(rawGuesses);
+      if (stored.winnerKey === identityKey && Array.isArray(rawGuesses)) {
+        winningGuessCounts.push(rawGuesses.length);
+      }
+      const targetPlayerId = Number(stored.targetPlayerId);
+      if (!Number.isInteger(targetPlayerId) || targetPlayerId <= 0) continue;
+      relevantPlayerIds.add(targetPlayerId);
+      guessIds.forEach((playerId) => relevantPlayerIds.add(playerId));
+      inputs.push({
+        source: 'multi',
+        recordId: Number(row.id),
+        mode: String(row.mode),
+        finishedAt: String(row.finishedAt),
+        round: Number(stored.round),
+        targetPlayerId,
+        guessPlayerIds: guessIds,
+      });
+    }
+  }
+  inputs.sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt) || b.recordId - a.recordId);
+  const allEnabledPlayers = getEnabledPlayers();
+  const playersById = new Map(allEnabledPlayers.map((player) => [player.id, player]));
+  for (const playerId of relevantPlayerIds) {
+    const player = getPlayer(playerId);
+    if (player) playersById.set(playerId, player);
+  }
+  const difficultyPools = new Map(
+    DIFFICULTY_LEVELS.map((difficulty) => [difficulty.key, getDifficultyPlayers(difficulty.key)])
+  );
+  const analysis = await analyzeGameChoices(inputs, playersById, difficultyPools, allEnabledPlayers);
+  return {
+    similarityIndex: analysis.summary.similarityIndex,
+    recentAverageWinningGuesses: winningGuessCounts.length
+      ? winningGuessCounts.reduce((sum, count) => sum + count, 0) / winningGuessCounts.length
+      : null,
+  };
+}
+
 router.get(
   '/reports',
   adminReadLimit,
@@ -209,6 +293,9 @@ router.get(
       .leftJoin('users as reported_user', 'reported_user.id', 'reported.user_id')
       .leftJoin('report_whitelist as whitelist', 'whitelist.identity_key', 'r.reported_key');
     if (parsed.status !== 'all') base.where('r.status', parsed.status);
+    if (parsed.reporterFilter !== 'all') {
+      base.whereIn('r.reported_key', pendingReporterFilterQuery(parsed.reporterFilter));
+    }
     if (parsed.search) {
       const pattern = `%${parsed.search}%`;
       base.where((builder) => {
@@ -242,16 +329,20 @@ router.get(
         'whitelist.identity_key as whitelistKey'
       );
     const reportedKeys = [...new Set(rows.map((row) => String(row.reportedKey)))];
-    const pendingCounts = new Map<string, number>();
+    const pendingCounts = new Map<string, { reports: number; reporters: number }>();
     if (reportedKeys.length) {
       const countRows = await db('match_reports')
         .select('reported_key as reportedKey')
         .whereIn('reported_key', reportedKeys)
         .where('status', 'pending')
         .groupBy('reported_key')
-        .count({ count: 'id' });
-      for (const row of countRows as Array<{ reportedKey?: unknown; count?: string | number }>) {
-        pendingCounts.set(String(row.reportedKey), Number(row.count ?? 0));
+        .count({ reports: 'id' })
+        .countDistinct({ reporters: 'reporter_key' });
+      for (const row of countRows as Array<{ reportedKey?: unknown; reports?: string | number; reporters?: string | number }>) {
+        pendingCounts.set(String(row.reportedKey), {
+          reports: Number(row.reports ?? 0),
+          reporters: Number(row.reporters ?? 0),
+        });
       }
     }
     res.json({
@@ -262,11 +353,102 @@ router.get(
         reported: reportIdentityDisplay({ key: row.reportedKey, name: row.reportedName, username: row.reportedUsername }),
         description: row.description ?? '', status: row.status, adminNote: row.adminNote ?? '',
         createdAt: row.createdAt, handledAt: row.handledAt, matchCreatedAt: row.matchCreatedAt,
-        pendingForReported: pendingCounts.get(String(row.reportedKey)) ?? 0,
+        pendingForReported: pendingCounts.get(String(row.reportedKey))?.reports ?? 0,
+        pendingReporterCount: pendingCounts.get(String(row.reportedKey))?.reporters ?? 0,
         whitelisted: Boolean(row.whitelistKey),
       })),
       total, page, pageSize: parsed.pageSize, totalPages,
     });
+  })
+);
+
+router.post(
+  '/reports/quick-dismiss/single-reporter',
+  adminWriteLimit,
+  validateBody(reportQuickDismissSchema),
+  asyncHandler(async (req, res) => {
+    const body = req.body as z.infer<typeof reportQuickDismissSchema>;
+    const rows = await pendingReporterFilterQuery('single')
+      .whereIn('reported_key', [...new Set(body.reportedKeys)])
+      .orderByRaw('min(created_at) asc')
+      .limit(body.reportedKeys.length);
+    const reportedKeys = rows.map((row) => String(row.reported_key));
+    const updated = reportedKeys.length
+      ? await db('match_reports')
+        .where('status', 'pending')
+        .whereIn('reported_key', reportedKeys)
+        .update({
+          status: 'dismissed',
+          admin_note: body.adminNote,
+          handled_by_user_id: req.user!.id,
+          handled_at: db.fn.now(),
+        })
+      : 0;
+    res.json({
+      ok: true,
+      targetCount: reportedKeys.length,
+      updated,
+    });
+  })
+);
+
+router.post(
+  '/reports/quick-dismiss/low-risk',
+  adminWriteLimit,
+  validateBody(reportLowRiskDismissSchema),
+  asyncHandler(async (req, res) => {
+    const body = req.body as z.infer<typeof reportLowRiskDismissSchema>;
+    const rows = await db('match_reports')
+      .where('status', 'pending')
+      .whereIn('reported_key', [...new Set(body.reportedKeys)])
+      .select('reported_key')
+      .groupBy('reported_key')
+      .orderBy('reported_key');
+    const reportedKeys = rows.map((row) => String(row.reported_key));
+    let dismissedTargets = 0;
+    let updated = 0;
+    for (const reportedKey of reportedKeys) {
+      const signals = await reportReviewSignals(reportedKey);
+      if (
+        signals.similarityIndex >= REPORT_LOW_RISK_MAX_SIMILARITY
+        || signals.recentAverageWinningGuesses == null
+        || signals.recentAverageWinningGuesses <= REPORT_LOW_RISK_MIN_AVERAGE_GUESSES
+      ) continue;
+      const dismissed = await db('match_reports')
+        .where({ reported_key: reportedKey, status: 'pending' })
+        .update({
+          status: 'dismissed',
+          admin_note: body.adminNote,
+          handled_by_user_id: req.user!.id,
+          handled_at: db.fn.now(),
+        });
+      if (dismissed) dismissedTargets += 1;
+      updated += Number(dismissed);
+    }
+    res.json({
+      ok: true,
+      scannedTargets: reportedKeys.length,
+      dismissedTargets,
+      updated,
+    });
+  })
+);
+
+router.patch(
+  '/reports/batch-selected',
+  adminWriteLimit,
+  validateBody(reportSelectedUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const body = req.body as z.infer<typeof reportSelectedUpdateSchema>;
+    const updated = await db('match_reports')
+      .whereIn('id', [...new Set(body.reportIds)])
+      .update({
+        status: body.status,
+        admin_note: body.adminNote,
+        handled_by_user_id: req.user!.id,
+        handled_at: body.status === 'pending' ? null : db.fn.now(),
+      });
+    res.json({ ok: true, updated, status: body.status, adminNote: body.adminNote });
   })
 );
 

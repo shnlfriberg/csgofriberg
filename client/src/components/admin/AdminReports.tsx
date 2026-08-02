@@ -8,6 +8,7 @@ import Badge from '../Badge';
 import DataTable, { type Column } from '../DataTable';
 import ModalPortal from '../ModalPortal';
 import { toast } from '../Toast';
+import { useConfirm } from '../ConfirmDialog';
 import {
   GuestDetailDialog,
   UserDetailDialog,
@@ -34,6 +35,7 @@ interface MatchReport {
   handledAt: string | null;
   matchCreatedAt: string;
   pendingForReported: number;
+  pendingReporterCount: number;
   whitelisted: boolean;
 }
 
@@ -57,8 +59,10 @@ function formatDate(value: string | null): string {
 
 export default function AdminReports() {
   const { t } = useTranslation();
+  const confirm = useConfirm();
   const [reports, setReports] = useState<MatchReport[]>([]);
   const [status, setStatus] = useState<'all' | ReportStatus>('pending');
+  const [reporterFilter, setReporterFilter] = useState<'all' | 'multiple' | 'single'>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -68,13 +72,18 @@ export default function AdminReports() {
   const [selected, setSelected] = useState<MatchReport | null>(null);
   const [reportedDetail, setReportedDetail] = useState<ReportedIdentity | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null);
+  const [quickAction, setQuickAction] = useState<'single' | 'lowRisk' | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
+  const [batchSelectedOpen, setBatchSelectedOpen] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const response = await api.get<ReportPage>('/admin/reports', {
-        params: { status, page, pageSize: 50, search: search || undefined },
+        params: { status, reporterFilter, page, pageSize: 50, search: search || undefined },
       });
       setReports(response.data.reports);
+      setSelectedIds(new Set());
       setTotal(response.data.total);
       setTotalPages(response.data.totalPages);
       if (response.data.page !== page) setPage(response.data.page);
@@ -83,7 +92,7 @@ export default function AdminReports() {
     } finally {
       setLoading(false);
     }
-  }, [page, search, status]);
+  }, [page, reporterFilter, search, status]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -94,6 +103,26 @@ export default function AdminReports() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [searchInput]);
+
+  const allVisibleSelected = reports.length > 0 && reports.every((report) => selectedIds.has(report.id));
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedIds.size > 0 && !allVisibleSelected;
+    }
+  }, [allVisibleSelected, selectedIds]);
+
+  const visibleReportedKeys = [...new Set(reports.map((report) => report.reportedKey))];
+  const toggleSelected = (reportId: number, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(reportId);
+      else next.delete(reportId);
+      return next;
+    });
+  };
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds(checked ? new Set(reports.map((report) => report.id)) : new Set());
+  };
 
   const openReportedDetails = async (report: MatchReport) => {
     setDetailLoadingId(report.id);
@@ -107,11 +136,68 @@ export default function AdminReports() {
     }
   };
 
+  const quickDismissSingleReporter = async () => {
+    if (!await confirm({
+      title: t('admin.quickDismissSingleTitle'),
+      message: t('admin.quickDismissSingleMessage'),
+      confirmLabel: t('admin.quickDismissSingleReporter'),
+      tone: 'warning',
+    })) return;
+    setQuickAction('single');
+    try {
+      const response = await api.post<{ targetCount: number; updated: number }>(
+        '/admin/reports/quick-dismiss/single-reporter',
+        { adminNote: t('admin.quickDismissSingleNote'), reportedKeys: visibleReportedKeys }
+      );
+      toast.success(t('admin.quickDismissSingleDone', { targets: response.data.targetCount, reports: response.data.updated }));
+      await load();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setQuickAction(null);
+    }
+  };
+
+  const quickDismissLowRisk = async () => {
+    if (!await confirm({
+      title: t('admin.quickDismissLowRiskTitle'),
+      message: t('admin.quickDismissLowRiskMessage'),
+      confirmLabel: t('admin.quickDismissLowRisk'),
+      tone: 'warning',
+    })) return;
+    setQuickAction('lowRisk');
+    try {
+      const response = await api.post<{
+        scannedTargets: number;
+        dismissedTargets: number;
+        updated: number;
+      }>('/admin/reports/quick-dismiss/low-risk', {
+        adminNote: t('admin.quickDismissLowRiskNote'),
+        reportedKeys: visibleReportedKeys.slice(0, 10),
+      });
+      toast.success(t('admin.quickDismissLowRiskDone', {
+        scanned: response.data.scannedTargets,
+        targets: response.data.dismissedTargets,
+        reports: response.data.updated,
+      }));
+      await load();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setQuickAction(null);
+    }
+  };
+
   const statusLabel = (value: ReportStatus) => t(`admin.reportStatus.${value}`);
   const columns: Column<MatchReport>[] = [
+    {
+      key: 'selection',
+      title: <input ref={selectAllRef} type="checkbox" aria-label={t('admin.selectAllReports')} checked={allVisibleSelected} disabled={!reports.length} onChange={(event) => toggleAllVisible(event.target.checked)} />,
+      render: (report) => <input type="checkbox" aria-label={t('admin.selectReport', { reported: report.reported })} checked={selectedIds.has(report.id)} onChange={(event) => toggleSelected(report.id, event.target.checked)} />,
+    },
     { key: 'createdAt', title: t('admin.reportCreatedAt'), render: (report) => formatDate(report.createdAt) },
     { key: 'reporter', title: t('admin.reporter') },
-    { key: 'reported', title: t('admin.reportedUser') },
+    { key: 'reported', title: t('admin.reportedUser'), render: (report) => <span className="admin-report-reported"><strong>{report.reported}</strong>{report.pendingReporterCount > 0 && <small>{t('admin.reportReporterCount', { count: report.pendingReporterCount })}</small>}</span> },
     { key: 'match', title: t('admin.reportMatch'), render: (report) => `${difficultyLabel(t, report.mode)} · BO${report.boType}` },
     { key: 'description', title: t('admin.reportDescription'), render: (report) => report.description || t('admin.reportNoDescription') },
     {
@@ -130,14 +216,75 @@ export default function AdminReports() {
       <div className="admin-list-toolbar">
         <label className="admin-search"><Search size={16} /><input className="input" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={t('admin.searchReports')} /></label>
         <label className="admin-page-size"><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as typeof status); }}><option value="pending">{statusLabel('pending')}</option><option value="resolved">{statusLabel('resolved')}</option><option value="dismissed">{statusLabel('dismissed')}</option><option value="all">{t('admin.reportStatus.all')}</option></select></label>
+        <label className="admin-page-size"><span>{t('admin.reporterFilterLabel')}</span><select className="input" value={reporterFilter} onChange={(event) => { setPage(1); setReporterFilter(event.target.value as typeof reporterFilter); }}><option value="all">{t('admin.reporterFilter.all')}</option><option value="multiple">{t('admin.reporterFilter.multiple')}</option><option value="single">{t('admin.reporterFilter.single')}</option></select></label>
+        <label className="admin-page-size"><span>{t('admin.quickActionLabel')}</span><select className="input" value="" disabled={quickAction !== null} onChange={(event) => { const action = event.target.value; if (!action) return; if (!reports.length) { toast.info(t('admin.quickActionNoReports')); return; } if (action === 'single') void quickDismissSingleReporter(); else if (action === 'lowRisk') void quickDismissLowRisk(); }}><option value="">{quickAction ? t('common.loading') : t('admin.chooseQuickAction')}</option><option value="single">{t('admin.quickDismissSingleReporter')}</option><option value="lowRisk">{t('admin.quickDismissLowRisk')}</option></select></label>
+        <button className="btn btn-ghost admin-report-selected-action" type="button" disabled={!selectedIds.size} onClick={() => setBatchSelectedOpen(true)}><ShieldCheck size={16} />{t('admin.processSelectedReports', { count: selectedIds.size })}</button>
       </div>
       <div className="admin-users-table admin-reports-table"><DataTable columns={columns} rows={reports} rowKey={(report) => report.id} loading={loading} empty={t('admin.noReports')} /></div>
       <div className="admin-pagination"><span className="muted">{total ? `${(page - 1) * 50 + 1}-${Math.min(page * 50, total)} / ${total}` : t('admin.zeroItems')}</span><div className="admin-pagination-actions"><button className="btn btn-ghost" type="button" aria-label={t('common.previousPage')} disabled={loading || page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft size={17} /></button><span>{t('admin.pageOf', { page, total: totalPages })}</span><button className="btn btn-ghost" type="button" aria-label={t('common.nextPage')} disabled={loading || page >= totalPages} onClick={() => setPage((value) => value + 1)}><ChevronRight size={17} /></button></div></div>
     </div>
     {selected && <ReportDialog report={selected} onClose={() => setSelected(null)} onSaved={(updated, reload) => { if (reload) void load(); else setReports((current) => current.map((item) => item.id === updated.id ? updated : item)); setSelected(null); }} />}
+    {batchSelectedOpen && <BatchSelectedDialog reportIds={[...selectedIds]} onClose={() => setBatchSelectedOpen(false)} onSaved={() => { setBatchSelectedOpen(false); setSelectedIds(new Set()); void load(); }} />}
     {reportedDetail?.type === 'user' && <UserDetailDialog user={reportedDetail.user} onClose={() => setReportedDetail(null)} onUserChange={(user) => setReportedDetail({ type: 'user', user })} />}
     {reportedDetail?.type === 'guest' && <GuestDetailDialog guest={reportedDetail.guest} onClose={() => setReportedDetail(null)} onGuestChange={(guest) => setReportedDetail({ type: 'guest', guest })} />}
   </>;
+}
+
+function BatchSelectedDialog({ reportIds, onClose, onSaved }: { reportIds: number[]; onClose: () => void; onSaved: () => void }) {
+  const { t } = useTranslation();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
+  const [status, setStatus] = useState<ReportStatus>('resolved');
+  const [note, setNote] = useState('');
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+  useEffect(() => {
+    const oldOverflow = document.body.style.overflow;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.body.style.overflow = 'hidden';
+    const frame = window.requestAnimationFrame(() => {
+      const dialog = dialogRef.current;
+      if (!dialog || (document.activeElement instanceof Node && dialog.contains(document.activeElement))) return;
+      dialog.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus();
+    });
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.body.style.overflow = oldOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      if (previousFocus?.isConnected) previousFocus.focus();
+    };
+  }, []);
+  const save = async () => {
+    setSaving(true);
+    try {
+      const response = await api.patch<{ updated: number }>('/admin/reports/batch-selected', {
+        reportIds,
+        status,
+        adminNote: note.trim(),
+      });
+      toast.success(t('admin.selectedReportsHandled', { count: response.data.updated }));
+      onSaved();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return <ModalPortal><div className="admin-player-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={dialogRef} className="admin-player-dialog admin-report-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-report-batch-title" tabIndex={-1}>
+    <div className="admin-player-dialog-heading"><div><h2 id="admin-report-batch-title"><ShieldCheck size={20} />{t('admin.processSelectedReports', { count: reportIds.length })}</h2></div><button className="confirm-close" type="button" aria-label={t('common.close')} onClick={onClose}><X size={18} /></button></div>
+    <div className="admin-report-detail">
+      <label><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => setStatus(event.target.value as ReportStatus)}><option value="pending">{t('admin.reportStatus.pending')}</option><option value="resolved">{t('admin.reportStatus.resolved')}</option><option value="dismissed">{t('admin.reportStatus.dismissed')}</option></select></label>
+      <label><span>{t('admin.reportAdminNote')}</span><textarea className="input" rows={4} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} placeholder={t('admin.reportAdminNotePlaceholder')} /></label>
+      <div className="confirm-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{t('common.cancel')}</button><button className="btn" type="button" disabled={saving} onClick={() => void save()}>{saving ? t('common.loading') : t('admin.saveReportBatch')}</button></div>
+    </div>
+  </div></div></ModalPortal>;
 }
 
 function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClose: () => void; onSaved: (report: MatchReport, reload: boolean) => void }) {

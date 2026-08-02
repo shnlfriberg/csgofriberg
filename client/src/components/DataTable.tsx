@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 export interface Column<T> {
   key: string;
-  title: string;
+  title: ReactNode;
   render?: (row: T) => ReactNode;
 }
 

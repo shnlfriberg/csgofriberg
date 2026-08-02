@@ -471,13 +471,15 @@ describe('admin user management', () => {
     const reporterA = insertedUsers.find((user) => user.username === reporterAUsername)!;
     const reporterB = insertedUsers.find((user) => user.username === reporterBUsername)!;
     const reportedKey = `g:${reportedGuestKey}`;
+    const singleReportedKey = `g:single-${stamp}`;
     const roomA = `admin-report-batch-a-${stamp}`;
     const roomB = `admin-report-batch-b-${stamp}`;
     const roomC = `admin-report-batch-c-${stamp}`;
+    const roomD = `admin-report-batch-d-${stamp}`;
     const matchIds: number[] = [];
     const cookie = authCookie(admin);
     try {
-      for (const roomId of [roomA, roomB, roomC]) {
+      for (const roomId of [roomA, roomB, roomC, roomD]) {
         const [insertedMatch] = await db('match_records').insert({
           room_id: roomId,
           db_type: 'easy',
@@ -493,10 +495,13 @@ describe('admin user management', () => {
         { match_id: matchIds[1], player_key: reportedKey, player_name: guestNameFromKey(reportedGuestKey) },
         { match_id: matchIds[2], user_id: reporterA.id, player_key: `u:${reporterA.id}`, player_name: reporterAUsername },
         { match_id: matchIds[2], player_key: reportedKey, player_name: guestNameFromKey(reportedGuestKey) },
+        { match_id: matchIds[3], user_id: reporterA.id, player_key: `u:${reporterA.id}`, player_name: reporterAUsername },
+        { match_id: matchIds[3], player_key: singleReportedKey, player_name: guestNameFromKey(singleReportedKey.slice(2)) },
       ]);
       await db('match_reports').insert([
         { match_id: matchIds[0], reporter_key: `u:${reporterA.id}`, reported_key: reportedKey, description: 'same target 1' },
         { match_id: matchIds[1], reporter_key: `u:${reporterB.id}`, reported_key: reportedKey, description: 'same target 2' },
+        { match_id: matchIds[3], reporter_key: `u:${reporterA.id}`, reported_key: singleReportedKey, description: 'single reporter' },
       ]);
 
       const listed = await request(
@@ -508,8 +513,42 @@ describe('admin user management', () => {
       expect(listed.data.reports[0]).toEqual(expect.objectContaining({
         reportedKey,
         pendingForReported: 2,
+        pendingReporterCount: 2,
         whitelisted: false,
       }));
+
+      const clustered = await request(
+        '/api/admin/reports?status=pending&reporterFilter=multiple&page=1&pageSize=10',
+        cookie
+      );
+      expect(clustered.data).toMatchObject({ total: 2 });
+      expect(clustered.data.reports).toEqual([
+        expect.objectContaining({ reportedKey, pendingReporterCount: 2 }),
+        expect.objectContaining({ reportedKey, pendingReporterCount: 2 }),
+      ]);
+
+      const quickSingle = await request('/api/admin/reports/quick-dismiss/single-reporter', cookie, {
+        method: 'POST',
+        body: { adminNote: 'single reporter dismissed', reportedKeys: [singleReportedKey] },
+      });
+      expect(quickSingle.response.status).toBe(200);
+      expect(quickSingle.data).toEqual({ ok: true, targetCount: 1, updated: 1 });
+      expect(await db('match_reports').where({ match_id: matchIds[3] }).first('status', 'admin_note'))
+        .toMatchObject({ status: 'dismissed', admin_note: 'single reporter dismissed' });
+      const selectedReport = await db('match_reports').where({ match_id: matchIds[3] }).first('id');
+      const selectedBatch = await request('/api/admin/reports/batch-selected', cookie, {
+        method: 'PATCH',
+        body: { reportIds: [Number(selectedReport.id)], status: 'resolved', adminNote: 'selected reviewed' },
+      });
+      expect(selectedBatch.response.status).toBe(200);
+      expect(selectedBatch.data).toEqual({
+        ok: true,
+        updated: 1,
+        status: 'resolved',
+        adminNote: 'selected reviewed',
+      });
+      expect(await db('match_reports').where({ id: selectedReport.id }).first('status', 'admin_note'))
+        .toMatchObject({ status: 'resolved', admin_note: 'selected reviewed' });
 
       const batch = await request('/api/admin/reports/batch', cookie, {
         method: 'PATCH',
@@ -571,6 +610,74 @@ describe('admin user management', () => {
       await db('report_whitelist').where({ identity_key: reportedKey }).del();
       await db('match_records').whereIn('id', matchIds).del();
       await db('users').whereIn('username', [adminUsername, reporterAUsername, reporterBUsername]).del();
+    }
+  });
+
+  it('quick dismisses reports with a low similarity index and high winning guess average', async () => {
+    const stamp = Date.now();
+    const adminUsername = `admin-report-low-risk-${stamp}`;
+    const reporterUsername = `reporter-low-risk-${stamp}`;
+    const reportedKey = `g:low-risk-${stamp}`;
+    const insertedUsers = await db('users').insert([
+      {
+        username: adminUsername,
+        display_id: userNameFromUsername(adminUsername),
+        password_hash: 'test',
+        role: 'admin',
+        token_version: 0,
+      },
+      {
+        username: reporterUsername,
+        display_id: userNameFromUsername(reporterUsername),
+        password_hash: 'test',
+        role: 'user',
+        token_version: 0,
+      },
+    ]).returning(['id', 'username', 'token_version']);
+    const admin = insertedUsers.find((user) => user.username === adminUsername)!;
+    const reporter = insertedUsers.find((user) => user.username === reporterUsername)!;
+    const [target] = await db('players').select('id').orderBy('id').limit(1);
+    const roomId = `admin-report-low-risk-room-${stamp}`;
+    const [insertedMatch] = await db('match_records').insert({
+      room_id: roomId,
+      db_type: 'easy',
+      bo_type: 1,
+      replay: JSON.stringify([{
+        round: 1,
+        targetPlayerId: target.id,
+        guessesByPlayer: { [reportedKey]: Array(5).fill(target.id) },
+        winnerKey: reportedKey,
+      }]),
+    }).returning('id');
+    const matchId = Number(typeof insertedMatch === 'object' ? insertedMatch.id : insertedMatch);
+    try {
+      await db('match_players').insert([
+        { match_id: matchId, user_id: reporter.id, player_key: `u:${reporter.id}`, player_name: reporterUsername },
+        { match_id: matchId, player_key: reportedKey, player_name: guestNameFromKey(reportedKey.slice(2)) },
+      ]);
+      await db('match_reports').insert({
+        match_id: matchId,
+        reporter_key: `u:${reporter.id}`,
+        reported_key: reportedKey,
+        description: 'low-risk target',
+      });
+
+      const response = await request('/api/admin/reports/quick-dismiss/low-risk', authCookie(admin), {
+        method: 'POST',
+        body: { adminNote: 'low-risk dismissed', reportedKeys: [reportedKey] },
+      });
+      expect(response.response.status).toBe(200);
+      expect(response.data).toEqual(expect.objectContaining({
+        ok: true,
+        scannedTargets: 1,
+        dismissedTargets: 1,
+        updated: 1,
+      }));
+      expect(await db('match_reports').where({ match_id: matchId }).first('status', 'admin_note'))
+        .toMatchObject({ status: 'dismissed', admin_note: 'low-risk dismissed' });
+    } finally {
+      await db('match_records').where({ id: matchId }).del();
+      await db('users').whereIn('username', [adminUsername, reporterUsername]).del();
     }
   });
 

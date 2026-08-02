@@ -28,7 +28,9 @@
   .admin-player-header-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-player-header-actions .btn { width: 100%; }
   .admin-list-toolbar { grid-template-columns: 1fr; align-items: stretch; }
+  .admin-reports-card .admin-list-toolbar { grid-template-columns: 1fr; align-items: stretch; }
   .admin-page-size { justify-content: space-between; }
+  .admin-report-selected-action { width: 100%; }
   .admin-pagination { flex-direction: column; }
   .admin-pagination-actions { width: min(280px, 100%); justify-content: space-between; }
 }
