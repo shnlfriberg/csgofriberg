@@ -49,18 +49,9 @@ let pendingClaimCursor = '0-0';
 export async function persistMatchResult(payload: MatchResultPayload): Promise<void> {
   const winner = payload.participants.find((player) => player.key === payload.winnerKey);
   const guessMetrics = winningGuessMetricsByPlayer(payload.rounds);
-  const participantValues = (player: MatchResultPayload['participants'][number]) => {
-    const metrics = guessMetrics.get(player.key);
-    return {
-      user_id: player.userId,
-      player_key: player.key,
-      player_name: player.name ?? '',
-      score: player.score,
-      is_winner: player.key === payload.winnerKey,
-      winning_guess_sum: metrics?.winningGuessSum ?? 0,
-      winning_rounds: metrics?.winningRounds ?? 0,
-    };
-  };
+  const participantUserIds = [...new Set(
+    payload.participants.flatMap((player) => (player.userId == null ? [] : [player.userId]))
+  )];
   const reportValues = (matchId: number | string) => (payload.reports ?? []).map((report) => ({
     match_id: matchId,
     reporter_key: report.reporterKey,
@@ -69,12 +60,32 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
     created_at: new Date(report.createdAt),
   }));
   const insertedMatch = await db.transaction(async (trx) => {
+    const existingUserIds = new Set<number>();
+    if (participantUserIds.length) {
+      const users = await trx('users').whereIn('id', participantUserIds).select('id');
+      for (const user of users) existingUserIds.add(Number(user.id));
+    }
+    const persistedUserId = (userId: number | null) => (
+      userId != null && existingUserIds.has(userId) ? userId : null
+    );
+    const participantValues = (player: MatchResultPayload['participants'][number]) => {
+      const metrics = guessMetrics.get(player.key);
+      return {
+        user_id: persistedUserId(player.userId),
+        player_key: player.key,
+        player_name: player.name ?? '',
+        score: player.score,
+        is_winner: player.key === payload.winnerKey,
+        winning_guess_sum: metrics?.winningGuessSum ?? 0,
+        winning_rounds: metrics?.winningRounds ?? 0,
+      };
+    };
     const inserted = await trx('match_records')
       .insert({
         room_id: payload.recordId,
         db_type: payload.dbType,
         bo_type: payload.boType,
-        winner_id: winner?.userId ?? null,
+        winner_id: persistedUserId(winner?.userId ?? null),
         winner_key: payload.winnerKey,
         finish_reason: payload.reason,
         forfeited_key: payload.forfeitedKey,

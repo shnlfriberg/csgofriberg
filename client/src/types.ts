@@ -110,8 +110,8 @@ export interface MatchReplayRound {
   reason: string;
   winner: 'me' | 'opponent' | null;
   answer: PlayerInfo;
-  me: { guesses: GuessFeedback[] };
-  opponent: { guesses: GuessFeedback[] };
+  me: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
+  opponent: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
 }
 
 export interface MatchReplay {

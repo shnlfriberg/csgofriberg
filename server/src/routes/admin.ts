@@ -105,6 +105,7 @@ const reportListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(10).max(100).default(50),
   status: z.enum(['all', 'pending', 'resolved', 'dismissed']).default('all'),
+  search: z.string().trim().max(64).default(''),
 });
 const reportParamsSchema = z.object({ reportId: z.coerce.number().int().positive() });
 const reportUpdateSchema = z.object({
@@ -147,11 +148,23 @@ function safeGuessIds(value: unknown): number[] {
     .filter((id) => Number.isInteger(id) && id > 0);
 }
 
-function replayGuesses(target: Player, ids: number[]): GuessFeedback[] {
-  return ids.flatMap((id) => {
+function replayGuessesWithTimes(target: Player, guessIds: unknown, guessTimes: unknown) {
+  const ids = Array.isArray(guessIds) ? guessIds.slice(0, MAX_GUESSES) : [];
+  const times = Array.isArray(guessTimes) ? guessTimes : [];
+  const guesses: GuessFeedback[] = [];
+  const normalizedTimes: Array<number | null> = [];
+  for (const [index, value] of ids.entries()) {
+    const id = Number(value);
+    if (!Number.isInteger(id) || id <= 0) continue;
     const guess = getPlayer(id);
-    return guess ? [compareGuess(guess, target)] : [];
-  });
+    if (!guess) continue;
+    guesses.push(compareGuess(guess, target));
+    const time = times[index];
+    normalizedTimes.push(typeof time === 'number' && Number.isFinite(time) && time >= 0
+      ? Math.floor(time)
+      : null);
+  }
+  return { guesses, guessTimes: normalizedTimes };
 }
 
 function reportIdentityDisplay(row: { key?: unknown; name?: unknown; username?: unknown }): string {
@@ -164,13 +177,8 @@ router.get(
   validateQuery(reportListQuerySchema),
   asyncHandler(async (req, res) => {
     const parsed = req.query as unknown as z.infer<typeof reportListQuerySchema>;
-    const base = db('match_reports as r').join('match_records as m', 'm.id', 'r.match_id');
-    if (parsed.status !== 'all') base.where('r.status', parsed.status);
-    const countRow = await base.clone().count({ count: 'r.id' }).first();
-    const total = Number(countRow?.count ?? 0);
-    const totalPages = Math.max(1, Math.ceil(total / parsed.pageSize));
-    const page = Math.min(parsed.page, totalPages);
-    const rows = await base.clone()
+    const base = db('match_reports as r')
+      .join('match_records as m', 'm.id', 'r.match_id')
       .leftJoin('match_players as reporter', function () {
         this.on('reporter.match_id', '=', 'r.match_id').andOn('reporter.player_key', '=', 'r.reporter_key');
       })
@@ -178,7 +186,27 @@ router.get(
       .leftJoin('match_players as reported', function () {
         this.on('reported.match_id', '=', 'r.match_id').andOn('reported.player_key', '=', 'r.reported_key');
       })
-      .leftJoin('users as reported_user', 'reported_user.id', 'reported.user_id')
+      .leftJoin('users as reported_user', 'reported_user.id', 'reported.user_id');
+    if (parsed.status !== 'all') base.where('r.status', parsed.status);
+    if (parsed.search) {
+      const pattern = `%${parsed.search}%`;
+      base.where((builder) => {
+        builder
+          .whereILike('reporter.player_name', pattern)
+          .orWhereILike('reporter.player_key', pattern)
+          .orWhereILike('reporter_user.username', pattern)
+          .orWhereILike('reporter_user.display_id', pattern)
+          .orWhereILike('reported.player_name', pattern)
+          .orWhereILike('reported.player_key', pattern)
+          .orWhereILike('reported_user.username', pattern)
+          .orWhereILike('reported_user.display_id', pattern);
+      });
+    }
+    const countRow = await base.clone().count({ count: 'r.id' }).first();
+    const total = Number(countRow?.count ?? 0);
+    const totalPages = Math.max(1, Math.ceil(total / parsed.pageSize));
+    const page = Math.min(parsed.page, totalPages);
+    const rows = await base.clone()
       .orderBy('r.created_at', 'desc')
       .orderBy('r.id', 'desc')
       .offset((page - 1) * parsed.pageSize)
@@ -489,14 +517,17 @@ router.get(
       const guessesByPlayer = round.guessesByPlayer;
       if (!guessesByPlayer || typeof guessesByPlayer !== 'object') return [];
       const guesses = guessesByPlayer as Record<string, unknown>;
+      const storedTimes = round.guessTimesByPlayer && typeof round.guessTimesByPlayer === 'object'
+        ? round.guessTimesByPlayer as Record<string, unknown>
+        : {};
       const winnerKey = typeof round.winnerKey === 'string' ? round.winnerKey : null;
       return [{
         round: Number(round.round),
         reason: typeof round.reason === 'string' ? round.reason : '',
         winner: winnerKey === match.meKey ? 'me' : winnerKey === opponent.key ? 'opponent' : null,
         answer: replayAnswer(target),
-        me: { guesses: replayGuesses(target, safeGuessIds(guesses[match.meKey])) },
-        opponent: { guesses: replayGuesses(target, safeGuessIds(guesses[opponent.key])) },
+        me: replayGuessesWithTimes(target, guesses[match.meKey], storedTimes[match.meKey]),
+        opponent: replayGuessesWithTimes(target, guesses[opponent.key], storedTimes[opponent.key]),
       }];
     });
     res.json({

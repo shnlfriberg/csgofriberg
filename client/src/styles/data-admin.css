@@ -152,6 +152,45 @@
   gap: 16px;
 }
 .replay-side { min-width: 0; overflow-x: auto; }
+.replay-decision-times {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-top: 8px;
+  color: var(--text-light);
+  font-size: var(--fs-xs);
+}
+.replay-decision-times-label {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  font-weight: 650;
+}
+.replay-decision-times ol {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.replay-decision-times li {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--card-soft);
+  color: var(--text-sec);
+  font-variant-numeric: tabular-nums;
+}
+.replay-decision-times li > span { color: var(--text-light); }
 .replay-side h4 {
   display: flex;
   align-items: center;

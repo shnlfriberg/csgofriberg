@@ -4,6 +4,21 @@ import { describe, expect, it, vi } from 'vitest';
 import ReplayDialog, { type MultiReplay } from './ReplayDialog';
 import type { PlayerPerformanceStats } from '../types';
 
+const guess = {
+  playerId: 2,
+  nickname: 'Guess',
+  correct: false,
+  attributes: {
+    nationality: { value: 'CN', level: 'wrong' as const },
+    team: { value: 'Team', level: 'wrong' as const },
+    age: { value: 20, level: 'wrong' as const },
+    role: { value: 'Rifler', level: 'wrong' as const },
+    majorChampionships: { value: 0, level: 'wrong' as const },
+    majorAppearances: { value: 1, level: 'wrong' as const },
+    isActive: { value: true, level: 'wrong' as const },
+  },
+};
+
 const replay: MultiReplay = {
   type: 'multi',
   id: 42,
@@ -47,6 +62,23 @@ const stats: PlayerPerformanceStats = {
 };
 
 describe('ReplayDialog', () => {
+  it('shows compact decision times only when explicitly enabled', () => {
+    const timedReplay: MultiReplay = {
+      ...replay,
+      rounds: [{
+        ...replay.rounds[0],
+        me: { guesses: [guess], guessTimes: [1_200] },
+        opponent: { guesses: [guess], guessTimes: [null] },
+      }],
+    };
+    const { rerender } = render(<ReplayDialog replay={timedReplay} onClose={vi.fn()} />);
+    expect(screen.queryByLabelText('每步用时')).not.toBeInTheDocument();
+
+    rerender(<ReplayDialog replay={timedReplay} onClose={vi.fn()} showDecisionTimes />);
+    expect(screen.getAllByLabelText('每步用时')).toHaveLength(2);
+    expect(screen.getByText('1.2s')).toBeInTheDocument();
+  });
+
   it('loads opponent stats into a modal from a multiplayer replay', async () => {
     const user = userEvent.setup();
     const onViewOpponentStats = vi.fn();

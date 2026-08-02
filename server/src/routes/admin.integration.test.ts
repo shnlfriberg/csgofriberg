@@ -127,6 +127,10 @@ describe('admin user management', () => {
                 [`u:${targetUser.id}`]: [analysisGuess.id, targetPlayer.id],
                 [`g:${opponentKey}`]: [targetPlayer.id],
               },
+              guessTimesByPlayer: {
+                [`u:${targetUser.id}`]: [1_200, null],
+                [`g:${opponentKey}`]: [3_000],
+              },
             }]),
           })
           .returning('id');
@@ -276,8 +280,8 @@ describe('admin user management', () => {
       expect(multiReplay.response.status).toBe(200);
       expect(multiReplay.data.rounds[0]).toMatchObject({
         answer: { id: targetPlayer.id },
-        me: { guesses: [{ playerId: analysisGuess.id }, { playerId: targetPlayer.id }] },
-        opponent: { guesses: [{ playerId: targetPlayer.id }] },
+        me: { guesses: [{ playerId: analysisGuess.id }, { playerId: targetPlayer.id }], guessTimes: [1_200, null] },
+        opponent: { guesses: [{ playerId: targetPlayer.id }], guessTimes: [3_000] },
       });
 
       const forbidden = await request(`/api/admin/users/${targetUser.id}/stats`, authCookie(targetUser));
@@ -354,7 +358,10 @@ describe('admin user management', () => {
       const reportId = Number(typeof insertedReport === 'object' ? insertedReport.id : insertedReport);
       const cookie = authCookie(admin);
 
-      const listed = await request('/api/admin/reports?status=pending&page=1&pageSize=10', cookie);
+      const listed = await request(
+        `/api/admin/reports?status=pending&page=1&pageSize=10&search=${encodeURIComponent(reporterUsername)}`,
+        cookie
+      );
       expect(listed.response.status).toBe(200);
       expect(listed.data).toMatchObject({ total: 1, page: 1, totalPages: 1 });
       expect(listed.data.reports).toEqual([
@@ -370,6 +377,13 @@ describe('admin user management', () => {
           status: 'pending',
         }),
       ]);
+
+      const foundByReported = await request(
+        `/api/admin/reports?status=pending&page=1&pageSize=10&search=${encodeURIComponent(reportedGuestKey)}`,
+        cookie
+      );
+      expect(foundByReported.data).toMatchObject({ total: 1 });
+      expect(foundByReported.data.reports).toEqual([expect.objectContaining({ id: reportId })]);
 
       const updated = await request(`/api/admin/reports/${reportId}`, cookie, {
         method: 'PATCH',

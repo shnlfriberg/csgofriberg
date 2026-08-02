@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Eye, X } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Eye, Search, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api, errMsg } from '../../api/client';
 import { currentLocale } from '../../i18n';
@@ -45,6 +45,8 @@ export default function AdminReports() {
   const { t } = useTranslation();
   const [reports, setReports] = useState<MatchReport[]>([]);
   const [status, setStatus] = useState<'all' | ReportStatus>('pending');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -54,7 +56,7 @@ export default function AdminReports() {
     setLoading(true);
     try {
       const response = await api.get<ReportPage>('/admin/reports', {
-        params: { status, page, pageSize: 50 },
+        params: { status, page, pageSize: 50, search: search || undefined },
       });
       setReports(response.data.reports);
       setTotal(response.data.total);
@@ -65,9 +67,17 @@ export default function AdminReports() {
     } finally {
       setLoading(false);
     }
-  }, [page, status]);
+  }, [page, search, status]);
 
   useEffect(() => { void load(); }, [load]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput.trim());
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   const statusLabel = (value: ReportStatus) => t(`admin.reportStatus.${value}`);
   const columns: Column<MatchReport>[] = [
@@ -86,6 +96,7 @@ export default function AdminReports() {
         <div className="admin-players-title"><h3>{t('admin.reportsTitle')}</h3><p className="muted">{t('admin.totalReports', { count: total })}</p></div>
       </div>
       <div className="admin-list-toolbar">
+        <label className="admin-search"><Search size={16} /><input className="input" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={t('admin.searchReports')} /></label>
         <label className="admin-page-size"><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as typeof status); }}><option value="pending">{statusLabel('pending')}</option><option value="resolved">{statusLabel('resolved')}</option><option value="dismissed">{statusLabel('dismissed')}</option><option value="all">{t('admin.reportStatus.all')}</option></select></label>
       </div>
       <div className="admin-users-table admin-reports-table"><DataTable columns={columns} rows={reports} rowKey={(report) => report.id} loading={loading} empty={t('admin.noReports')} /></div>

@@ -314,7 +314,7 @@ function GamesTab({ user, onReplayOpenChange }: { user: AdminUser; onReplayOpenC
         <span>{t('common.page', { page })}</span>
         <button className="btn btn-ghost" type="button" aria-label={t('common.nextPage')} disabled={!hasNext || loading} onClick={() => setPage((value) => value + 1)}><ChevronRight size={17} /></button>
       </div>
-      {replay && <ReplayDialog replay={replay} onClose={closeReplay} />}
+      {replay && <ReplayDialog replay={replay} onClose={closeReplay} showDecisionTimes />}
     </>
   );
 }

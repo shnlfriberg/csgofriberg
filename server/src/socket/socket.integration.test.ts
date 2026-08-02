@@ -286,7 +286,7 @@ describe('multiplayer socket integration', () => {
       createdRoomIds.push(created.room.id);
 
       expect(await emit(unverifiedSocket, 'room:join', { roomId: created.room.id }))
-        .toEqual({ code: 'EMAIL_VERIFICATION_REQUIRED' });
+        .toEqual({ code: 'ROOM_VERIFIED_EMAIL_ONLY' });
       expect(await emit(verifiedSocket, 'room:join', { roomId: created.room.id }))
         .toMatchObject({ role: 'player', room: { verifiedOnly: true } });
 
@@ -618,7 +618,13 @@ describe('multiplayer socket integration', () => {
     await stopSocket?.();
     if (io) io.close();
     if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
-    if (createdTestUserIds.length) await db('users').whereIn('id', createdTestUserIds).del();
+    if (createdTestUserIds.length) {
+      const matchIds = [...new Set(await db('match_players')
+        .whereIn('user_id', createdTestUserIds)
+        .pluck<number>('match_id'))];
+      if (matchIds.length) await db('match_records').whereIn('id', matchIds).del();
+      await db('users').whereIn('id', createdTestUserIds).del();
+    }
   });
 
   it('serializes starts and rejects stale or duplicate guesses', async () => {

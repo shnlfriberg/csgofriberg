@@ -8,6 +8,43 @@ describe('match result persistence', () => {
     await initDb();
   });
 
+  it('persists historical match data when queued user accounts no longer exist', async () => {
+    const stamp = Date.now();
+    const recordId = `missing-users-${stamp}`;
+    const playerA = `u:${900000000 + stamp}`;
+    const playerB = `u:${900100000 + stamp}`;
+    const missingUserA = 900000000 + stamp;
+    const missingUserB = 900100000 + stamp;
+    try {
+      await persistMatchResult({
+        recordId,
+        dbType: 'easy',
+        boType: 1,
+        winnerKey: playerA,
+        reason: 'score',
+        forfeitedKey: null,
+        participants: [
+          { key: playerA, userId: missingUserA, name: 'Former A', score: 1 },
+          { key: playerB, userId: missingUserB, name: 'Former B', score: 0 },
+        ],
+        rounds: [],
+      });
+
+      const match = await db('match_records').where({ room_id: recordId }).first('id', 'winner_id', 'winner_key');
+      const players = await db('match_players')
+        .where({ match_id: match.id })
+        .select('player_key', 'player_name', 'score', 'is_winner', 'user_id')
+        .orderBy('player_key');
+      expect(match).toMatchObject({ winner_id: null, winner_key: playerA });
+      expect(players).toEqual([
+        { player_key: playerA, player_name: 'Former A', score: 1, is_winner: 1, user_id: null },
+        { player_key: playerB, player_name: 'Former B', score: 0, is_winner: 0, user_id: null },
+      ]);
+    } finally {
+      await db('match_records').where({ room_id: recordId }).del();
+    }
+  });
+
   it('adds reports idempotently when they arrive after the match record', async () => {
     const stamp = Date.now();
     const recordId = `report-persistence-${stamp}`;

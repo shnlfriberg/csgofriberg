@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { BarChart3, ChevronLeft, ChevronRight, Swords, User, X } from 'lucide-react';
+import { BarChart3, ChevronLeft, ChevronRight, Clock3, Swords, User, X } from 'lucide-react';
 import Badge from './Badge';
 import GuessBoard from './GuessBoard';
 import { PlayerInfoTable } from './AnswerOverlay';
@@ -49,12 +49,36 @@ function AnswerSection({ answer }: { answer: PlayerInfo }) {
   );
 }
 
+function formatDecisionTime(value: number | null): string {
+  if (value === null) return '-';
+  if (value < 1_000) return `${value}ms`;
+  return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}s`;
+}
+
+function DecisionTimes({ values }: { values: Array<number | null> | undefined }) {
+  const { t } = useTranslation();
+  if (!values?.length) return null;
+  return (
+    <div className="replay-decision-times" aria-label={t('replay.decisionTimes')}>
+      <span className="replay-decision-times-label"><Clock3 size={13} />{t('replay.decisionTimes')}</span>
+      <ol>
+        {values.map((value, index) => (
+          <li key={index} title={t('replay.decisionStep', { step: index + 1, time: formatDecisionTime(value) })}>
+            <span>{index + 1}</span>{formatDecisionTime(value)}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 interface ReplayDialogProps {
   replay: Replay;
   onClose: () => void;
   opponentStats?: PlayerPerformanceStats | null;
   opponentStatsLoading?: boolean;
   onViewOpponentStats?: () => void;
+  showDecisionTimes?: boolean;
 }
 
 export default function ReplayDialog({
@@ -63,6 +87,7 @@ export default function ReplayDialog({
   opponentStats = null,
   opponentStatsLoading = false,
   onViewOpponentStats,
+  showDecisionTimes = false,
 }: ReplayDialogProps) {
   const { t } = useTranslation();
   const titleId = useId();
@@ -162,7 +187,7 @@ export default function ReplayDialog({
                       <div className="replay-side">
                         <h4><User size={15} />{t('replay.mySide')}</h4>
                         {activeRound.me.guesses.length
-                          ? <GuessBoard guesses={activeRound.me.guesses} />
+                          ? <><GuessBoard guesses={activeRound.me.guesses} />{showDecisionTimes && <DecisionTimes values={activeRound.me.guessTimes} />}</>
                           : <p className="muted">{t('replay.noRoundGuesses')}</p>}
                       </div>
                       <div className="replay-side">
@@ -186,7 +211,7 @@ export default function ReplayDialog({
                           )}
                         </h4>
                         {activeRound.opponent.guesses.length
-                          ? <GuessBoard guesses={activeRound.opponent.guesses} />
+                          ? <><GuessBoard guesses={activeRound.opponent.guesses} />{showDecisionTimes && <DecisionTimes values={activeRound.opponent.guessTimes} />}</>
                           : <p className="muted">{t('replay.noRoundGuesses')}</p>}
                       </div>
                     </div>

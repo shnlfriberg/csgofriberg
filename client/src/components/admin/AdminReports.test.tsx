@@ -1,4 +1,4 @@
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/client';
@@ -50,7 +50,7 @@ describe('AdminReports', () => {
 
     const reportRow = (await screen.findByText('疑似自动化操作')).closest('tr')!;
     expect(api.get).toHaveBeenCalledWith('/admin/reports', {
-      params: { status: 'pending', page: 1, pageSize: 50 },
+      params: { status: 'pending', page: 1, pageSize: 50, search: undefined },
     });
     await user.click(screen.getByRole('button', { name: '处理举报' }));
     const dialog = screen.getByRole('dialog', { name: '处理举报' });
@@ -64,5 +64,18 @@ describe('AdminReports', () => {
     });
     expect(dialog).not.toBeInTheDocument();
     expect(within(reportRow).getByText('已处理')).toBeInTheDocument();
+  });
+
+  it('searches reports by either participant', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminReports />);
+
+    await screen.findByText('疑似自动化操作');
+    await user.type(screen.getByPlaceholderText('搜索举报方或被举报方'), '访客#BBBBB');
+    await waitFor(() => {
+      expect(api.get).toHaveBeenLastCalledWith('/admin/reports', {
+        params: { status: 'pending', page: 1, pageSize: 50, search: '访客#BBBBB' },
+      });
+    });
   });
 });

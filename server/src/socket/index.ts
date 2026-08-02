@@ -1532,7 +1532,7 @@ export function setupSocket(io: Server) {
         }
         const existingSpectator = room.spectators.find((p) => p.key === me.key);
         if (room.verifiedOnly && me.key !== room.hostKey && !me.emailVerified) {
-          return { code: 'EMAIL_VERIFICATION_REQUIRED' };
+          return { code: 'ROOM_VERIFIED_EMAIL_ONLY' };
         }
         const asSpectator = Boolean(
           existingSpectator || payload.spectate || room.status !== 'waiting' || room.players.length >= 2
