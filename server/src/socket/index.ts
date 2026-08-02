@@ -29,6 +29,7 @@ import {
   beginMaintenanceWindow,
   cancelQueue,
   claimDueSchedules,
+  clearLegacyMatchmakingQueues,
   clearIdentityRoom,
   deleteRoom,
   getRoom,
@@ -69,7 +70,7 @@ import {
   recordMatchmakingExit,
 } from '../services/matchmakingCooldown';
 import { isMatchmakingRestricted } from '../services/matchmakingRestriction';
-import { isGuestBanned, isGuestMatchmakingRestricted, recordGuestSeen } from '../services/guestAccounts';
+import { isGuestBanned, recordGuestSeen } from '../services/guestAccounts';
 import { pickTargetAvoidingRecent, rememberTargetSelection } from '../services/targetSelection';
 
 const NEXT_ROUND_DELAY_MS = 6_000;
@@ -131,7 +132,6 @@ const activeRoundPayloadSchema = z.object({ roundId: z.number().int().positive()
 const matchStartPayloadSchema = z.object({
   dbType: difficultyKeySchema,
   anonymous: z.boolean().default(false),
-  verifiedOnly: z.boolean().default(false),
 });
 
 function validForwardedIp(value: string | undefined): string | null {
@@ -1190,6 +1190,7 @@ export function setupSocket(io: Server) {
     backgroundTasks.add(task);
     void task.catch((err) => logTransientError(label, err)).finally(() => backgroundTasks.delete(task));
   };
+  trackBackground(clearLegacyMatchmakingQueues(), 'matchmaking-legacy-queue-cleanup');
   const presenceSubscribers = new Set<string>();
   const heartbeatEntries = new Map<string, { ip: string; identity: string; socketId: string }>();
   let heartbeatRequest: Promise<void> | null = null;
@@ -2045,11 +2046,8 @@ export function setupSocket(io: Server) {
         ...me,
         socketId: socket.id,
         anonymous: payload.anonymous,
-        verifiedOnly: true,
-        matchmakingPool: (me.userId
-          ? await isMatchmakingRestricted(me.userId)
-          : await isGuestMatchmakingRestricted(me.key.slice(2)))
-          ? 'verified-restricted'
+        matchmakingPool: me.userId && await isMatchmakingRestricted(me.userId)
+          ? 'restricted'
           : 'verified',
       };
       let opponent = isRedisAvailable() ? await queueOrTakeOpponent(dbType, queuedMe) : null;

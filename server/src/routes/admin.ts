@@ -895,7 +895,7 @@ router.patch(
     if (!updated) throw new HttpError(404, 'USER_NOT_FOUND');
     await Promise.all([
       cacheMatchmakingRestriction(id, restricted),
-      moveQueuedIdentityToPool(`u:${id}`, restricted ? 'restricted' : 'public'),
+      moveQueuedIdentityToPool(`u:${id}`, restricted ? 'restricted' : 'verified'),
     ]);
     res.json({ id, matchmakingRestricted: restricted });
   })
@@ -1020,7 +1020,7 @@ router.patch(
     const guest = await db('guest_accounts').where({ id }).first('guest_key');
     if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
     await db('guest_accounts').where({ id }).update({ matchmaking_restricted: restricted });
-    await moveQueuedIdentityToPool(`g:${guest.guest_key}`, restricted ? 'restricted' : 'public');
+    await moveQueuedIdentityToPool(`g:${guest.guest_key}`, restricted ? 'restricted' : 'verified');
     res.json({ id, matchmakingRestricted: restricted });
   })
 );

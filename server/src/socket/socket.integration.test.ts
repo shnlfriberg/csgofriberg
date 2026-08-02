@@ -126,7 +126,7 @@ describe('multiplayer socket integration', () => {
       socketId: `queue-socket-${stamp}`,
     };
     const client = redis()!;
-    const queueKey = redisKey('matchmaking:easy');
+    const queueKey = redisKey('matchmaking:verified:easy');
     const restrictedQueueKey = redisKey('matchmaking:restricted:easy');
     await client.zAdd(queueKey, { score: Date.now() - 301_000, value: staleIdentity });
 
