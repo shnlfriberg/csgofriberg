@@ -109,9 +109,11 @@ export default function AdminReports() {
 function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClose: () => void; onSaved: (report: MatchReport) => void }) {
   const { t } = useTranslation();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const onCloseRef = useRef(onClose);
   const [status, setStatus] = useState<ReportStatus>(report.status);
   const [note, setNote] = useState(report.adminNote);
   const [saving, setSaving] = useState(false);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -120,7 +122,7 @@ function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClo
       dialogRef.current?.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus();
     });
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+      if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); return; }
       if (event.key !== 'Tab') return;
       const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])');
       if (!focusable?.length) return;
@@ -136,7 +138,7 @@ function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClo
       document.removeEventListener('keydown', onKeyDown);
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [onClose]);
+  }, []);
   const save = async () => {
     setSaving(true);
     try {

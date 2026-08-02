@@ -78,4 +78,20 @@ describe('AdminReports', () => {
       });
     });
   });
+
+  it('keeps the admin note focused when the report list rerenders', async () => {
+    const user = userEvent.setup();
+    const { rerender } = renderWithProviders(<AdminReports />);
+
+    await screen.findByText('疑似自动化操作');
+    await user.click(screen.getByRole('button', { name: '处理举报' }));
+    const note = screen.getByPlaceholderText('填写处理记录，最多 500 字');
+    await user.type(note, '已');
+    expect(note).toHaveFocus();
+
+    rerender(<AdminReports />);
+    expect(note).toHaveFocus();
+    await user.type(note, '核查');
+    expect(note).toHaveValue('已核查');
+  });
 });
