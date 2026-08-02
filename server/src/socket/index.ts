@@ -55,6 +55,7 @@ import {
   redisKey,
 } from '../redis';
 import { enqueueMatchResult } from '../services/matchResultQueue';
+import { db } from '../db/knex';
 import { getPresenceStats, ONLINE_STALE_MS, PresenceStats } from '../services/presence';
 import { GuessFeedback, Player } from '../types';
 import { config } from '../config';
@@ -1310,7 +1311,16 @@ export function setupSocket(io: Server) {
     const refreshIdentityEmailState = async () => {
       if (!me.userId) return;
       const current = await authenticateCookie(socket.handshake.headers.cookie);
-      if (current?.id === me.userId) me.emailVerified = Boolean(current.email && current.emailVerified);
+      if (current?.id !== me.userId) {
+        me.emailVerified = false;
+        return;
+      }
+      // Match eligibility must reflect a verification completed in another request
+      // even when invalidating the shared auth cache has transiently failed.
+      const user = await db('users')
+        .where({ id: me.userId })
+        .first('email', 'email_verified_at');
+      me.emailVerified = Boolean(user?.email && user.email_verified_at);
     };
     socket.emit('identity:self', { key: me.key });
     void getResourceVersionNotice()

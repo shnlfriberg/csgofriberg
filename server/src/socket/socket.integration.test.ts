@@ -12,7 +12,7 @@ import { resolveSocketIp, setRecoveryWindow, setupSocket } from './index';
 import { browserFingerprint, POW_COOKIE } from '../services/pow';
 import jwt from 'jsonwebtoken';
 import { config } from '../config';
-import { guestNameFromKey, invalidateAuthUser, signToken } from '../middleware/auth';
+import { guestNameFromKey, signToken } from '../middleware/auth';
 import { cancelQueue, getRoom, queueOrTakeOpponent, withRoomLock } from '../services/roomStore';
 import {
   clearMatchmakingCooldown,
@@ -291,7 +291,8 @@ describe('multiplayer socket integration', () => {
         .toMatchObject({ role: 'player', room: { verifiedOnly: true } });
 
       await db('users').where({ id: unverified.id }).update({ email_verified_at: new Date().toISOString() });
-      await invalidateAuthUser(unverified.id);
+      expect(JSON.parse((await redis()!.get(redisKey(`auth:user:${unverified.id}`)))!))
+        .toMatchObject({ emailVerified: false });
       expect(await emit(unverifiedSocket, 'match:start', { dbType: 'easy' }))
         .toEqual({ queued: true });
       await emit(unverifiedSocket, 'match:cancel');
