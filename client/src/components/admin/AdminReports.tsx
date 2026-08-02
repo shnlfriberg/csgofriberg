@@ -155,7 +155,9 @@ function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClo
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     document.body.style.overflow = 'hidden';
     const frame = window.requestAnimationFrame(() => {
-      dialogRef.current?.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus();
+      const dialog = dialogRef.current;
+      if (!dialog || (document.activeElement instanceof Node && dialog.contains(document.activeElement))) return;
+      dialog.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus();
     });
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); return; }
