@@ -15,6 +15,7 @@ import {
   type AdminGuest,
   type AdminUser,
 } from './AdminUsers';
+import ExternalAnalysisPanel, { type ExternalAnalysisView } from './ExternalAnalysisPanel';
 
 type ReportStatus = 'pending' | 'resolved' | 'dismissed';
 
@@ -72,7 +73,7 @@ export default function AdminReports() {
   const [selected, setSelected] = useState<MatchReport | null>(null);
   const [reportedDetail, setReportedDetail] = useState<ReportedIdentity | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null);
-  const [quickAction, setQuickAction] = useState<'single' | 'lowRisk' | null>(null);
+  const [quickAction, setQuickAction] = useState<'single' | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [batchSelectedOpen, setBatchSelectedOpen] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
@@ -158,36 +159,6 @@ export default function AdminReports() {
     }
   };
 
-  const quickDismissLowRisk = async () => {
-    if (!await confirm({
-      title: t('admin.quickDismissLowRiskTitle'),
-      message: t('admin.quickDismissLowRiskMessage'),
-      confirmLabel: t('admin.quickDismissLowRisk'),
-      tone: 'warning',
-    })) return;
-    setQuickAction('lowRisk');
-    try {
-      const response = await api.post<{
-        scannedTargets: number;
-        dismissedTargets: number;
-        updated: number;
-      }>('/admin/reports/quick-dismiss/low-risk', {
-        adminNote: t('admin.quickDismissLowRiskNote'),
-        reportedKeys: visibleReportedKeys.slice(0, 10),
-      });
-      toast.success(t('admin.quickDismissLowRiskDone', {
-        scanned: response.data.scannedTargets,
-        targets: response.data.dismissedTargets,
-        reports: response.data.updated,
-      }));
-      await load();
-    } catch (error) {
-      toast.error(errMsg(error));
-    } finally {
-      setQuickAction(null);
-    }
-  };
-
   const statusLabel = (value: ReportStatus) => t(`admin.reportStatus.${value}`);
   const columns: Column<MatchReport>[] = [
     {
@@ -217,7 +188,7 @@ export default function AdminReports() {
         <label className="admin-search"><Search size={16} /><input className="input" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={t('admin.searchReports')} /></label>
         <label className="admin-page-size"><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as typeof status); }}><option value="pending">{statusLabel('pending')}</option><option value="resolved">{statusLabel('resolved')}</option><option value="dismissed">{statusLabel('dismissed')}</option><option value="all">{t('admin.reportStatus.all')}</option></select></label>
         <label className="admin-page-size"><span>{t('admin.reporterFilterLabel')}</span><select className="input" value={reporterFilter} onChange={(event) => { setPage(1); setReporterFilter(event.target.value as typeof reporterFilter); }}><option value="all">{t('admin.reporterFilter.all')}</option><option value="multiple">{t('admin.reporterFilter.multiple')}</option><option value="single">{t('admin.reporterFilter.single')}</option></select></label>
-        <label className="admin-page-size"><span>{t('admin.quickActionLabel')}</span><select className="input" value="" disabled={quickAction !== null} onChange={(event) => { const action = event.target.value; if (!action) return; if (!reports.length) { toast.info(t('admin.quickActionNoReports')); return; } if (action === 'single') void quickDismissSingleReporter(); else if (action === 'lowRisk') void quickDismissLowRisk(); }}><option value="">{quickAction ? t('common.loading') : t('admin.chooseQuickAction')}</option><option value="single">{t('admin.quickDismissSingleReporter')}</option><option value="lowRisk">{t('admin.quickDismissLowRisk')}</option></select></label>
+        <label className="admin-page-size"><span>{t('admin.quickActionLabel')}</span><select className="input" value="" disabled={quickAction !== null} onChange={(event) => { const action = event.target.value; if (!action) return; if (!reports.length) { toast.info(t('admin.quickActionNoReports')); return; } if (action === 'single') void quickDismissSingleReporter(); }}><option value="">{quickAction ? t('common.loading') : t('admin.chooseQuickAction')}</option><option value="single">{t('admin.quickDismissSingleReporter')}</option></select></label>
         <button className="btn btn-ghost admin-report-selected-action" type="button" disabled={!selectedIds.size} onClick={() => setBatchSelectedOpen(true)}><ShieldCheck size={16} />{t('admin.processSelectedReports', { count: selectedIds.size })}</button>
       </div>
       <div className="admin-users-table admin-reports-table"><DataTable columns={columns} rows={reports} rowKey={(report) => report.id} loading={loading} empty={t('admin.noReports')} /></div>
@@ -296,6 +267,8 @@ function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClo
   const [saving, setSaving] = useState(false);
   const [applyToPending, setApplyToPending] = useState(false);
   const [whitelisting, setWhitelisting] = useState(false);
+  const [analysis, setAnalysis] = useState<ExternalAnalysisView | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
@@ -366,11 +339,20 @@ function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClo
     } catch (error) { toast.error(errMsg(error)); }
     finally { setWhitelisting(false); }
   };
+  const runAnalysis = async (locale: string) => {
+    setAnalysisLoading(true);
+    try {
+      const response = await api.post<ExternalAnalysisView>(`/admin/reports/${report.id}/analysis`, { locale });
+      setAnalysis(response.data);
+    } catch (error) { toast.error(errMsg(error)); }
+    finally { setAnalysisLoading(false); }
+  };
   return <ModalPortal><div className="admin-player-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={dialogRef} className="admin-player-dialog admin-report-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-report-title" tabIndex={-1}>
     <div className="admin-player-dialog-heading"><div><h2 id="admin-report-title"><AlertTriangle size={20} />{t('admin.handleReport')}</h2><p>{report.reporter} → {report.reported}</p></div><button className="confirm-close" type="button" aria-label={t('common.close')} onClick={onClose}><X size={18} /></button></div>
     <div className="admin-report-detail">
       <dl><div><dt>{t('admin.reportMatch')}</dt><dd>{difficultyLabel(t, report.mode)} · BO{report.boType} · #{report.matchId}</dd></div><div><dt>{t('admin.reportCreatedAt')}</dt><dd>{formatDate(report.createdAt)}</dd></div><div><dt>{t('admin.reportDescription')}</dt><dd>{report.description || t('admin.reportNoDescription')}</dd></div></dl>
       {report.whitelisted && <p className="admin-report-whitelist-state"><ShieldCheck size={17} />{t('admin.reportWhitelisted')}</p>}
+      <ExternalAnalysisPanel view={analysis} loading={analysisLoading} onAnalyze={(locale) => void runAnalysis(locale)} />
       <label><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => setStatus(event.target.value as ReportStatus)}><option value="pending">{t('admin.reportStatus.pending')}</option><option value="resolved">{t('admin.reportStatus.resolved')}</option><option value="dismissed">{t('admin.reportStatus.dismissed')}</option></select></label>
       <label><span>{t('admin.reportAdminNote')}</span><textarea className="input" rows={4} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} placeholder={t('admin.reportAdminNotePlaceholder')} /></label>
       {report.pendingForReported > 1 && <label className="admin-report-batch-toggle"><input type="checkbox" checked={applyToPending} onChange={(event) => setApplyToPending(event.target.checked)} /><span>{t('admin.reportBatchSameReported', { count: report.pendingForReported })}</span></label>}

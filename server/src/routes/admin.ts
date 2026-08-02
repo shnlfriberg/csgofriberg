@@ -22,10 +22,14 @@ import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { publishResourceVersion } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
 import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
-import { getDifficultyPlayers, getEnabledPlayers, getPlayer } from '../services/playerCache';
+import { getPlayer } from '../services/playerCache';
 import type { GuessFeedback, Player } from '../types';
 import { DIFFICULTY_LEVELS } from '../difficulties';
-import { analyzeGameChoices, AnalysisRoundInput } from '../services/userGameAnalysis';
+import {
+  AnalysisLocale,
+  AnalysisSubject,
+  requestExternalCheatAnalysis,
+} from '../services/externalCheatAnalysis';
 import {
   createPlayer,
   deletePlayer,
@@ -59,6 +63,13 @@ const adminWriteLimit = rateLimit({
 const adminImportLimit = rateLimit({
   name: 'admin-import',
   limit: 10,
+  windowSeconds: 60,
+  key: requestIdentity,
+  failClosed: true,
+});
+const adminAnalysisLimit = rateLimit({
+  name: 'admin-analysis',
+  limit: 5,
   windowSeconds: 60,
   key: requestIdentity,
   failClosed: true,
@@ -128,17 +139,13 @@ const reportWhitelistSchema = z.object({
 const reportWhitelistParamsSchema = z.object({
   reportedKey: reportIdentityKeySchema,
 });
+const analysisRequestSchema = z.object({
+  locale: z.enum(['zh-CN', 'en-US', 'ja-JP']).default('zh-CN'),
+});
 const reportQuickDismissSchema = z.object({
   adminNote: z.string().trim().min(1).max(500),
   reportedKeys: z.array(reportIdentityKeySchema).min(1).max(100),
 });
-const reportLowRiskDismissSchema = z.object({
-  adminNote: z.string().trim().min(1).max(500),
-  reportedKeys: z.array(reportIdentityKeySchema).min(1).max(10),
-});
-
-const REPORT_LOW_RISK_MAX_SIMILARITY = 60;
-const REPORT_LOW_RISK_MIN_AVERAGE_GUESSES = 4.5;
 
 function matchPlayerDisplayId(row: { key?: unknown; name?: unknown; username?: unknown }): string {
   const key = typeof row.key === 'string' ? row.key : '';
@@ -165,14 +172,6 @@ function replayAnswer(target: Player) {
     majorAppearances: target.major_appearances,
     isActive: Boolean(target.is_active),
   };
-}
-
-function safeGuessIds(value: unknown): number[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .slice(0, MAX_GUESSES)
-    .map((item) => Number(item))
-    .filter((id) => Number.isInteger(id) && id > 0);
 }
 
 function replayGuessesWithTimes(target: Player, guessIds: unknown, guessTimes: unknown) {
@@ -214,65 +213,6 @@ function pendingReporterFilterQuery(filter: 'multiple' | 'single') {
     .havingRaw(filter === 'multiple'
       ? 'count(distinct reporter_key) >= 2'
       : 'count(distinct reporter_key) = 1');
-}
-
-async function reportReviewSignals(identityKey: string) {
-  const multiRows = await db('match_records as m')
-    .join('match_players as mp', 'mp.match_id', 'm.id')
-    .where('mp.player_key', identityKey)
-    .orderBy('m.created_at', 'desc')
-    .limit(10)
-    .select('m.id', 'm.db_type as mode', 'm.replay', 'm.created_at as finishedAt', 'mp.player_key as playerKey');
-  const inputs: AnalysisRoundInput[] = [];
-  const relevantPlayerIds = new Set<number>();
-  const winningGuessCounts: number[] = [];
-  for (const row of multiRows) {
-    let rounds: unknown = [];
-    try { rounds = JSON.parse(String(row.replay)); } catch { rounds = []; }
-    if (!Array.isArray(rounds)) continue;
-    for (const value of rounds.slice(0, 30)) {
-      if (!value || typeof value !== 'object') continue;
-      const stored = value as Record<string, unknown>;
-      const guessesByPlayer = stored.guessesByPlayer;
-      const rawGuesses = guessesByPlayer && typeof guessesByPlayer === 'object'
-        ? (guessesByPlayer as Record<string, unknown>)[String(row.playerKey || identityKey)]
-        : [];
-      const guessIds = safeGuessIds(rawGuesses);
-      if (stored.winnerKey === identityKey && Array.isArray(rawGuesses)) {
-        winningGuessCounts.push(rawGuesses.length);
-      }
-      const targetPlayerId = Number(stored.targetPlayerId);
-      if (!Number.isInteger(targetPlayerId) || targetPlayerId <= 0) continue;
-      relevantPlayerIds.add(targetPlayerId);
-      guessIds.forEach((playerId) => relevantPlayerIds.add(playerId));
-      inputs.push({
-        source: 'multi',
-        recordId: Number(row.id),
-        mode: String(row.mode),
-        finishedAt: String(row.finishedAt),
-        round: Number(stored.round),
-        targetPlayerId,
-        guessPlayerIds: guessIds,
-      });
-    }
-  }
-  inputs.sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt) || b.recordId - a.recordId);
-  const allEnabledPlayers = getEnabledPlayers();
-  const playersById = new Map(allEnabledPlayers.map((player) => [player.id, player]));
-  for (const playerId of relevantPlayerIds) {
-    const player = getPlayer(playerId);
-    if (player) playersById.set(playerId, player);
-  }
-  const difficultyPools = new Map(
-    DIFFICULTY_LEVELS.map((difficulty) => [difficulty.key, getDifficultyPlayers(difficulty.key)])
-  );
-  const analysis = await analyzeGameChoices(inputs, playersById, difficultyPools, allEnabledPlayers);
-  return {
-    similarityIndex: analysis.summary.similarityIndex,
-    recentAverageWinningGuesses: winningGuessCounts.length
-      ? winningGuessCounts.reduce((sum, count) => sum + count, 0) / winningGuessCounts.length
-      : null,
-  };
 }
 
 router.get(
@@ -387,48 +327,6 @@ router.post(
     res.json({
       ok: true,
       targetCount: reportedKeys.length,
-      updated,
-    });
-  })
-);
-
-router.post(
-  '/reports/quick-dismiss/low-risk',
-  adminWriteLimit,
-  validateBody(reportLowRiskDismissSchema),
-  asyncHandler(async (req, res) => {
-    const body = req.body as z.infer<typeof reportLowRiskDismissSchema>;
-    const rows = await db('match_reports')
-      .where('status', 'pending')
-      .whereIn('reported_key', [...new Set(body.reportedKeys)])
-      .select('reported_key')
-      .groupBy('reported_key')
-      .orderBy('reported_key');
-    const reportedKeys = rows.map((row) => String(row.reported_key));
-    let dismissedTargets = 0;
-    let updated = 0;
-    for (const reportedKey of reportedKeys) {
-      const signals = await reportReviewSignals(reportedKey);
-      if (
-        signals.similarityIndex >= REPORT_LOW_RISK_MAX_SIMILARITY
-        || signals.recentAverageWinningGuesses == null
-        || signals.recentAverageWinningGuesses <= REPORT_LOW_RISK_MIN_AVERAGE_GUESSES
-      ) continue;
-      const dismissed = await db('match_reports')
-        .where({ reported_key: reportedKey, status: 'pending' })
-        .update({
-          status: 'dismissed',
-          admin_note: body.adminNote,
-          handled_by_user_id: req.user!.id,
-          handled_at: db.fn.now(),
-        });
-      if (dismissed) dismissedTargets += 1;
-      updated += Number(dismissed);
-    }
-    res.json({
-      ok: true,
-      scannedTargets: reportedKeys.length,
-      dismissedTargets,
       updated,
     });
   })
@@ -575,6 +473,31 @@ router.get(
       });
     }
     throw new HttpError(404, 'USER_NOT_FOUND');
+  })
+);
+
+router.post(
+  '/reports/:reportId/analysis',
+  adminAnalysisLimit,
+  validateParams(reportParamsSchema),
+  validateBody(analysisRequestSchema),
+  asyncHandler(async (req, res) => {
+    const { reportId } = req.params as unknown as z.infer<typeof reportParamsSchema>;
+    const { locale } = req.body as z.infer<typeof analysisRequestSchema>;
+    const report = await db('match_reports').where({ id: reportId }).first('reported_key');
+    if (!report) throw new HttpError(404, 'REPORT_NOT_FOUND');
+    const identityKey = String(report.reported_key);
+    let subject: AnalysisSubject;
+    if (identityKey.startsWith('u:')) {
+      const userId = Number(identityKey.slice(2));
+      if (!Number.isInteger(userId) || userId <= 0) throw new HttpError(404, 'USER_NOT_FOUND');
+      subject = { type: 'user', userId, identityKey };
+    } else if (identityKey.startsWith('g:')) {
+      subject = { type: 'guest', guestKey: identityKey.slice(2), identityKey };
+    } else {
+      throw new HttpError(404, 'USER_NOT_FOUND');
+    }
+    res.json(await requestExternalCheatAnalysis(subject, locale as AnalysisLocale, 'report'));
   })
 );
 
@@ -1000,117 +923,40 @@ router.get(
   })
 );
 
-router.get(
+router.post(
   '/users/:id/analysis',
-  adminReadLimit,
+  adminAnalysisLimit,
   validateParams(idParamsSchema),
+  validateBody(analysisRequestSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     if (!(await db('users').where({ id }).first('id'))) throw new HttpError(404, 'USER_NOT_FOUND');
     const identityKey = `u:${id}`;
-    const multiRows = await db('match_records as m')
-      .join('match_players as mp', 'mp.match_id', 'm.id')
-      .where('mp.user_id', id)
-      .orderBy('m.created_at', 'desc')
-      .limit(10)
-      .select('m.id', 'm.db_type as mode', 'm.replay', 'm.created_at as finishedAt', 'mp.player_key as playerKey');
-    const inputs: AnalysisRoundInput[] = [];
-    const relevantPlayerIds = new Set<number>();
-    for (const row of multiRows) {
-      let rounds: unknown = [];
-      try { rounds = JSON.parse(String(row.replay)); } catch { rounds = []; }
-      if (!Array.isArray(rounds)) continue;
-      for (const value of rounds.slice(0, 30)) {
-        if (!value || typeof value !== 'object') continue;
-        const stored = value as Record<string, unknown>;
-        const guessesByPlayer = stored.guessesByPlayer;
-        const guessIds = guessesByPlayer && typeof guessesByPlayer === 'object'
-          ? safeGuessIds((guessesByPlayer as Record<string, unknown>)[String(row.playerKey || identityKey)])
-          : [];
-        const targetPlayerId = Number(stored.targetPlayerId);
-        if (!Number.isInteger(targetPlayerId) || targetPlayerId <= 0) continue;
-        relevantPlayerIds.add(targetPlayerId);
-        guessIds.forEach((playerId) => relevantPlayerIds.add(playerId));
-        inputs.push({
-          source: 'multi', recordId: Number(row.id), mode: String(row.mode),
-          finishedAt: String(row.finishedAt), round: Number(stored.round),
-          targetPlayerId, guessPlayerIds: guessIds,
-        });
-      }
-    }
-    inputs.sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt) || b.recordId - a.recordId);
-    const allEnabledPlayers = getEnabledPlayers();
-    const playersById = new Map(allEnabledPlayers.map((player) => [player.id, player]));
-    for (const playerId of relevantPlayerIds) {
-      const player = getPlayer(playerId);
-      if (player) playersById.set(playerId, player);
-    }
-    const difficultyPools = new Map(
-      DIFFICULTY_LEVELS.map((difficulty) => [difficulty.key, getDifficultyPlayers(difficulty.key)])
-    );
-    const analysis = await analyzeGameChoices(inputs, playersById, difficultyPools, allEnabledPlayers);
-    res.json({
-      summary: analysis.summary,
-      limitations: {
-        hasGuessTiming: false,
-        usesCurrentPlayerData: true,
-        statement: 'RISK_SIGNAL_NOT_PROOF',
-      },
-    });
+    const { locale } = req.body as z.infer<typeof analysisRequestSchema>;
+    res.json(await requestExternalCheatAnalysis(
+      { type: 'user', userId: id, identityKey },
+      locale as AnalysisLocale,
+      'user-detail'
+    ));
   })
 );
 
-router.get(
+router.post(
   '/guests/:id/analysis',
-  adminReadLimit,
+  adminAnalysisLimit,
   validateParams(idParamsSchema),
+  validateBody(analysisRequestSchema),
   asyncHandler(async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const guest = await db('guest_accounts').where({ id }).first('guest_key');
     if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
     const identityKey = `g:${guest.guest_key}`;
-    const multiRows = await db('match_records as m')
-      .join('match_players as mp', 'mp.match_id', 'm.id')
-      .where('mp.player_key', identityKey)
-      .orderBy('m.created_at', 'desc')
-      .limit(10)
-      .select('m.id', 'm.db_type as mode', 'm.replay', 'm.created_at as finishedAt', 'mp.player_key as playerKey');
-    const inputs: AnalysisRoundInput[] = [];
-    const relevantPlayerIds = new Set<number>();
-    for (const row of multiRows) {
-      let rounds: unknown = [];
-      try { rounds = JSON.parse(String(row.replay)); } catch { rounds = []; }
-      if (!Array.isArray(rounds)) continue;
-      for (const value of rounds.slice(0, 30)) {
-        if (!value || typeof value !== 'object') continue;
-        const stored = value as Record<string, unknown>;
-        const guessesByPlayer = stored.guessesByPlayer;
-        const guessIds = guessesByPlayer && typeof guessesByPlayer === 'object'
-          ? safeGuessIds((guessesByPlayer as Record<string, unknown>)[String(row.playerKey || identityKey)])
-          : [];
-        const targetPlayerId = Number(stored.targetPlayerId);
-        if (!Number.isInteger(targetPlayerId) || targetPlayerId <= 0) continue;
-        relevantPlayerIds.add(targetPlayerId);
-        guessIds.forEach((playerId) => relevantPlayerIds.add(playerId));
-        inputs.push({
-          source: 'multi', recordId: Number(row.id), mode: String(row.mode),
-          finishedAt: String(row.finishedAt), round: Number(stored.round), targetPlayerId, guessPlayerIds: guessIds,
-        });
-      }
-    }
-    inputs.sort((a, b) => Date.parse(b.finishedAt) - Date.parse(a.finishedAt) || b.recordId - a.recordId);
-    const allEnabledPlayers = getEnabledPlayers();
-    const playersById = new Map(allEnabledPlayers.map((player) => [player.id, player]));
-    for (const playerId of relevantPlayerIds) {
-      const player = getPlayer(playerId);
-      if (player) playersById.set(playerId, player);
-    }
-    const difficultyPools = new Map(DIFFICULTY_LEVELS.map((difficulty) => [difficulty.key, getDifficultyPlayers(difficulty.key)]));
-    const analysis = await analyzeGameChoices(inputs, playersById, difficultyPools, allEnabledPlayers);
-    res.json({
-      summary: analysis.summary,
-      limitations: { hasGuessTiming: false, usesCurrentPlayerData: true, statement: 'RISK_SIGNAL_NOT_PROOF' },
-    });
+    const { locale } = req.body as z.infer<typeof analysisRequestSchema>;
+    res.json(await requestExternalCheatAnalysis(
+      { type: 'guest', guestKey: String(guest.guest_key), identityKey },
+      locale as AnalysisLocale,
+      'guest-detail'
+    ));
   })
 );
 

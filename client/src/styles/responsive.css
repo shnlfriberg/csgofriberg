@@ -347,7 +347,9 @@
   .admin-user-actions { flex-wrap: wrap; min-width: 180px; }
   .admin-user-detail-dialog { height: calc(100dvh - 20px); }
   .admin-user-ranking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .admin-analysis-summary { grid-template-columns: 1fr; }
+  .admin-external-analysis-decision { align-items: stretch; flex-direction: column; }
+  .admin-external-analysis-decision .btn { align-self: flex-start; }
+  .admin-external-analysis-score { grid-template-columns: auto auto auto; place-items: baseline; justify-content: start; gap: 5px; min-height: 0; border-top: 1px solid var(--border); border-left: 0; }
   .admin-announcement-row { align-items: flex-start; flex-direction: column; }
   .admin-announcement-row > .btn { align-self: flex-end; }
   .overlay-card .btns,
@@ -417,7 +419,8 @@
   .admin-user-detail-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-user-ranking-grid { grid-template-columns: 1fr; }
   .admin-user-leaderboard-control { align-items: flex-start; flex-direction: column; }
-  .admin-analysis-summary dl { grid-template-columns: 1fr; }
+  .admin-external-analysis-sections > section > div { grid-template-columns: 1fr; }
+  .admin-external-analysis-point { grid-template-columns: minmax(70px, 120px) minmax(60px, 1fr) minmax(42px, auto); }
   .announcement-popup-actions .btn { width: 100%; }
   .room-ready-actions { flex-direction: column; }
   .room-waiting-card .room-ready-actions {

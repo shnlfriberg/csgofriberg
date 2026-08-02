@@ -206,13 +206,15 @@ describe('admin user management', () => {
         rank: expect.any(Number),
       });
 
-      const analysis = await request(`/api/admin/users/${targetUser.id}/analysis`, adminSession);
-      expect(analysis.response.status).toBe(200);
-      expect(analysis.data).toMatchObject({
-        summary: expect.objectContaining({ sampleSize: 2 }),
-        limitations: expect.objectContaining({ hasGuessTiming: false }),
+      const analysisConfig = { ...config.cheatAnalysis };
+      Object.assign(config.cheatAnalysis, { apiUrl: '', apiToken: '' });
+      const analysis = await request(`/api/admin/users/${targetUser.id}/analysis`, adminSession, {
+        method: 'POST',
+        body: { locale: 'zh-CN' },
       });
-      expect(analysis.data).not.toHaveProperty('trajectories');
+      Object.assign(config.cheatAnalysis, analysisConfig);
+      expect(analysis.response.status).toBe(503);
+      expect(analysis.data).toEqual({ code: 'ANALYSIS_SERVICE_NOT_CONFIGURED' });
 
       const invalidVisibility = await request(
         `/api/admin/users/${targetUser.id}/leaderboard-visibility`,
@@ -288,7 +290,10 @@ describe('admin user management', () => {
       const forbidden = await request(`/api/admin/users/${targetUser.id}/stats`, authCookie(targetUser));
       expect(forbidden.response.status).toBe(403);
       expect(forbidden.data).toEqual({ code: 'FORBIDDEN' });
-      const forbiddenAnalysis = await request(`/api/admin/users/${targetUser.id}/analysis`, authCookie(targetUser));
+      const forbiddenAnalysis = await request(`/api/admin/users/${targetUser.id}/analysis`, authCookie(targetUser), {
+        method: 'POST',
+        body: { locale: 'zh-CN' },
+      });
       expect(forbiddenAnalysis.response.status).toBe(403);
       expect(forbiddenAnalysis.data).toEqual({ code: 'FORBIDDEN' });
 
@@ -610,74 +615,6 @@ describe('admin user management', () => {
       await db('report_whitelist').where({ identity_key: reportedKey }).del();
       await db('match_records').whereIn('id', matchIds).del();
       await db('users').whereIn('username', [adminUsername, reporterAUsername, reporterBUsername]).del();
-    }
-  });
-
-  it('quick dismisses reports with a low similarity index and high winning guess average', async () => {
-    const stamp = Date.now();
-    const adminUsername = `admin-report-low-risk-${stamp}`;
-    const reporterUsername = `reporter-low-risk-${stamp}`;
-    const reportedKey = `g:low-risk-${stamp}`;
-    const insertedUsers = await db('users').insert([
-      {
-        username: adminUsername,
-        display_id: userNameFromUsername(adminUsername),
-        password_hash: 'test',
-        role: 'admin',
-        token_version: 0,
-      },
-      {
-        username: reporterUsername,
-        display_id: userNameFromUsername(reporterUsername),
-        password_hash: 'test',
-        role: 'user',
-        token_version: 0,
-      },
-    ]).returning(['id', 'username', 'token_version']);
-    const admin = insertedUsers.find((user) => user.username === adminUsername)!;
-    const reporter = insertedUsers.find((user) => user.username === reporterUsername)!;
-    const [target] = await db('players').select('id').orderBy('id').limit(1);
-    const roomId = `admin-report-low-risk-room-${stamp}`;
-    const [insertedMatch] = await db('match_records').insert({
-      room_id: roomId,
-      db_type: 'easy',
-      bo_type: 1,
-      replay: JSON.stringify([{
-        round: 1,
-        targetPlayerId: target.id,
-        guessesByPlayer: { [reportedKey]: Array(5).fill(target.id) },
-        winnerKey: reportedKey,
-      }]),
-    }).returning('id');
-    const matchId = Number(typeof insertedMatch === 'object' ? insertedMatch.id : insertedMatch);
-    try {
-      await db('match_players').insert([
-        { match_id: matchId, user_id: reporter.id, player_key: `u:${reporter.id}`, player_name: reporterUsername },
-        { match_id: matchId, player_key: reportedKey, player_name: guestNameFromKey(reportedKey.slice(2)) },
-      ]);
-      await db('match_reports').insert({
-        match_id: matchId,
-        reporter_key: `u:${reporter.id}`,
-        reported_key: reportedKey,
-        description: 'low-risk target',
-      });
-
-      const response = await request('/api/admin/reports/quick-dismiss/low-risk', authCookie(admin), {
-        method: 'POST',
-        body: { adminNote: 'low-risk dismissed', reportedKeys: [reportedKey] },
-      });
-      expect(response.response.status).toBe(200);
-      expect(response.data).toEqual(expect.objectContaining({
-        ok: true,
-        scannedTargets: 1,
-        dismissedTargets: 1,
-        updated: 1,
-      }));
-      expect(await db('match_reports').where({ match_id: matchId }).first('status', 'admin_note'))
-        .toMatchObject({ status: 'dismissed', admin_note: 'low-risk dismissed' });
-    } finally {
-      await db('match_records').where({ id: matchId }).del();
-      await db('users').whereIn('username', [adminUsername, reporterUsername]).del();
     }
   });
 

@@ -33,6 +33,7 @@ const configuredDisplayIdForbiddenTokens = (process.env.DISPLAY_ID_FORBIDDEN_TOK
   .split(',')
   .map((token) => token.trim().toUpperCase())
   .filter(Boolean);
+const configuredCheatAnalysisTimeoutMs = Number(process.env.CHEAT_ANALYSIS_TIMEOUT_MS || 15_000);
 const invalidDisplayIdForbiddenToken = configuredDisplayIdForbiddenTokens.find(
   (token) => !/^[0-9A-Z]{2,5}$/.test(token)
 );
@@ -84,6 +85,13 @@ export const config = {
     allowedSuffixes: configuredEmailAllowedSuffixes,
     verifyTtlSeconds: Math.max(300, Number(process.env.EMAIL_VERIFY_TTL_SECONDS || 1800)),
   },
+  cheatAnalysis: {
+    apiUrl: process.env.CHEAT_ANALYSIS_API_URL?.trim() || '',
+    apiToken: process.env.CHEAT_ANALYSIS_API_TOKEN?.trim() || '',
+    timeoutMs: Number.isFinite(configuredCheatAnalysisTimeoutMs)
+      ? Math.max(1_000, Math.min(30_000, configuredCheatAnalysisTimeoutMs))
+      : 15_000,
+  },
   disconnectForfeitMs: Math.max(100, Number(process.env.DISCONNECT_FORFEIT_MS || 30_000)),
   matchReadyTimeoutMs: 30_000,
   powDifficulty: configuredPowDifficulty,
@@ -114,6 +122,9 @@ export function validateProductionConfig(): void {
   }
   if (config.powRegisterDifficulty <= config.powDifficulty) {
     throw new Error('POW_REGISTER_DIFFICULTY_MUST_EXCEED_POW_DIFFICULTY');
+  }
+  if (Boolean(config.cheatAnalysis.apiUrl) !== Boolean(config.cheatAnalysis.apiToken)) {
+    throw new Error('CHEAT_ANALYSIS_API_URL_AND_TOKEN_MUST_BE_CONFIGURED_TOGETHER');
   }
   if (process.env.NODE_ENV !== 'production') return;
   if (

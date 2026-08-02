@@ -24,6 +24,7 @@ import ReplayDialog, { type MultiReplay, type Replay, type SingleReplay } from '
 import { useTranslation } from 'react-i18next';
 import { difficultyLabel } from '../../utils/difficulty';
 import { currentLocale } from '../../i18n';
+import ExternalAnalysisPanel, { type ExternalAnalysisView } from './ExternalAnalysisPanel';
 
 export interface AdminUser {
   id: number;
@@ -64,14 +65,6 @@ interface LeaderboardEntry {
   total: number; wins: number; winRate: number; avgGuesses: number | null;
 }
 interface LeaderboardView { leaderboardHidden: boolean; entries: LeaderboardEntry[] }
-interface AnalysisView {
-  summary: {
-    similarityIndex: number; level: 'insufficient' | 'common' | 'elevated' | 'high'; sampleSize: number;
-    confidence: number; averageEntropyPercentile: number; topDecileRate: number; lowRegretRate: number;
-    analyzedRounds: number; truncated: boolean;
-  };
-  limitations: { hasGuessTiming: boolean; usesCurrentPlayerData: boolean; statement: string };
-}
 type DetailTab = 'stats' | 'games' | 'leaderboards' | 'analysis' | 'manage';
 type GuestDetailTab = 'stats' | 'games' | 'analysis' | 'manage';
 
@@ -168,7 +161,8 @@ export function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: Ad
   const { t } = useTranslation();
   const [tab, setTab] = useState<GuestDetailTab>('stats');
   const [stats, setStats] = useState<PlayerPerformanceStats | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisView | null>(null);
+  const [analysis, setAnalysis] = useState<ExternalAnalysisView | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [updating, setUpdating] = useState<'ban' | 'restriction' | null>(null);
   useEffect(() => {
@@ -181,14 +175,21 @@ export function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: Ad
     return () => { document.body.style.overflow = oldOverflow; document.removeEventListener('keydown', onKeyDown); };
   }, [onClose]);
   useEffect(() => {
-    if (tab === 'manage' || (tab === 'stats' && stats) || (tab === 'analysis' && analysis)) return;
+    if (tab !== 'stats' || stats) return;
     setLoading(true);
-    const endpoint = tab === 'stats' ? 'stats' : 'analysis';
-    api.get(`/admin/guests/${guest.id}/${endpoint}`)
-      .then((response) => tab === 'stats' ? setStats(response.data.stats) : setAnalysis(response.data))
+    api.get(`/admin/guests/${guest.id}/stats`)
+      .then((response) => setStats(response.data.stats))
       .catch((error) => toast.error(errMsg(error)))
       .finally(() => setLoading(false));
-  }, [analysis, guest.id, stats, tab]);
+  }, [guest.id, stats, tab]);
+  const runAnalysis = async (locale: string) => {
+    setAnalysisLoading(true);
+    try {
+      const response = await api.post<ExternalAnalysisView>(`/admin/guests/${guest.id}/analysis`, { locale });
+      setAnalysis(response.data);
+    } catch (error) { toast.error(errMsg(error)); }
+    finally { setAnalysisLoading(false); }
+  };
   const update = async (kind: 'ban' | 'restriction', value: boolean) => {
     setUpdating(kind);
     try {
@@ -210,7 +211,7 @@ export function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: Ad
     <div className="admin-user-detail-content">
       {tab === 'stats' && <StatsTab view={stats ? { user: fakeUser, stats } : null} />}
       {tab === 'games' && <GuestGamesTab guest={guest} />}
-      {tab === 'analysis' && (analysis ? <AnalysisSummary view={analysis} /> : <p className="muted admin-user-detail-loading">{loading ? t('common.loading') : t('common.noData')}</p>)}
+      {tab === 'analysis' && <ExternalAnalysisPanel view={analysis} loading={analysisLoading} onAnalyze={(locale) => void runAnalysis(locale)} />}
       {tab === 'manage' && <div className="admin-quick-management">
         <div className="admin-user-leaderboard-control"><div><strong>{t('admin.banStatus')}</strong><span>{guest.banned ? t('admin.banned') : t('admin.notBanned')}</span></div><label className="admin-user-leaderboard-toggle"><input type="checkbox" checked={guest.banned} disabled={updating === 'ban'} onChange={(event) => void update('ban', event.target.checked)} /><span>{guest.banned ? t('admin.banned') : t('admin.notBanned')}</span></label></div>
         <div className="admin-user-leaderboard-control"><div><strong>{t('admin.matchmakingRestriction')}</strong><span>{guest.matchmakingRestricted ? t('admin.matchmakingRestricted') : t('admin.matchmakingNormal')}</span></div><label className="admin-user-leaderboard-toggle"><input type="checkbox" checked={guest.matchmakingRestricted} disabled={updating === 'restriction'} onChange={(event) => void update('restriction', event.target.checked)} /><span>{guest.matchmakingRestricted ? t('admin.matchmakingRestricted') : t('admin.matchmakingNormal')}</span></label></div>
@@ -362,31 +363,20 @@ function LeaderboardsTab({ view, updating, onToggle }: { view: LeaderboardView |
   </>;
 }
 
-function AnalysisSummary({ view }: { view: AnalysisView }) {
-  const { t } = useTranslation();
-  const summary = view.summary;
-  const levelKey = `admin.analysisLevel.${summary.level}`;
-  return <div className="admin-analysis-summary">
-    <div className={`admin-analysis-index level-${summary.level}`}><span>{t('admin.analysisIndex')}</span><strong>{summary.similarityIndex}</strong><small>{t(levelKey)}</small></div>
-    <dl>
-      <div><dt>{t('admin.analysisSamples')}</dt><dd>{summary.sampleSize}</dd></div>
-      <div><dt>{t('admin.analysisConfidence')}</dt><dd>{summary.confidence.toFixed(1)}%</dd></div>
-      <div><dt>{t('admin.analysisEntropyPercentile')}</dt><dd>{summary.averageEntropyPercentile.toFixed(1)}%</dd></div>
-      <div><dt>{t('admin.analysisTopDecile')}</dt><dd>{summary.topDecileRate.toFixed(1)}%</dd></div>
-    </dl>
-  </div>;
-}
-
 function AnalysisTab({
   user,
   view,
+  loading,
+  onAnalyze,
   updating,
   onToggle,
   banUpdating,
   onBan,
 }: {
   user: AdminUser;
-  view: AnalysisView | null;
+  view: ExternalAnalysisView | null;
+  loading: boolean;
+  onAnalyze: (locale: string) => void;
   updating: boolean;
   onToggle: (restricted: boolean) => void;
   banUpdating: boolean;
@@ -407,8 +397,7 @@ function AnalysisTab({
       <span>{user.banned ? t('admin.banned') : t('admin.notBanned')}</span>
     </label>
   </div>;
-  if (!view) return <>{banControl}{restrictionControl}<p className="muted admin-user-detail-loading">{t('common.loading')}</p></>;
-  return <>{banControl}{restrictionControl}<AnalysisSummary view={view} /></>;
+  return <>{banControl}{restrictionControl}<ExternalAnalysisPanel view={view} loading={loading} onAnalyze={onAnalyze} /></>;
 }
 
 function QuickManagementTab({
@@ -442,7 +431,8 @@ export function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminU
   const [tab, setTab] = useState<DetailTab>('stats');
   const [stats, setStats] = useState<UserStatsView | null>(null);
   const [leaderboards, setLeaderboards] = useState<LeaderboardView | null>(null);
-  const [analysis, setAnalysis] = useState<AnalysisView | null>(null);
+  const [analysis, setAnalysis] = useState<ExternalAnalysisView | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [visibilityUpdating, setVisibilityUpdating] = useState(false);
   const [restrictionUpdating, setRestrictionUpdating] = useState(false);
   const [banUpdating, setBanUpdating] = useState(false);
@@ -472,15 +462,23 @@ export function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminU
   }, [onClose]);
 
   useEffect(() => {
-    if (tab === 'games' || tab === 'manage' || loaded.current.has(tab)) return;
+    if (tab === 'games' || tab === 'manage' || tab === 'analysis' || loaded.current.has(tab)) return;
     loaded.current.add(tab);
-    const endpoint = tab === 'stats' ? 'stats' : tab === 'leaderboards' ? 'leaderboards' : 'analysis';
+    const endpoint = tab === 'stats' ? 'stats' : 'leaderboards';
     api.get(`/admin/users/${user.id}/${endpoint}`).then((res) => {
       if (tab === 'stats') setStats(res.data as UserStatsView);
       else if (tab === 'leaderboards') setLeaderboards(res.data as LeaderboardView);
-      else setAnalysis(res.data as AnalysisView);
     }).catch((err) => { loaded.current.delete(tab); toast.error(errMsg(err)); });
   }, [tab, user.id]);
+
+  const runAnalysis = async (locale: string) => {
+    setAnalysisLoading(true);
+    try {
+      const response = await api.post<ExternalAnalysisView>(`/admin/users/${user.id}/analysis`, { locale });
+      setAnalysis(response.data);
+    } catch (error) { toast.error(errMsg(error)); }
+    finally { setAnalysisLoading(false); }
+  };
 
   const updateVisibility = async (hidden: boolean) => {
     setVisibilityUpdating(true);
@@ -531,7 +529,7 @@ export function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminU
         {tab === 'stats' && <StatsTab view={stats} />}
         {tab === 'games' && <GamesTab user={user} onReplayOpenChange={setReplayOpen} />}
         {tab === 'leaderboards' && <LeaderboardsTab view={leaderboards} updating={visibilityUpdating} onToggle={(hidden) => void updateVisibility(hidden)} />}
-        {tab === 'analysis' && <AnalysisTab user={user} view={analysis} updating={restrictionUpdating} onToggle={(restricted) => void updateMatchmakingRestriction(restricted)} banUpdating={banUpdating} onBan={(banned) => void updateBan(banned)} />}
+        {tab === 'analysis' && <AnalysisTab user={user} view={analysis} loading={analysisLoading} onAnalyze={(locale) => void runAnalysis(locale)} updating={restrictionUpdating} onToggle={(restricted) => void updateMatchmakingRestriction(restricted)} banUpdating={banUpdating} onBan={(banned) => void updateBan(banned)} />}
         {tab === 'manage' && <QuickManagementTab user={user} visibilityUpdating={visibilityUpdating} restrictionUpdating={restrictionUpdating} banUpdating={banUpdating} onVisibility={(hidden) => void updateVisibility(hidden)} onRestriction={(restricted) => void updateMatchmakingRestriction(restricted)} onBan={(banned) => void updateBan(banned)} />}
       </div>
     </div>
