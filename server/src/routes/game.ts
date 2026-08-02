@@ -156,8 +156,8 @@ router.post(
   '/:id/guess',
   rateLimit({
     name: 'game-guess',
-    limit: 30,
-    windowSeconds: 10,
+    limit: 20,
+    windowSeconds: 60,
     key: requestIdentity,
     failClosed: true,
   }),
