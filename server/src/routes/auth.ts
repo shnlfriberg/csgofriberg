@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/knex';
 import {
@@ -29,16 +29,50 @@ import {
 
 const router = Router();
 
+const USERNAME_MIN_LENGTH = 2;
+const USERNAME_MAX_LENGTH = 20;
+const PASSWORD_MIN_LENGTH = 10;
+const PASSWORD_MAX_LENGTH = 128;
+const USERNAME_PATTERN = /^[\w一-龥-]+$/;
+
 const credentialsSchema = z.object({
   username: z
     .string()
-    .min(2)
-    .max(20)
-    .regex(/^[\w一-龥-]+$/),
-  password: z.string().min(10).max(128),
+    .min(USERNAME_MIN_LENGTH)
+    .max(USERNAME_MAX_LENGTH)
+    .regex(USERNAME_PATTERN),
+  password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
 });
 const registerSchema = credentialsSchema.extend({ email: z.string().trim().email().max(320).optional().or(z.literal('')) });
 const emailSchema = z.object({ email: z.string().trim().email().max(320) });
+
+function validateRegisterBody(req: Request, res: Response, next: NextFunction) {
+  const result = registerSchema.safeParse(req.body);
+  if (!result.success) {
+    const body = req.body && typeof req.body === 'object'
+      ? req.body as Record<string, unknown>
+      : {};
+    const username = body.username;
+    const password = body.password;
+    let code = 'VALIDATION_FAILED';
+    if (typeof username !== 'string' || username.length === 0) {
+      code = 'REGISTER_USERNAME_REQUIRED';
+    } else if (username.length < USERNAME_MIN_LENGTH || username.length > USERNAME_MAX_LENGTH) {
+      code = 'REGISTER_USERNAME_LENGTH';
+    } else if (!USERNAME_PATTERN.test(username)) {
+      code = 'REGISTER_USERNAME_CHARACTERS';
+    } else if (typeof password !== 'string' || password.length === 0) {
+      code = 'REGISTER_PASSWORD_REQUIRED';
+    } else if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+      code = 'REGISTER_PASSWORD_LENGTH';
+    } else if (body.email != null && body.email !== '') {
+      code = 'INVALID_EMAIL';
+    }
+    return res.status(400).json({ code });
+  }
+  req.body = result.data;
+  next();
+}
 
 function publicUser(user: { id: number; username: string; role: 'user' | 'admin'; email?: string | null; emailVerified?: boolean }) {
   return {
@@ -53,7 +87,7 @@ function publicUser(user: { id: number; username: string; role: 'user' | 'admin'
 router.post(
   '/register',
   rateLimit({ name: 'register', limit: 5, windowSeconds: 3600, failClosed: true }),
-  validateBody(registerSchema),
+  validateRegisterBody,
   asyncHandler(async (req, res) => {
     const { username, password, email: emailInput } = req.body;
     let email: string | null = null;

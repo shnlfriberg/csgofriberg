@@ -220,4 +220,18 @@ describe('cookie authentication', () => {
     await db('games').where({ session_id: sessionId }).del();
     await db('users').where({ id: user.id }).del();
   });
+
+  it.each([
+    ['short username', { username: 'a', password: 'long-enough-password' }, 'REGISTER_USERNAME_LENGTH'],
+    ['invalid username characters', { username: 'bad name', password: 'long-enough-password' }, 'REGISTER_USERNAME_CHARACTERS'],
+    ['short password', { username: 'valid_name', password: 'short' }, 'REGISTER_PASSWORD_LENGTH'],
+    ['invalid email', { username: 'valid_name', password: 'long-enough-password', email: 'invalid-email' }, 'INVALID_EMAIL'],
+  ])('returns a specific registration error for %s', async (_label, body, code) => {
+    const result = await request('/api/auth/register', '', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    expect(result.response.status).toBe(400);
+    expect(result.data).toEqual({ code });
+  });
 });

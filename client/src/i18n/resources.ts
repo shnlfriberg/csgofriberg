@@ -136,6 +136,8 @@ export const resources = {
       auth: {
         login: '登录', register: '注册', username: '用户名', password: '密码（至少 10 位）',
         confirmPassword: '确认密码', emailOptional: '邮箱（可选）', registerPowComputing: '正在进行安全校验', mismatch: '两次输入的密码不一致',
+        usernameRequired: '请输入用户名', usernameLength: '用户名长度必须为 2-20 个字符', usernameCharacters: '用户名只能包含字母、数字、下划线、连字符和中文',
+        passwordRequired: '请输入密码', passwordLength: '密码长度必须为 10-128 个字符', emailInvalid: '请输入有效的邮箱地址，例如 name@example.com',
         description: '单人和开房间无需登录即可游玩，随机匹配需要绑定并验证邮箱。',
         toRegister: '没有账号？去注册', toLogin: '已有账号？去登录',
         claimFailed: '登录成功，但匿名战绩同步失败：{{message}}',
@@ -242,7 +244,7 @@ export const resources = {
         apiTokensTitle: '外部 API Token', apiTokensCount: '{{count}} 个有效 Token', apiTokenName: 'Token 名称', apiTokenNamePlaceholder: '例如：选手数据同步', apiTokenExpiresIn: '有效天数（1-365）', createApiToken: '生成 Token', creatingApiToken: '生成中...', apiTokenCreated: 'API Token 已生成', newApiToken: '新 API Token', apiTokenShownOnce: '明文仅显示这一次，请妥善保管。', copyApiToken: '复制 Token', apiTokenCopied: '已复制', apiTokenCopyFailed: '复制失败，请手动选择 Token', noApiTokens: '暂无有效 API Token', apiTokenCreatedAt: '创建：{{date}}', apiTokenExpiresAt: '到期：{{date}}', revokeApiToken: '撤销', revokeApiTokenTitle: '撤销 {{name}}？', revokeApiTokenMessage: '使用该 Token 的外部调用会立即失效。', apiTokenRevoked: 'API Token 已撤销',
       },
       errors: {
-        EMAIL_ALREADY_VERIFIED: '邮箱验证完成后不能再次修改', VALIDATION_FAILED: '输入格式不正确', INVALID_REQUEST_BODY: '请求数据不完整，请重试', PAYLOAD_TOO_LARGE: '导入数据过大，请拆分后重试',
+        EMAIL_ALREADY_VERIFIED: '邮箱验证完成后不能再次修改', VALIDATION_FAILED: '输入格式不正确', REGISTER_USERNAME_REQUIRED: '请输入用户名', REGISTER_USERNAME_LENGTH: '用户名长度必须为 2-20 个字符', REGISTER_USERNAME_CHARACTERS: '用户名只能包含字母、数字、下划线、连字符和中文', REGISTER_PASSWORD_REQUIRED: '请输入密码', REGISTER_PASSWORD_LENGTH: '密码长度必须为 10-128 个字符', INVALID_REQUEST_BODY: '请求数据不完整，请重试', PAYLOAD_TOO_LARGE: '导入数据过大，请拆分后重试',
         INTERNAL_ERROR: '服务器开小差了，请稍后再试', AUTH_REQUIRED: '请先登录', AUTH_EXPIRED: '登录状态已过期，请重新登录',
         FORBIDDEN: '没有权限执行此操作', CANNOT_BAN_SELF: '不能封禁当前管理员账号', USERNAME_TAKEN: '用户名已被注册', EMAIL_TAKEN: '邮箱已被其他账号绑定', EMAIL_NOT_CONFIGURED: '服务器尚未配置发信服务', EMAIL_VERIFICATION_COOLDOWN: '验证邮件发送过于频繁，请稍后重试', INVALID_EMAIL: '邮箱格式无效', EMAIL_ALIAS_NOT_SUPPORTED: '不支持邮箱别名（+ 或点号）', EMAIL_DOMAIN_NOT_ALLOWED: '该邮箱后缀不在允许列表中', USER_BANNED: '该身份已被封禁', EMAIL_VERIFICATION_REQUIRED: '请先验证邮箱', REPORT_NOT_AVAILABLE: '当前对局暂不可举报', REPORT_ALREADY_SUBMITTED: '您已举报过本场对局', REPORT_NOT_FOUND: '举报不存在', USER_NOT_FOUND: '用户不存在', INVALID_CREDENTIALS: '用户名或密码错误',
         NOT_FOUND: '内容不存在', GUEST_KEY_REQUIRED: '访客标识缺失，请刷新页面重试', GAME_NOT_FOUND: '对局不存在', GAME_FINISHED: '对局已结束',
@@ -337,7 +339,7 @@ export const resources = {
       },
       auth: {
         login: 'Log in', register: 'Sign up', username: 'Username', password: 'Password (at least 10 characters)', confirmPassword: 'Confirm password', emailOptional: 'Email (optional)',
-        registerPowComputing: 'Running security check', mismatch: 'The passwords do not match', description: 'Solo play and private rooms are available to guests; Quick Match requires a linked and verified email.',
+        registerPowComputing: 'Running security check', mismatch: 'The passwords do not match', usernameRequired: 'Enter a username', usernameLength: 'The username must be 2-20 characters long', usernameCharacters: 'Use only letters, numbers, underscores, hyphens, or Chinese characters', passwordRequired: 'Enter a password', passwordLength: 'The password must be 10-128 characters long', emailInvalid: 'Enter a valid email address, such as name@example.com', description: 'Solo play and private rooms are available to guests; Quick Match requires a linked and verified email.',
         toRegister: 'No account? Sign up', toLogin: 'Already have an account? Log in', claimFailed: 'Logged in, but guest results could not be synced: {{message}}',
       },
       player: {
@@ -432,7 +434,7 @@ export const resources = {
         apiTokensTitle: 'External API Tokens', apiTokensCount: '{{count}} active tokens', apiTokenName: 'Token name', apiTokenNamePlaceholder: 'For example: player data sync', apiTokenExpiresIn: 'Valid days (1-365)', createApiToken: 'Generate token', creatingApiToken: 'Generating...', apiTokenCreated: 'API token generated', newApiToken: 'New API token', apiTokenShownOnce: 'The secret is shown only once. Store it securely.', copyApiToken: 'Copy token', apiTokenCopied: 'Copied', apiTokenCopyFailed: 'Copy failed. Select and copy the token manually.', noApiTokens: 'No active API tokens', apiTokenCreatedAt: 'Created: {{date}}', apiTokenExpiresAt: 'Expires: {{date}}', revokeApiToken: 'Revoke', revokeApiTokenTitle: 'Revoke {{name}}?', revokeApiTokenMessage: 'External calls using this token will stop working immediately.', apiTokenRevoked: 'API token revoked',
       },
       errors: {
-        EMAIL_ALREADY_VERIFIED: 'A verified email cannot be changed.', VALIDATION_FAILED: 'Invalid input', INVALID_REQUEST_BODY: 'The request is incomplete. Please try again.', PAYLOAD_TOO_LARGE: 'The import is too large. Split it and try again.',
+        EMAIL_ALREADY_VERIFIED: 'A verified email cannot be changed.', VALIDATION_FAILED: 'Invalid input', REGISTER_USERNAME_REQUIRED: 'Enter a username.', REGISTER_USERNAME_LENGTH: 'The username must be 2-20 characters long.', REGISTER_USERNAME_CHARACTERS: 'Use only letters, numbers, underscores, hyphens, or Chinese characters.', REGISTER_PASSWORD_REQUIRED: 'Enter a password.', REGISTER_PASSWORD_LENGTH: 'The password must be 10-128 characters long.', INVALID_REQUEST_BODY: 'The request is incomplete. Please try again.', PAYLOAD_TOO_LARGE: 'The import is too large. Split it and try again.',
         INTERNAL_ERROR: 'Something went wrong on the server. Please try again later.', AUTH_REQUIRED: 'Please log in first.', AUTH_EXPIRED: 'Your session has expired. Please log in again.',
         FORBIDDEN: 'You do not have permission to do that.', CANNOT_BAN_SELF: 'You cannot ban the current administrator account.', USERNAME_TAKEN: 'That username is already registered.', EMAIL_TAKEN: 'That email is already linked to another account.', EMAIL_NOT_CONFIGURED: 'Email delivery is not configured.', EMAIL_VERIFICATION_COOLDOWN: 'Verification emails are being sent too frequently. Try again shortly.', INVALID_EMAIL: 'Invalid email address.', EMAIL_ALIAS_NOT_SUPPORTED: 'Email aliases using + or dots are not supported.', EMAIL_DOMAIN_NOT_ALLOWED: 'That email domain is not allowed.', USER_BANNED: 'This identity has been banned.', EMAIL_VERIFICATION_REQUIRED: 'Verify your email first.', REPORT_NOT_AVAILABLE: 'This match cannot be reported now.', REPORT_ALREADY_SUBMITTED: 'You have already reported this match.', REPORT_NOT_FOUND: 'Report not found.', USER_NOT_FOUND: 'User not found.', INVALID_CREDENTIALS: 'Incorrect username or password.',
         NOT_FOUND: 'Content not found.', GUEST_KEY_REQUIRED: 'Guest identity is missing. Refresh the page and try again.', GAME_NOT_FOUND: 'Game not found.', GAME_FINISHED: 'This game has ended.',
@@ -526,7 +528,7 @@ export const resources = {
       },
       auth: {
         login: 'ログイン', register: '登録', username: 'ユーザー名', password: 'パスワード（10 文字以上）', confirmPassword: 'パスワード確認', emailOptional: 'メール（任意）',
-        registerPowComputing: 'セキュリティ確認中', mismatch: 'パスワードが一致しません', description: 'ソロとルーム作成はゲストでも利用できますが、ランダムマッチにはメールの登録と確認が必要です。',
+        registerPowComputing: 'セキュリティ確認中', mismatch: 'パスワードが一致しません', usernameRequired: 'ユーザー名を入力してください', usernameLength: 'ユーザー名は 2-20 文字で入力してください', usernameCharacters: 'ユーザー名には英数字、アンダースコア、ハイフン、中国語文字のみ使用できます', passwordRequired: 'パスワードを入力してください', passwordLength: 'パスワードは 10-128 文字で入力してください', emailInvalid: 'name@example.com のような有効なメールアドレスを入力してください', description: 'ソロとルーム作成はゲストでも利用できますが、ランダムマッチにはメールの登録と確認が必要です。',
         toRegister: 'アカウントがない場合は登録', toLogin: 'アカウントをお持ちの場合はログイン', claimFailed: 'ログインしましたが、ゲスト戦績を同期できませんでした：{{message}}',
       },
       player: {
@@ -620,7 +622,7 @@ export const resources = {
         apiTokensTitle: '外部 API トークン', apiTokensCount: '有効なトークン {{count}} 件', apiTokenName: 'トークン名', apiTokenNamePlaceholder: '例：選手データ同期', apiTokenExpiresIn: '有効日数（1-365）', createApiToken: 'トークンを生成', creatingApiToken: '生成中...', apiTokenCreated: 'API トークンを生成しました', newApiToken: '新しい API トークン', apiTokenShownOnce: 'シークレットは一度だけ表示されます。安全に保管してください。', copyApiToken: 'トークンをコピー', apiTokenCopied: 'コピーしました', apiTokenCopyFailed: 'コピーできませんでした。トークンを手動で選択してください。', noApiTokens: '有効な API トークンはありません', apiTokenCreatedAt: '作成：{{date}}', apiTokenExpiresAt: '期限：{{date}}', revokeApiToken: '無効化', revokeApiTokenTitle: '{{name}} を無効化しますか？', revokeApiTokenMessage: 'このトークンを使用する外部呼び出しは直ちに無効になります。', apiTokenRevoked: 'API トークンを無効化しました',
       },
       errors: {
-        EMAIL_ALREADY_VERIFIED: '確認済みメールは変更できません。', VALIDATION_FAILED: '入力形式が正しくありません', INVALID_REQUEST_BODY: 'リクエストデータが不足しています。もう一度お試しください。', PAYLOAD_TOO_LARGE: 'インポートデータが大きすぎます。分割して再試行してください。',
+        EMAIL_ALREADY_VERIFIED: '確認済みメールは変更できません。', VALIDATION_FAILED: '入力形式が正しくありません', REGISTER_USERNAME_REQUIRED: 'ユーザー名を入力してください。', REGISTER_USERNAME_LENGTH: 'ユーザー名は 2-20 文字で入力してください。', REGISTER_USERNAME_CHARACTERS: 'ユーザー名には英数字、アンダースコア、ハイフン、中国語文字のみ使用できます。', REGISTER_PASSWORD_REQUIRED: 'パスワードを入力してください。', REGISTER_PASSWORD_LENGTH: 'パスワードは 10-128 文字で入力してください。', INVALID_REQUEST_BODY: 'リクエストデータが不足しています。もう一度お試しください。', PAYLOAD_TOO_LARGE: 'インポートデータが大きすぎます。分割して再試行してください。',
         INTERNAL_ERROR: 'サーバーで問題が発生しました。後でもう一度お試しください。', AUTH_REQUIRED: '先にログインしてください。', AUTH_EXPIRED: 'ログインの有効期限が切れました。再度ログインしてください。',
         FORBIDDEN: 'この操作を行う権限がありません。', CANNOT_BAN_SELF: '現在の管理者アカウントは BAN できません。', USERNAME_TAKEN: 'このユーザー名は既に登録されています。', EMAIL_TAKEN: 'このメールは既に登録されています。', EMAIL_NOT_CONFIGURED: 'メール送信が設定されていません。', EMAIL_VERIFICATION_COOLDOWN: '確認メールの送信間隔が短すぎます。しばらくしてから再試行してください。', INVALID_EMAIL: 'メールアドレスが無効です。', EMAIL_ALIAS_NOT_SUPPORTED: '+ やドットを使うメール別名は利用できません。', EMAIL_DOMAIN_NOT_ALLOWED: 'このメールドメインは許可されていません。', USER_BANNED: 'この ID は BAN されています。', EMAIL_VERIFICATION_REQUIRED: '先にメールを確認してください。', REPORT_NOT_AVAILABLE: '現在この対局は通報できません。', REPORT_ALREADY_SUBMITTED: 'この対局はすでに通報済みです。', REPORT_NOT_FOUND: '通報が見つかりません。', USER_NOT_FOUND: 'ユーザーが見つかりません。', INVALID_CREDENTIALS: 'ユーザー名またはパスワードが正しくありません。',
         NOT_FOUND: 'コンテンツが見つかりません。', GUEST_KEY_REQUIRED: 'ゲスト識別情報がありません。ページを更新してください。', GAME_NOT_FOUND: '対局が見つかりません。', GAME_FINISHED: 'この対局は終了しています。',

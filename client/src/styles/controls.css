@@ -215,6 +215,9 @@
 /* ===== 表单 ===== */
 .form { display: flex; flex-direction: column; gap: 14px; max-width: 420px; margin: 0 auto; }
 .auth-card { width: min(480px, 100%); margin: clamp(10px, 6vh, 56px) auto; }
+.auth-field { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
+.auth-field-error { color: var(--danger); font-size: 0.82rem; line-height: 1.35; overflow-wrap: anywhere; }
+.auth-field .input[aria-invalid='true'] { border-color: var(--danger); }
 .auth-password-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .auth-password-fields .input { min-width: 0; }
 .auth-pow-status { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
