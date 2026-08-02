@@ -9,10 +9,13 @@ import { errorHandler } from '../middleware/common';
 import { initRedis, redis, redisKey } from '../redis';
 import { config } from '../config';
 import { hasLeadingZeroBits, modifiedSha256, POW_COOKIE } from '../services/pow';
+import { initDb } from '../db/init';
+import { db } from '../db/knex';
 
 let server: http.Server;
 let baseUrl: string;
 const USER_AGENT = 'csgofriberg-pow-integration-test';
+const TEST_IP = `198.51.100.${(Date.now() % 250) + 1}`;
 
 function setCookies(response: Response): string[] {
   const getSetCookie = (response.headers as any).getSetCookie?.bind(response.headers);
@@ -25,6 +28,7 @@ async function request(path: string, init: RequestInit = {}) {
     headers: {
       'Content-Type': 'application/json',
       'User-Agent': USER_AGENT,
+      'X-Forwarded-For': TEST_IP,
       ...(init.headers ?? {}),
     },
   });
@@ -41,8 +45,10 @@ function solve(challenge: string, difficulty: number): string {
 
 describe('proof of work gateway', () => {
   beforeAll(async () => {
+    await initDb();
     await initRedis();
     const app = express();
+    app.set('trust proxy', 1);
     app.use(express.json());
     app.use('/api/pow', powRoutes);
     app.use('/api', requirePow);
@@ -111,6 +117,7 @@ describe('proof of work gateway', () => {
     });
     expect(registerChallenge.response.status).toBe(200);
     expect(registerChallenge.data.difficulty).toBe(config.powRegisterDifficulty);
+    expect(setCookies(registerChallenge.response).join(';')).not.toContain(`${POW_COOKIE}=`);
     const blockedRegister = await request('/api/auth/register', {
       method: 'POST',
       body: JSON.stringify({ username: 'pow-register-check', password: 'Strong-password-123' }),
@@ -118,6 +125,54 @@ describe('proof of work gateway', () => {
     });
     expect(blockedRegister.response.status).toBe(428);
     expect(blockedRegister.data.code).toBe('POW_REQUIRED');
+  });
+
+  it('consumes one dedicated PoW proof for exactly one registration', async () => {
+    const challengeResult = await request('/api/pow/challenge', {
+      method: 'POST',
+      body: JSON.stringify({ profile: 'register' }),
+    });
+    const nonce = solve(challengeResult.data.challenge, challengeResult.data.difficulty);
+    const username = `pr${Date.now().toString(36)}`;
+    const proofHeaders = {
+      'X-Register-PoW-Id': challengeResult.data.id,
+      'X-Register-PoW-Nonce': nonce,
+    };
+
+    const registered = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password: 'Strong-password-123' }),
+      headers: proofHeaders,
+    });
+    expect(registered.response.status).toBe(200);
+    expect(registered.data.user.username).toBe(username);
+    expect(setCookies(registered.response).join(';')).not.toContain(`${POW_COOKIE}=`);
+
+    const replay = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username: `${username}x`, password: 'Strong-password-123' }),
+      headers: proofHeaders,
+    });
+    expect(replay.response.status).toBe(428);
+    expect(replay.data.code).toBe('POW_REQUIRED');
+    expect(await db('users').where({ username: `${username}x` }).first()).toBeUndefined();
+
+    await db('users').where({ username }).del();
+  });
+
+  it('does not exchange a registration challenge for a reusable PoW cookie', async () => {
+    const challengeResult = await request('/api/pow/challenge', {
+      method: 'POST',
+      body: JSON.stringify({ profile: 'register' }),
+    });
+    const result = await request('/api/pow/verify', {
+      method: 'POST',
+      body: JSON.stringify({ id: challengeResult.data.id, nonce: '0' }),
+    });
+
+    expect(result.response.status).toBe(400);
+    expect(result.data.code).toBe('POW_CHALLENGE_INVALID');
+    expect(setCookies(result.response).join(';')).not.toContain(`${POW_COOKIE}=`);
   });
 
   it('binds a challenge to the requesting browser fingerprint', async () => {

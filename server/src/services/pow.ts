@@ -18,7 +18,10 @@ interface StoredChallenge {
   challenge: string;
   difficulty: number;
   fingerprint: string;
+  purpose?: PowPurpose;
 }
+
+export type PowPurpose = 'default' | 'register';
 
 interface PowTokenPayload {
   typ: 'pow';
@@ -88,7 +91,8 @@ export function hasLeadingZeroBits(digest: Uint8Array, difficulty: number): bool
 
 export async function createChallenge(
   userAgent: string | undefined,
-  difficulty = config.powDifficulty
+  difficulty = config.powDifficulty,
+  purpose: PowPurpose = 'default'
 ) {
   const client = redis();
   if (!client) throw new Error('REDIS_UNAVAILABLE');
@@ -98,6 +102,7 @@ export async function createChallenge(
     challenge,
     difficulty,
     fingerprint: browserFingerprint(userAgent),
+    purpose,
   };
   await client.set(redisKey(`pow:challenge:${id}`), JSON.stringify(stored), {
     EX: config.powChallengeTtlSeconds,
@@ -115,7 +120,8 @@ export async function createChallenge(
 export async function consumeAndVerifyChallenge(
   id: string,
   nonceText: string,
-  userAgent: string | undefined
+  userAgent: string | undefined,
+  expectedPurpose: PowPurpose = 'default'
 ): Promise<number> {
   const client = redis();
   if (!client) throw new Error('REDIS_UNAVAILABLE');
@@ -131,6 +137,9 @@ export async function consumeAndVerifyChallenge(
     throw new PowVerificationError('POW_CHALLENGE_INVALID');
   }
   if (!Number.isInteger(stored.difficulty) || stored.difficulty < 16 || stored.difficulty > 24) {
+    throw new PowVerificationError('POW_CHALLENGE_INVALID');
+  }
+  if ((stored.purpose ?? 'default') !== expectedPurpose) {
     throw new PowVerificationError('POW_CHALLENGE_INVALID');
   }
   if (stored.fingerprint !== browserFingerprint(userAgent)) {

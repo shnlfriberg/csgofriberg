@@ -67,26 +67,26 @@ describe('PoW worker fallback', () => {
     });
   });
 
-  it('requests the stronger register profile and exposes a fake progress state', async () => {
-    post
-      .mockResolvedValueOnce({
-        data: {
-          id: 'register-challenge-id',
-          challenge: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
-          difficulty: 19,
-          algorithm: 'csgofriberg-pow-v1',
-        },
-      })
-      .mockResolvedValueOnce({ data: { expiresAt: Date.now() + 30_000, expiresInMs: 30_000, difficulty: 19 } });
+  it('returns a one-time register proof without verifying it into a cookie', async () => {
+    post.mockResolvedValueOnce({
+      data: {
+        id: 'register-challenge-id',
+        challenge: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+        difficulty: 19,
+        algorithm: 'csgofriberg-pow-v1',
+      },
+    });
 
-    const { ensurePow, getPowProgress, subscribePowProgress } = await import('./pow');
+    const { createRegisterPow, getPowProgress, subscribePowProgress } = await import('./pow');
     const states: boolean[] = [];
     const unsubscribe = subscribePowProgress(() => states.push(getPowProgress().active));
-    await ensurePow({ profile: 'register' });
+    const proof = await createRegisterPow();
     unsubscribe();
 
+    expect(proof).toEqual({ id: 'register-challenge-id', nonce: '37031' });
     expect(states).toContain(true);
     expect(getPowProgress().active).toBe(false);
     expect(post).toHaveBeenNthCalledWith(1, '/challenge', { profile: 'register' }, expect.any(Object));
+    expect(post).toHaveBeenCalledTimes(1);
   });
 });

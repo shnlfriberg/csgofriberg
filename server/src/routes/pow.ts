@@ -30,7 +30,7 @@ router.post(
     const requiredDifficulty = req.body.profile === 'register'
       ? config.powRegisterDifficulty
       : config.powDifficulty;
-    const current = getRequestPow(req);
+    const current = req.body.profile === 'register' ? null : getRequestPow(req);
     if (
       current &&
       current.difficulty >= requiredDifficulty &&
@@ -43,7 +43,11 @@ router.post(
         difficulty: current.difficulty,
       });
     }
-    res.json(await createChallenge(req.headers['user-agent'], requiredDifficulty));
+    res.json(await createChallenge(
+      req.headers['user-agent'],
+      requiredDifficulty,
+      req.body.profile ?? 'default'
+    ));
   })
 );
 

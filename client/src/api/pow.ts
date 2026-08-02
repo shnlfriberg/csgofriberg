@@ -14,7 +14,10 @@ interface ChallengeResponse {
   algorithm?: string;
 }
 
-export type PowProfile = 'default' | 'register';
+export interface RegisterPowProof {
+  id: string;
+  nonce: string;
+}
 
 export interface PowProgress {
   active: boolean;
@@ -22,7 +25,7 @@ export interface PowProgress {
 }
 
 let validUntil = 0;
-let activeRequest: { profile: PowProfile; promise: Promise<void> } | null = null;
+let activeRequest: Promise<void> | null = null;
 let refreshTimer: number | null = null;
 let progressTimer: number | null = null;
 let progressStartedAt = 0;
@@ -120,26 +123,37 @@ async function solveChallenge(challenge: string, difficulty: number): Promise<st
   }
 }
 
-async function refreshPow(profile: PowProfile): Promise<void> {
+async function requestChallenge(profile?: 'register'): Promise<ChallengeResponse> {
   const challengeResponse = await powApi.post<ChallengeResponse>(
     '/challenge',
-    profile === 'register' ? { profile } : undefined,
+    profile ? { profile } : undefined,
     {
       headers: { 'Cache-Control': 'no-cache' },
     }
   );
-  const data = challengeResponse.data;
-  if (data.valid && data.expiresAt) {
-    noteValidity(data.expiresInMs, data.expiresAt);
-    scheduleRefresh();
-    return;
-  }
+  return challengeResponse.data;
+}
+
+function requireSolvableChallenge(data: ChallengeResponse): asserts data is Required<Pick<
+  ChallengeResponse,
+  'id' | 'challenge' | 'difficulty' | 'algorithm'
+>> & ChallengeResponse {
   if (
     data.algorithm !== 'csgofriberg-pow-v1' ||
     !data.id ||
     !data.challenge ||
     !data.difficulty
   ) throw new Error('POW_CHALLENGE_INVALID');
+}
+
+async function refreshPow(): Promise<void> {
+  const data = await requestChallenge();
+  if (data.valid && data.expiresAt) {
+    noteValidity(data.expiresInMs, data.expiresAt);
+    scheduleRefresh();
+    return;
+  }
+  requireSolvableChallenge(data);
 
   const nonce = await solveChallenge(data.challenge, data.difficulty);
   const verifyResponse = await powApi.post<{ expiresAt: number; expiresInMs?: number; difficulty?: number }>('/verify', {
@@ -150,16 +164,9 @@ async function refreshPow(profile: PowProfile): Promise<void> {
   scheduleRefresh();
 }
 
-export function ensurePow(
-  options: boolean | { force?: boolean; profile?: PowProfile } = false
-): Promise<void> {
-  const force = typeof options === 'boolean' ? options : Boolean(options.force);
-  const profile: PowProfile = typeof options === 'boolean' ? 'default' : options.profile ?? 'default';
-  if (activeRequest) {
-    if (activeRequest.profile === 'register' || profile === 'default') return activeRequest.promise;
-    return activeRequest.promise.then(() => ensurePow({ force: true, profile }));
-  }
-  if (profile === 'default' && !force && validUntil > performance.now()) {
+export function ensurePow(force = false): Promise<void> {
+  if (activeRequest) return activeRequest;
+  if (!force && validUntil > performance.now()) {
     scheduleRefresh();
     return Promise.resolve();
   }
@@ -167,23 +174,34 @@ export function ensurePow(
     validUntil = 0;
   }
   const promise = (async () => {
-    if (profile === 'register') startRegisterProgress();
     try {
-      await refreshPow(profile);
+      await refreshPow();
     } catch (error) {
       validUntil = 0;
       throw error;
-    } finally {
-      if (profile === 'register') stopRegisterProgress();
     }
   })();
-  activeRequest = { profile, promise };
+  activeRequest = promise;
   void promise.then(() => {
-    if (activeRequest?.promise === promise) activeRequest = null;
+    if (activeRequest === promise) activeRequest = null;
   }, () => {
-    if (activeRequest?.promise === promise) activeRequest = null;
+    if (activeRequest === promise) activeRequest = null;
   });
   return promise;
+}
+
+export async function createRegisterPow(): Promise<RegisterPowProof> {
+  startRegisterProgress();
+  try {
+    const data = await requestChallenge('register');
+    requireSolvableChallenge(data);
+    return {
+      id: data.id,
+      nonce: await solveChallenge(data.challenge, data.difficulty),
+    };
+  } finally {
+    stopRegisterProgress();
+  }
 }
 
 export function notePowExpiry(expiresAt: unknown, expiresInMs?: unknown): void {

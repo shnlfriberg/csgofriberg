@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { translate } from '../i18n/messages';
-import { ensurePow, notePowExpiry } from './pow';
+import { createRegisterPow, ensurePow, notePowExpiry } from './pow';
 import { hasAuthHint, refreshAuthenticatedSession } from './authSession';
 
 export const api = axios.create({ baseURL: '/api', withCredentials: true });
@@ -8,7 +8,13 @@ export const api = axios.create({ baseURL: '/api', withCredentials: true });
 api.interceptors.request.use(async (request) => {
   const isRegisterRequest = request.method?.toLowerCase() === 'post' &&
     String(request.url ?? '').replace(/^.*\/api/, '') === '/auth/register';
-  await ensurePow(isRegisterRequest ? { profile: 'register' } : undefined);
+  if (isRegisterRequest) {
+    const proof = await createRegisterPow();
+    request.headers.set('X-Register-PoW-Id', proof.id);
+    request.headers.set('X-Register-PoW-Nonce', proof.nonce);
+  } else {
+    await ensurePow();
+  }
   if (hasAuthHint()) request.headers.set('X-Auth-Expected', '1');
   else request.headers.delete('X-Auth-Expected');
   return request;
@@ -32,9 +38,7 @@ api.interceptors.response.use(
     if (code === 'POW_REQUIRED' && config && !config._powRetried) {
       config._powRetried = true;
       const isRegisterRequest = String(config?.url ?? '').replace(/^.*\/api/, '') === '/auth/register';
-      await ensurePow(isRegisterRequest
-        ? { force: true, profile: 'register' }
-        : true);
+      if (!isRegisterRequest) await ensurePow(true);
       return api.request(config);
     }
     if (
