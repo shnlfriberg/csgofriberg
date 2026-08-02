@@ -61,6 +61,8 @@ describe('playerList cache', () => {
       { id: 3, nickname: 'B1t' },
       { id: 4, nickname: 'bitwise' },
       { id: 5, nickname: 'f0rest' },
+      { id: 6, nickname: 'fl1t' },
+      { id: 7, nickname: 'lucky' },
     ];
 
     expect(searchPlayerList(players, 'simple').map((player) => player.nickname))
@@ -69,5 +71,13 @@ describe('playerList cache', () => {
       .toEqual(['B1t', 'bitwise']);
     expect(searchPlayerList(players, 'forest').map((player) => player.nickname))
       .toEqual(['f0rest']);
+    expect(searchPlayerList(players, 'slmple').map((player) => player.nickname))
+      .toEqual(['s1mple']);
+    expect(searchPlayerList(players, 'fllt').map((player) => player.nickname))
+      .toEqual(['fl1t']);
+    expect(searchPlayerList(players, '1ucky').map((player) => player.nickname))
+      .toEqual(['lucky']);
+    expect(searchPlayerList([{ id: 8, nickname: 'lily' }], 'iily'))
+      .toEqual([]);
   });
 });

@@ -131,28 +131,44 @@ function normalizeSearch(value: string): string {
   return value.trim().toLocaleLowerCase('en-US');
 }
 
-function normalizeLeet(value: string): string {
-  return normalizeSearch(value).replace(/[0-9]/g, (character) => LEET_EQUIVALENTS[character]);
+function areLeetCharactersEquivalent(left: string, right: string): boolean {
+  if (left === right) return true;
+  if (left === '1') return right === 'i' || right === 'l';
+  if (right === '1') return left === 'i' || left === 'l';
+  return LEET_EQUIVALENTS[left] === right || LEET_EQUIVALENTS[right] === left;
 }
 
-function matchScore(nickname: string, query: string, leetQuery: string): number {
+function leetMatchesAt(value: string, query: string, start: number): boolean {
+  if (start + query.length > value.length) return false;
+  for (let index = 0; index < query.length; index += 1) {
+    if (!areLeetCharactersEquivalent(value[start + index], query[index])) return false;
+  }
+  return true;
+}
+
+function leetIncludes(value: string, query: string): boolean {
+  for (let start = 0; start <= value.length - query.length; start += 1) {
+    if (leetMatchesAt(value, query, start)) return true;
+  }
+  return false;
+}
+
+function matchScore(nickname: string, query: string): number {
   const name = normalizeSearch(nickname);
-  const leetName = normalizeLeet(nickname);
   if (name === query) return 0;
-  if (leetName === leetQuery) return 1;
+  if (name.length === query.length && leetMatchesAt(name, query, 0)) return 1;
   if (name.startsWith(query)) return 2;
-  if (leetName.startsWith(leetQuery)) return 3;
+  if (leetMatchesAt(name, query, 0)) return 3;
   if (name.includes(query)) return 4;
-  if (leetName.includes(leetQuery)) return 5;
+  if (leetIncludes(name, query)) return 5;
   return Number.POSITIVE_INFINITY;
 }
 
 export function searchPlayerList(players: PlayerSuggestion[], query: string): PlayerSuggestion[] {
   const normalized = normalizeSearch(query);
   if (!normalized) return [];
-  const leetQuery = normalizeLeet(query);
   return players
-    .map((player) => ({ player, score: matchScore(player.nickname, normalized, leetQuery) }))
+    .map((player) => ({ player, score: matchScore(player.nickname, normalized) }))
     .filter((entry) => Number.isFinite(entry.score))
     .sort((a, b) => a.score - b.score || a.player.nickname.localeCompare(b.player.nickname))
     .map((entry) => entry.player)
