@@ -63,6 +63,9 @@ describe('player schema migration', () => {
     expect(await instance.schema.hasTable('match_reports')).toBe(true);
     expect(await instance.schema.hasColumn('match_reports', 'reported_key')).toBe(true);
     expect(await instance.schema.hasColumn('match_reports', 'admin_note')).toBe(true);
+    expect(await instance.schema.hasTable('report_whitelist')).toBe(true);
+    expect(await instance.schema.hasColumn('report_whitelist', 'identity_key')).toBe(true);
+    expect(await instance.schema.hasColumn('report_whitelist', 'created_by_user_id')).toBe(true);
     expect(await instance.schema.hasColumn('games', 'first_guess_player_id')).toBe(true);
     expect(await instance.schema.hasColumn('games', 'guess_times')).toBe(true);
     expect(await instance.schema.hasColumn('users', 'display_id')).toBe(true);

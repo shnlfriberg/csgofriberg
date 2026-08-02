@@ -95,4 +95,41 @@ describe('match result persistence', () => {
       await db('match_records').where({ room_id: recordId }).del();
     }
   });
+
+  it('auto-dismisses reports for whitelisted reported identities', async () => {
+    const stamp = Date.now();
+    const recordId = `report-whitelist-${stamp}`;
+    const playerA = `g:report-whitelist-a-${stamp}`;
+    const playerB = `g:report-whitelist-b-${stamp}`;
+    try {
+      await db('report_whitelist').insert({
+        identity_key: playerB,
+        display_name: 'Trusted B',
+        admin_note: 'trusted',
+      });
+      await persistMatchResult({
+        recordId,
+        dbType: 'easy',
+        boType: 1,
+        winnerKey: playerA,
+        reason: 'score',
+        forfeitedKey: null,
+        participants: [
+          { key: playerA, userId: null, name: 'A', score: 1 },
+          { key: playerB, userId: null, name: 'B', score: 0 },
+        ],
+        reports: [
+          { reporterKey: playerA, reportedKey: playerB, description: 'trusted target', createdAt: stamp },
+        ],
+        rounds: [],
+      });
+
+      const match = await db('match_records').where({ room_id: recordId }).first('id');
+      expect(await db('match_reports').where({ match_id: match.id }).first('status', 'handled_at'))
+        .toMatchObject({ status: 'dismissed' });
+    } finally {
+      await db('match_records').where({ room_id: recordId }).del();
+      await db('report_whitelist').where({ identity_key: playerB }).del();
+    }
+  });
 });

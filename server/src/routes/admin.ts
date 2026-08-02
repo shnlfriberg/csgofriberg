@@ -108,9 +108,21 @@ const reportListQuerySchema = z.object({
   search: z.string().trim().max(64).default(''),
 });
 const reportParamsSchema = z.object({ reportId: z.coerce.number().int().positive() });
+const reportIdentityKeySchema = z.string().trim().min(3).max(80)
+  .refine((key) => key.startsWith('u:') || key.startsWith('g:'));
 const reportUpdateSchema = z.object({
   status: z.enum(['pending', 'resolved', 'dismissed']),
   adminNote: z.string().trim().max(500).default(''),
+});
+const reportBatchUpdateSchema = reportUpdateSchema.extend({
+  reportedKey: reportIdentityKeySchema,
+});
+const reportWhitelistSchema = z.object({
+  reportedKey: reportIdentityKeySchema,
+  adminNote: z.string().trim().max(500).default(''),
+});
+const reportWhitelistParamsSchema = z.object({
+  reportedKey: reportIdentityKeySchema,
 });
 
 function matchPlayerDisplayId(row: { key?: unknown; name?: unknown; username?: unknown }): string {
@@ -194,7 +206,8 @@ router.get(
       .leftJoin('match_players as reported', function () {
         this.on('reported.match_id', '=', 'r.match_id').andOn('reported.player_key', '=', 'r.reported_key');
       })
-      .leftJoin('users as reported_user', 'reported_user.id', 'reported.user_id');
+      .leftJoin('users as reported_user', 'reported_user.id', 'reported.user_id')
+      .leftJoin('report_whitelist as whitelist', 'whitelist.identity_key', 'r.reported_key');
     if (parsed.status !== 'all') base.where('r.status', parsed.status);
     if (parsed.search) {
       const pattern = `%${parsed.search}%`;
@@ -225,18 +238,161 @@ router.get(
         'r.handled_at as handledAt', 'm.room_id as roomId', 'm.db_type as mode', 'm.bo_type as boType',
         'm.created_at as matchCreatedAt',
         'reporter.player_name as reporterName', 'reporter_user.username as reporterUsername',
-        'reported.player_name as reportedName', 'reported_user.username as reportedUsername'
+        'reported.player_name as reportedName', 'reported_user.username as reportedUsername',
+        'whitelist.identity_key as whitelistKey'
       );
+    const reportedKeys = [...new Set(rows.map((row) => String(row.reportedKey)))];
+    const pendingCounts = new Map<string, number>();
+    if (reportedKeys.length) {
+      const countRows = await db('match_reports')
+        .select('reported_key as reportedKey')
+        .whereIn('reported_key', reportedKeys)
+        .where('status', 'pending')
+        .groupBy('reported_key')
+        .count({ count: 'id' });
+      for (const row of countRows as Array<{ reportedKey?: unknown; count?: string | number }>) {
+        pendingCounts.set(String(row.reportedKey), Number(row.count ?? 0));
+      }
+    }
     res.json({
       reports: rows.map((row) => ({
         id: Number(row.id), matchId: Number(row.matchId), roomId: row.roomId, mode: row.mode, boType: Number(row.boType),
+        reporterKey: row.reporterKey, reportedKey: row.reportedKey,
         reporter: reportIdentityDisplay({ key: row.reporterKey, name: row.reporterName, username: row.reporterUsername }),
         reported: reportIdentityDisplay({ key: row.reportedKey, name: row.reportedName, username: row.reportedUsername }),
         description: row.description ?? '', status: row.status, adminNote: row.adminNote ?? '',
         createdAt: row.createdAt, handledAt: row.handledAt, matchCreatedAt: row.matchCreatedAt,
+        pendingForReported: pendingCounts.get(String(row.reportedKey)) ?? 0,
+        whitelisted: Boolean(row.whitelistKey),
       })),
       total, page, pageSize: parsed.pageSize, totalPages,
     });
+  })
+);
+
+router.patch(
+  '/reports/batch',
+  adminWriteLimit,
+  validateBody(reportBatchUpdateSchema),
+  asyncHandler(async (req, res) => {
+    const body = req.body as z.infer<typeof reportBatchUpdateSchema>;
+    const updated = await db('match_reports')
+      .where({ reported_key: body.reportedKey, status: 'pending' })
+      .update({
+        status: body.status,
+        admin_note: body.adminNote,
+        handled_by_user_id: req.user!.id,
+        handled_at: body.status === 'pending' ? null : db.fn.now(),
+      });
+    res.json({ ok: true, reportedKey: body.reportedKey, status: body.status, adminNote: body.adminNote, updated });
+  })
+);
+
+router.post(
+  '/reports/whitelist',
+  adminWriteLimit,
+  validateBody(reportWhitelistSchema),
+  asyncHandler(async (req, res) => {
+    const body = req.body as z.infer<typeof reportWhitelistSchema>;
+    const result = await db.transaction(async (trx) => {
+      const participant = await trx('match_players as reported')
+        .leftJoin('users as reported_user', 'reported_user.id', 'reported.user_id')
+        .where('reported.player_key', body.reportedKey)
+        .orderBy('reported.id', 'desc')
+        .first('reported.player_name as name', 'reported_user.username as username');
+      const displayName = reportIdentityDisplay({
+        key: body.reportedKey,
+        name: participant?.name,
+        username: participant?.username,
+      });
+      await trx('report_whitelist')
+        .insert({
+          identity_key: body.reportedKey,
+          display_name: displayName,
+          admin_note: body.adminNote,
+          created_by_user_id: req.user!.id,
+        })
+        .onConflict('identity_key')
+        .merge({
+          display_name: displayName,
+          admin_note: body.adminNote,
+          created_by_user_id: req.user!.id,
+        });
+      const dismissed = await trx('match_reports')
+        .where({ reported_key: body.reportedKey, status: 'pending' })
+        .update({
+          status: 'dismissed',
+          admin_note: body.adminNote,
+          handled_by_user_id: req.user!.id,
+          handled_at: trx.fn.now(),
+        });
+      return { displayName, dismissed };
+    });
+    res.json({ ok: true, reportedKey: body.reportedKey, ...result });
+  })
+);
+
+router.delete(
+  '/reports/whitelist/:reportedKey',
+  adminWriteLimit,
+  validateParams(reportWhitelistParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { reportedKey } = req.params as unknown as z.infer<typeof reportWhitelistParamsSchema>;
+    const removed = await db('report_whitelist').where({ identity_key: reportedKey }).del();
+    res.json({ ok: true, reportedKey, removed });
+  })
+);
+
+router.get(
+  '/reports/:reportId/reported-identity',
+  adminReadLimit,
+  validateParams(reportParamsSchema),
+  asyncHandler(async (req, res) => {
+    const { reportId } = req.params as unknown as z.infer<typeof reportParamsSchema>;
+    const report = await db('match_reports').where({ id: reportId }).first('reported_key');
+    if (!report) throw new HttpError(404, 'REPORT_NOT_FOUND');
+    const reportedKey = String(report.reported_key);
+    if (reportedKey.startsWith('u:')) {
+      const id = Number(reportedKey.slice(2));
+      if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(404, 'USER_NOT_FOUND');
+      const user = await db('users')
+        .where({ id })
+        .first('id', 'username', 'display_id', 'role', 'leaderboard_hidden', 'matchmaking_restricted', 'email', 'email_verified_at', 'banned_at', 'created_at');
+      if (!user) throw new HttpError(404, 'USER_NOT_FOUND');
+      return res.json({
+        type: 'user',
+        user: {
+          id: Number(user.id),
+          username: user.username,
+          displayId: user.display_id || userNameFromUsername(user.username),
+          role: user.role,
+          leaderboardHidden: Boolean(user.leaderboard_hidden),
+          matchmakingRestricted: Boolean(user.matchmaking_restricted),
+          email: user.email ?? null,
+          emailVerified: Boolean(user.email_verified_at),
+          banned: Boolean(user.banned_at),
+          createdAt: user.created_at,
+        },
+      });
+    }
+    if (reportedKey.startsWith('g:')) {
+      const guest = await db('guest_accounts')
+        .where({ guest_key: reportedKey.slice(2) })
+        .first('id', 'display_id', 'banned_at', 'matchmaking_restricted', 'created_at', 'last_seen_at');
+      if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
+      return res.json({
+        type: 'guest',
+        guest: {
+          id: Number(guest.id),
+          displayId: guest.display_id,
+          banned: Boolean(guest.banned_at),
+          matchmakingRestricted: Boolean(guest.matchmaking_restricted),
+          createdAt: guest.created_at,
+          lastSeenAt: guest.last_seen_at,
+        },
+      });
+    }
+    throw new HttpError(404, 'USER_NOT_FOUND');
   })
 );
 

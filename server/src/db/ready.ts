@@ -49,6 +49,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'handled_at',
     'created_at',
   ],
+  report_whitelist: ['identity_key', 'display_name', 'admin_note', 'created_by_user_id', 'created_at'],
   announcements: ['id', 'title', 'content', 'is_popup'],
 };
 

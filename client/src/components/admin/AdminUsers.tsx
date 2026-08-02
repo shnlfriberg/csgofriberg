@@ -25,7 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { difficultyLabel } from '../../utils/difficulty';
 import { currentLocale } from '../../i18n';
 
-interface AdminUser {
+export interface AdminUser {
   id: number;
   username: string;
   displayId: string;
@@ -45,7 +45,7 @@ interface UserPage {
   pageSize: number;
   totalPages: number;
 }
-interface AdminGuest { id: number; displayId: string; banned: boolean; matchmakingRestricted: boolean; createdAt: string; lastSeenAt: string }
+export interface AdminGuest { id: number; displayId: string; banned: boolean; matchmakingRestricted: boolean; createdAt: string; lastSeenAt: string }
 interface GuestPage { guests: AdminGuest[]; total: number; page: number; pageSize: number; totalPages: number }
 interface GuestGamePage { type: 'single' | 'multi'; page: number; pageSize: number; hasNext: boolean; items: UserGame[] }
 
@@ -164,7 +164,7 @@ function GuestGamesTab({ guest }: { guest: AdminGuest }) {
   </>;
 }
 
-function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: AdminGuest; onClose: () => void; onGuestChange: (guest: AdminGuest) => void }) {
+export function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: AdminGuest; onClose: () => void; onGuestChange: (guest: AdminGuest) => void }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<GuestDetailTab>('stats');
   const [stats, setStats] = useState<PlayerPerformanceStats | null>(null);
@@ -437,7 +437,7 @@ function QuickManagementTab({
   </div>;
 }
 
-function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminUser; onClose: () => void; onUserChange: (user: AdminUser) => void }) {
+export function UserDetailDialog({ user, onClose, onUserChange }: { user: AdminUser; onClose: () => void; onUserChange: (user: AdminUser) => void }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<DetailTab>('stats');
   const [stats, setStats] = useState<UserStatsView | null>(null);

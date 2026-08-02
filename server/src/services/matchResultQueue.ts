@@ -52,19 +52,34 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
   const participantUserIds = [...new Set(
     payload.participants.flatMap((player) => (player.userId == null ? [] : [player.userId]))
   )];
-  const reportValues = (matchId: number | string) => (payload.reports ?? []).map((report) => ({
-    match_id: matchId,
-    reporter_key: report.reporterKey,
-    reported_key: report.reportedKey,
-    description: report.description,
-    created_at: new Date(report.createdAt),
-  }));
   const insertedMatch = await db.transaction(async (trx) => {
     const existingUserIds = new Set<number>();
     if (participantUserIds.length) {
       const users = await trx('users').whereIn('id', participantUserIds).select('id');
       for (const user of users) existingUserIds.add(Number(user.id));
     }
+    const reportPayloads = payload.reports ?? [];
+    const reportedKeys = [...new Set(reportPayloads.map((report) => report.reportedKey))];
+    const whitelistedReportedKeys = new Set<string>();
+    if (reportedKeys.length) {
+      const rows = await trx('report_whitelist')
+        .whereIn('identity_key', reportedKeys)
+        .select('identity_key');
+      for (const row of rows) whitelistedReportedKeys.add(String(row.identity_key));
+    }
+    const reportValues = (matchId: number | string) => reportPayloads.map((report) => {
+      const autoDismissed = whitelistedReportedKeys.has(report.reportedKey);
+      const createdAt = new Date(report.createdAt);
+      return {
+        match_id: matchId,
+        reporter_key: report.reporterKey,
+        reported_key: report.reportedKey,
+        description: report.description,
+        status: autoDismissed ? 'dismissed' : 'pending',
+        handled_at: autoDismissed ? createdAt : null,
+        created_at: createdAt,
+      };
+    });
     const persistedUserId = (userId: number | null) => (
       userId != null && existingUserIds.has(userId) ? userId : null
     );

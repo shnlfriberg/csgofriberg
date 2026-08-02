@@ -10,6 +10,7 @@ vi.mock('../../api/client', () => ({
   api: {
     get: vi.fn(),
     patch: vi.fn(),
+    post: vi.fn(),
   },
   errMsg: vi.fn(() => 'request failed'),
 }));
@@ -26,6 +27,8 @@ describe('AdminReports', () => {
           roomId: 'ROOM1',
           mode: 'easy',
           boType: 3,
+          reporterKey: 'u:1',
+          reportedKey: 'g:BBBBB',
           reporter: '用户#AAAAA',
           reported: '访客#BBBBB',
           description: '疑似自动化操作',
@@ -34,6 +37,8 @@ describe('AdminReports', () => {
           createdAt: '2026-08-02T00:00:00.000Z',
           handledAt: null,
           matchCreatedAt: '2026-08-02T00:00:00.000Z',
+          pendingForReported: 2,
+          whitelisted: false,
         }],
         total: 1,
         page: 1,
@@ -42,6 +47,7 @@ describe('AdminReports', () => {
       },
     } as never);
     vi.mocked(api.patch).mockResolvedValue({ data: { ok: true } } as never);
+    vi.mocked(api.post).mockResolvedValue({ data: { ok: true, dismissed: 2 } } as never);
   });
 
   it('lists pending reports and saves the processing result', async () => {
@@ -76,6 +82,79 @@ describe('AdminReports', () => {
       expect(api.get).toHaveBeenLastCalledWith('/admin/reports', {
         params: { status: 'pending', page: 1, pageSize: 50, search: '访客#BBBBB' },
       });
+    });
+  });
+
+  it('opens the existing user detail dialog for the reported identity', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminReports />);
+
+    await screen.findByText('疑似自动化操作');
+    vi.mocked(api.get)
+      .mockResolvedValueOnce({
+        data: {
+          type: 'user',
+          user: {
+            id: 9,
+            username: 'reported-user',
+            displayId: '用户#ZZZZZ',
+            role: 'user',
+            leaderboardHidden: false,
+            matchmakingRestricted: false,
+            email: null,
+            emailVerified: false,
+            banned: false,
+            createdAt: '2026-08-02T00:00:00.000Z',
+          },
+        },
+      } as never)
+      .mockResolvedValueOnce({
+        data: {
+          user: { id: 9 },
+          stats: {
+            single: { games: 2, wins: 1, losses: 1, winRate: 0.5, avgGuesses: 2, bestGuesses: 2 },
+            multi: { games: 3, wins: 2, losses: 1, winRate: 0.667, recentAverageWinningGuesses: 1.5 },
+          },
+        },
+      } as never);
+
+    await user.click(screen.getByRole('button', { name: '查看被举报人详情' }));
+
+    expect(api.get).toHaveBeenCalledWith('/admin/reports/4/reported-identity');
+    expect(await screen.findByRole('dialog', { name: '用户详情' })).toBeInTheDocument();
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/admin/users/9/stats'));
+    expect(screen.getByRole('tab', { name: '对局记录' })).toBeInTheDocument();
+  });
+
+  it('batch processes pending reports for the same reported identity', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminReports />);
+
+    await screen.findByText('疑似自动化操作');
+    await user.click(screen.getByRole('button', { name: '处理举报' }));
+    const dialog = screen.getByRole('dialog', { name: '处理举报' });
+    await user.selectOptions(within(dialog).getByLabelText('处理状态', { selector: 'select' }), 'resolved');
+    await user.click(within(dialog).getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: '批量保存' }));
+
+    expect(api.patch).toHaveBeenCalledWith('/admin/reports/batch', {
+      reportedKey: 'g:BBBBB',
+      status: 'resolved',
+      adminNote: '',
+    });
+  });
+
+  it('adds the reported identity to the whitelist', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<AdminReports />);
+
+    await screen.findByText('疑似自动化操作');
+    await user.click(screen.getByRole('button', { name: '处理举报' }));
+    await user.click(screen.getByRole('button', { name: '加入举报白名单' }));
+
+    expect(api.post).toHaveBeenCalledWith('/admin/reports/whitelist', {
+      reportedKey: 'g:BBBBB',
+      adminNote: '',
     });
   });
 

@@ -558,6 +558,32 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     'create index if not exists "match_reports_status_created_idx" on "match_reports" ("status", "created_at")'
   );
 
+  if (!(await instance.schema.hasTable('report_whitelist'))) {
+    await instance.schema.createTable('report_whitelist', (t) => {
+      t.string('identity_key', 80).primary();
+      t.string('display_name', 64).notNullable().defaultTo('');
+      t.string('admin_note', 500).nullable();
+      t.integer('created_by_user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+  } else {
+    if (!(await instance.schema.hasColumn('report_whitelist', 'display_name'))) {
+      await instance.schema.alterTable('report_whitelist', (t) => t.string('display_name', 64).notNullable().defaultTo(''));
+    }
+    if (!(await instance.schema.hasColumn('report_whitelist', 'admin_note'))) {
+      await instance.schema.alterTable('report_whitelist', (t) => t.string('admin_note', 500).nullable());
+    }
+    if (!(await instance.schema.hasColumn('report_whitelist', 'created_by_user_id'))) {
+      await instance.schema.alterTable('report_whitelist', (t) => t.integer('created_by_user_id').nullable());
+    }
+    if (!(await instance.schema.hasColumn('report_whitelist', 'created_at'))) {
+      await instance.schema.alterTable('report_whitelist', (t) => t.timestamp('created_at').notNullable().defaultTo(instance.fn.now()));
+    }
+  }
+  await instance.raw(
+    'create index if not exists "report_whitelist_created_idx" on "report_whitelist" ("created_at")'
+  );
+
   if (instance.client.config.client === 'pg') {
     await instance.raw(
       'alter table "match_records" alter column "room_id" type varchar(64)'

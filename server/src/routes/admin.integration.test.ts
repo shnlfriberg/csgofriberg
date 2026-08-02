@@ -12,6 +12,7 @@ import { initRedis } from '../redis';
 import { initPlayerCache } from '../services/playerCache';
 import { playerImportSchema } from '../services/playerMutations';
 import { isMatchmakingRestricted } from '../services/matchmakingRestriction';
+import { recordGuestSeen } from '../services/guestAccounts';
 
 let server: http.Server;
 let baseUrl: string;
@@ -336,6 +337,7 @@ describe('admin user management', () => {
     }).returning('id');
     const matchId = Number(typeof insertedMatch === 'object' ? insertedMatch.id : insertedMatch);
     try {
+      await recordGuestSeen(reportedGuestKey, guestNameFromKey(reportedGuestKey));
       await db('match_players').insert([
         {
           match_id: matchId,
@@ -385,6 +387,35 @@ describe('admin user management', () => {
       expect(foundByReported.data).toMatchObject({ total: 1 });
       expect(foundByReported.data.reports).toEqual([expect.objectContaining({ id: reportId })]);
 
+      const reportedIdentity = await request(`/api/admin/reports/${reportId}/reported-identity`, cookie);
+      expect(reportedIdentity.response.status).toBe(200);
+      expect(reportedIdentity.data).toEqual({
+        type: 'guest',
+        guest: expect.objectContaining({
+          displayId: guestNameFromKey(reportedGuestKey),
+          banned: false,
+          matchmakingRestricted: false,
+        }),
+      });
+
+      const [reportedUserReport] = await db('match_reports').insert({
+        match_id: matchId,
+        reporter_key: `g:reporter-${stamp}`,
+        reported_key: `u:${reporter.id}`,
+        description: 'user identity lookup',
+      }).returning('id');
+      const reportedUserReportId = Number(typeof reportedUserReport === 'object' ? reportedUserReport.id : reportedUserReport);
+      const reportedUserIdentity = await request(`/api/admin/reports/${reportedUserReportId}/reported-identity`, cookie);
+      expect(reportedUserIdentity.response.status).toBe(200);
+      expect(reportedUserIdentity.data).toEqual({
+        type: 'user',
+        user: expect.objectContaining({
+          id: reporter.id,
+          username: reporterUsername,
+          displayId: userNameFromUsername(reporterUsername),
+        }),
+      });
+
       const updated = await request(`/api/admin/reports/${reportId}`, cookie, {
         method: 'PATCH',
         body: { status: 'resolved', adminNote: 'reviewed' },
@@ -402,7 +433,144 @@ describe('admin user management', () => {
       expect(invalid.data).toEqual({ code: 'VALIDATION_FAILED' });
     } finally {
       await db('match_records').where({ id: matchId }).del();
+      await db('guest_accounts').where({ guest_key: reportedGuestKey }).del();
       await db('users').whereIn('username', [adminUsername, reporterUsername]).del();
+    }
+  });
+
+  it('batch processes duplicate reports and whitelists reported identities', async () => {
+    const stamp = Date.now();
+    const adminUsername = `admin-report-batch-${stamp}`;
+    const reporterAUsername = `reporter-a-${stamp}`;
+    const reporterBUsername = `reporter-b-${stamp}`;
+    const reportedGuestKey = `trusted-${stamp}`;
+    const insertedUsers = await db('users').insert([
+      {
+        username: adminUsername,
+        display_id: userNameFromUsername(adminUsername),
+        password_hash: 'test',
+        role: 'admin',
+        token_version: 0,
+      },
+      {
+        username: reporterAUsername,
+        display_id: userNameFromUsername(reporterAUsername),
+        password_hash: 'test',
+        role: 'user',
+        token_version: 0,
+      },
+      {
+        username: reporterBUsername,
+        display_id: userNameFromUsername(reporterBUsername),
+        password_hash: 'test',
+        role: 'user',
+        token_version: 0,
+      },
+    ]).returning(['id', 'username', 'token_version']);
+    const admin = insertedUsers.find((user) => user.username === adminUsername)!;
+    const reporterA = insertedUsers.find((user) => user.username === reporterAUsername)!;
+    const reporterB = insertedUsers.find((user) => user.username === reporterBUsername)!;
+    const reportedKey = `g:${reportedGuestKey}`;
+    const roomA = `admin-report-batch-a-${stamp}`;
+    const roomB = `admin-report-batch-b-${stamp}`;
+    const roomC = `admin-report-batch-c-${stamp}`;
+    const matchIds: number[] = [];
+    const cookie = authCookie(admin);
+    try {
+      for (const roomId of [roomA, roomB, roomC]) {
+        const [insertedMatch] = await db('match_records').insert({
+          room_id: roomId,
+          db_type: 'easy',
+          bo_type: 3,
+          replay: '[]',
+        }).returning('id');
+        matchIds.push(Number(typeof insertedMatch === 'object' ? insertedMatch.id : insertedMatch));
+      }
+      await db('match_players').insert([
+        { match_id: matchIds[0], user_id: reporterA.id, player_key: `u:${reporterA.id}`, player_name: reporterAUsername },
+        { match_id: matchIds[0], player_key: reportedKey, player_name: guestNameFromKey(reportedGuestKey) },
+        { match_id: matchIds[1], user_id: reporterB.id, player_key: `u:${reporterB.id}`, player_name: reporterBUsername },
+        { match_id: matchIds[1], player_key: reportedKey, player_name: guestNameFromKey(reportedGuestKey) },
+        { match_id: matchIds[2], user_id: reporterA.id, player_key: `u:${reporterA.id}`, player_name: reporterAUsername },
+        { match_id: matchIds[2], player_key: reportedKey, player_name: guestNameFromKey(reportedGuestKey) },
+      ]);
+      await db('match_reports').insert([
+        { match_id: matchIds[0], reporter_key: `u:${reporterA.id}`, reported_key: reportedKey, description: 'same target 1' },
+        { match_id: matchIds[1], reporter_key: `u:${reporterB.id}`, reported_key: reportedKey, description: 'same target 2' },
+      ]);
+
+      const listed = await request(
+        `/api/admin/reports?status=pending&page=1&pageSize=10&search=${encodeURIComponent(reportedGuestKey)}`,
+        cookie
+      );
+      expect(listed.response.status).toBe(200);
+      expect(listed.data).toMatchObject({ total: 2 });
+      expect(listed.data.reports[0]).toEqual(expect.objectContaining({
+        reportedKey,
+        pendingForReported: 2,
+        whitelisted: false,
+      }));
+
+      const batch = await request('/api/admin/reports/batch', cookie, {
+        method: 'PATCH',
+        body: { reportedKey, status: 'resolved', adminNote: 'same target reviewed' },
+      });
+      expect(batch.response.status).toBe(200);
+      expect(batch.data).toEqual({
+        ok: true,
+        reportedKey,
+        status: 'resolved',
+        adminNote: 'same target reviewed',
+        updated: 2,
+      });
+      const pendingCount = await db('match_reports')
+        .where({ reported_key: reportedKey, status: 'pending' })
+        .count({ count: 'id' })
+        .first();
+      expect(Number(pendingCount?.count ?? 0)).toBe(0);
+
+      await db('match_reports').insert({
+        match_id: matchIds[2],
+        reporter_key: `u:${reporterA.id}`,
+        reported_key: reportedKey,
+        description: 'trusted target',
+      });
+      const whitelisted = await request('/api/admin/reports/whitelist', cookie, {
+        method: 'POST',
+        body: { reportedKey, adminNote: 'trusted identity' },
+      });
+      expect(whitelisted.response.status).toBe(200);
+      expect(whitelisted.data).toEqual({
+        ok: true,
+        reportedKey,
+        displayName: guestNameFromKey(reportedGuestKey),
+        dismissed: 1,
+      });
+      expect(await db('report_whitelist').where({ identity_key: reportedKey }).first())
+        .toMatchObject({ display_name: guestNameFromKey(reportedGuestKey), admin_note: 'trusted identity', created_by_user_id: admin.id });
+      expect(await db('match_reports').where({ match_id: matchIds[2] }).first('status', 'admin_note', 'handled_by_user_id'))
+        .toMatchObject({ status: 'dismissed', admin_note: 'trusted identity', handled_by_user_id: admin.id });
+
+      const dismissed = await request(
+        `/api/admin/reports?status=dismissed&page=1&pageSize=10&search=${encodeURIComponent(reportedGuestKey)}`,
+        cookie
+      );
+      expect(dismissed.data.reports).toEqual([
+        expect.objectContaining({ reportedKey, whitelisted: true, status: 'dismissed' }),
+      ]);
+
+      const removed = await request(
+        `/api/admin/reports/whitelist/${encodeURIComponent(reportedKey)}`,
+        cookie,
+        { method: 'DELETE' }
+      );
+      expect(removed.response.status).toBe(200);
+      expect(removed.data).toEqual({ ok: true, reportedKey, removed: 1 });
+      expect(await db('report_whitelist').where({ identity_key: reportedKey }).first()).toBeUndefined();
+    } finally {
+      await db('report_whitelist').where({ identity_key: reportedKey }).del();
+      await db('match_records').whereIn('id', matchIds).del();
+      await db('users').whereIn('username', [adminUsername, reporterAUsername, reporterBUsername]).del();
     }
   });
 
