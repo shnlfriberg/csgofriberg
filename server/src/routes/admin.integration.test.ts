@@ -128,7 +128,7 @@ describe('admin user management', () => {
                 [`g:${opponentKey}`]: [targetPlayer.id],
               },
               guessTimesByPlayer: {
-                [`u:${targetUser.id}`]: [1_200, null],
+                [`u:${targetUser.id}`]: [1_200, 4_200],
                 [`g:${opponentKey}`]: [3_000],
               },
             }]),
@@ -280,7 +280,7 @@ describe('admin user management', () => {
       expect(multiReplay.response.status).toBe(200);
       expect(multiReplay.data.rounds[0]).toMatchObject({
         answer: { id: targetPlayer.id },
-        me: { guesses: [{ playerId: analysisGuess.id }, { playerId: targetPlayer.id }], guessTimes: [1_200, null] },
+        me: { guesses: [{ playerId: analysisGuess.id }, { playerId: targetPlayer.id }], guessTimes: [1_200, 3_000] },
         opponent: { guesses: [{ playerId: targetPlayer.id }], guessTimes: [3_000] },
       });
 

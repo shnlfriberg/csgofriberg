@@ -153,6 +153,8 @@ function replayGuessesWithTimes(target: Player, guessIds: unknown, guessTimes: u
   const times = Array.isArray(guessTimes) ? guessTimes : [];
   const guesses: GuessFeedback[] = [];
   const normalizedTimes: Array<number | null> = [];
+  let previousGuessAt = 0;
+  let previousTimeKnown = true;
   for (const [index, value] of ids.entries()) {
     const id = Number(value);
     if (!Number.isInteger(id) || id <= 0) continue;
@@ -160,9 +162,15 @@ function replayGuessesWithTimes(target: Player, guessIds: unknown, guessTimes: u
     if (!guess) continue;
     guesses.push(compareGuess(guess, target));
     const time = times[index];
-    normalizedTimes.push(typeof time === 'number' && Number.isFinite(time) && time >= 0
-      ? Math.floor(time)
-      : null);
+    if (typeof time !== 'number' || !Number.isFinite(time) || time < 0) {
+      normalizedTimes.push(null);
+      previousTimeKnown = false;
+      continue;
+    }
+    const currentGuessAt = Math.floor(time);
+    normalizedTimes.push(previousTimeKnown ? Math.max(0, currentGuessAt - previousGuessAt) : null);
+    previousGuessAt = currentGuessAt;
+    previousTimeKnown = true;
   }
   return { guesses, guessTimes: normalizedTimes };
 }
