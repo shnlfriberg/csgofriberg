@@ -86,7 +86,7 @@ function publicUser(user: { id: number; username: string; role: 'user' | 'admin'
 
 router.post(
   '/register',
-  rateLimit({ name: 'register', limit: 5, windowSeconds: 3600, failClosed: true }),
+  rateLimit({ name: 'register', limit: 3, windowSeconds: 3600, failClosed: true }),
   validateRegisterBody,
   asyncHandler(async (req, res) => {
     const { username, password, email: emailInput } = req.body;
@@ -127,7 +127,7 @@ router.post(
   '/login',
   rateLimit({
     name: 'login',
-    limit: 10,
+    limit: 5,
     windowSeconds: 60,
     failClosed: true,
     key: (req) => `${req.ip}:${String(req.body?.username ?? '').toLowerCase()}`,
@@ -208,7 +208,7 @@ router.post(
 router.post(
   '/email/request',
   requireAuth,
-  rateLimit({ name: 'email-request', limit: 5, windowSeconds: 3600, key: requestIdentity, failClosed: true }),
+  rateLimit({ name: 'email-request', limit: 3, windowSeconds: 3600, key: requestIdentity, failClosed: true }),
   validateBody(emailSchema),
   asyncHandler(async (req, res) => {
     try {
@@ -248,7 +248,7 @@ router.post(
   requireAuth,
   rateLimit({
     name: 'claim',
-    limit: 5,
+    limit: 3,
     windowSeconds: 3600,
     key: requestIdentity,
     failClosed: true,

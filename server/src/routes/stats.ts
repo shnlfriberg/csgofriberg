@@ -231,7 +231,7 @@ router.get(
   '/me',
   rateLimit({
     name: 'stats-me',
-    limit: 30,
+    limit: 10,
     windowSeconds: 60,
     key: requestIdentity,
     failClosed: true,
@@ -267,7 +267,7 @@ router.get(
   '/replays',
   rateLimit({
     name: 'stats-replay-list',
-    limit: 30,
+    limit: 20,
     windowSeconds: 60,
     key: requestIdentity,
     failClosed: true,
@@ -373,7 +373,7 @@ router.get(
   '/games/:id/replay',
   rateLimit({
     name: 'stats-replay',
-    limit: 60,
+    limit: 15,
     windowSeconds: 60,
     key: requestIdentity,
     failClosed: true,
@@ -427,7 +427,7 @@ router.get(
   '/matches/:id/opponent-stats',
   rateLimit({
     name: 'stats-opponent-performance',
-    limit: 30,
+    limit: 10,
     windowSeconds: 60,
     key: requestIdentity,
     failClosed: true,
@@ -468,7 +468,7 @@ router.get(
   '/matches/:id/replay',
   rateLimit({
     name: 'stats-multi-replay',
-    limit: 60,
+    limit: 20,
     windowSeconds: 60,
     key: requestIdentity,
     failClosed: true,
