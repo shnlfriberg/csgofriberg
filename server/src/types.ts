@@ -18,6 +18,7 @@ export interface Player {
   nationality: string;
   region: string;
   team: string;
+  team_history: string[];
   age: number;
   role: string;
   major_championships: number;

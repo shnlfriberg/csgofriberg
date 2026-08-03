@@ -9,6 +9,7 @@ function makePlayer(overrides: Partial<Player>): Player {
     nationality: '瑞典',
     region: '欧洲',
     team: 'NIP',
+    team_history: [],
     age: 35,
     role: 'Rifler',
     major_championships: 1,
@@ -51,6 +52,24 @@ describe('compareGuess', () => {
   it('年龄相差 4 岁给 wrong', () => {
     const guess = makePlayer({ id: 2, age: target.age - 4 });
     expect(compareGuess(guess, target).attributes.age.level).toBe('wrong');
+  });
+
+  it('当前队伍相同为 correct，即使该队伍也出现在历史队伍中', () => {
+    const targetWithHistory = makePlayer({ team: 'NIP', team_history: ['NIP', 'Fnatic'] });
+    const guess = makePlayer({ id: 2, team: 'NIP' });
+    expect(compareGuess(guess, targetWithHistory).attributes.team).toEqual({
+      value: 'NIP',
+      level: 'correct',
+    });
+  });
+
+  it('猜测队伍命中历史队伍时为 close', () => {
+    const targetWithHistory = makePlayer({ team: 'NIP', team_history: ['Fnatic', 'NIP'] });
+    const guess = makePlayer({ id: 2, team: 'Fnatic' });
+    expect(compareGuess(guess, targetWithHistory).attributes.team).toEqual({
+      value: 'Fnatic',
+      level: 'close',
+    });
   });
 
   it('Major 参赛次数相差 1 给 close 并带方向提示', () => {

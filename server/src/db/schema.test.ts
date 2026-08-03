@@ -48,6 +48,7 @@ describe('player schema migration', () => {
 
     expect(await instance.schema.hasColumn('players', 'real_name')).toBe(false);
     expect(await instance.schema.hasColumn('players', 'major_championships')).toBe(true);
+    expect(await instance.schema.hasColumn('players', 'team_history')).toBe(true);
     expect(await instance.schema.hasColumn('players', 'is_easy')).toBe(false);
     expect(await instance.schema.hasColumn('players', 'is_enabled')).toBe(true);
     expect(await instance.schema.hasTable('difficulty_levels')).toBe(true);
@@ -78,6 +79,7 @@ describe('player schema migration', () => {
     expect(player.age).toBe(new Date().getFullYear() - 1990);
     expect((await instance('players').columnInfo('age')).nullable).toBe(false);
     expect(player.major_championships).toBe(0);
+    expect(player.team_history).toBe('[]');
     expect(player.is_enabled).toBe(1);
     expect(await instance('player_difficulties')
       .where({ player_id: player.id })

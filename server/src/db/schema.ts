@@ -313,6 +313,7 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('nationality', 64).notNullable();
       t.string('region', 32).notNullable().defaultTo('');
       t.string('team', 64).notNullable().defaultTo('');
+      t.text('team_history').notNullable().defaultTo('[]');
       t.integer('age').notNullable();
       t.string('role', 32).notNullable().defaultTo('Rifler');
       t.integer('major_championships').notNullable().defaultTo(0);
@@ -401,6 +402,11 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   }
   if (!(await instance.schema.hasColumn('games', 'session_id'))) {
     await instance.schema.alterTable('games', (t) => t.string('session_id', 64).nullable());
+  }
+  if (!(await instance.schema.hasColumn('players', 'team_history'))) {
+    await instance.schema.alterTable('players', (t) => {
+      t.text('team_history').notNullable().defaultTo('[]');
+    });
   }
   if (!(await instance.schema.hasColumn('games', 'guess_times'))) {
     await instance.schema.alterTable('games', (t) => t.text('guess_times').notNullable().defaultTo('[]'));

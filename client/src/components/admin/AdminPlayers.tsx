@@ -50,6 +50,7 @@ export default function AdminPlayers() {
       if (currentRequest !== requestId.current) return;
       setPlayers(res.data.players.map((p) => ({
         ...p,
+        team_history: p.team_history ?? [],
         difficulties: p.difficulties ?? [],
         is_active: Boolean(p.is_active),
         is_enabled: Boolean(p.is_enabled),

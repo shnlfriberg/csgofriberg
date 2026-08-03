@@ -3,6 +3,7 @@ import { db } from '../db/knex';
 import { redis, redisKey, redisPublisher, redisSubscriber } from '../redis';
 import { Player } from '../types';
 import { DIFFICULTY_LEVELS } from '../difficulties';
+import { normalizeTeamHistory } from './teamHistory';
 
 const INVALIDATE_CHANNEL = redisKey('players:invalidate');
 // v1 stored a SHA string and cannot be incremented safely during rolling upgrades.
@@ -36,7 +37,11 @@ export async function refreshPlayerCache(): Promise<void> {
         db('player_difficulties').select('player_id', 'difficulty_key'),
         redis()?.get(VERSION_KEY) ?? Promise.resolve(null),
       ]);
-      const hydrated = rows.map((player) => ({ ...player, difficulties: [] as string[] }));
+      const hydrated = rows.map((player) => ({
+        ...player,
+        team_history: normalizeTeamHistory(player.team_history),
+        difficulties: [] as string[],
+      }));
       const hydratedById = new Map(hydrated.map((player) => [Number(player.id), player]));
       playersByDifficulty = new Map(
         DIFFICULTY_LEVELS

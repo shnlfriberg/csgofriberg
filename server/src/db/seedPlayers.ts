@@ -1,12 +1,14 @@
 import type { Knex } from 'knex';
 import { db } from './knex';
 import playersData from './seeds/players.json';
+import { serializeTeamHistory } from '../services/teamHistory';
 
 interface SeedPlayer {
   nickname: string;
   nationality: string;
   region: string;
   team?: string;
+  team_history?: string[];
   age: number;
   role?: string;
   major_championships?: number;
@@ -40,6 +42,7 @@ export async function insertMissingSeedPlayers(instance: Knex = db): Promise<num
         nationality: player.nationality,
         region: player.region,
         team: player.team ?? '',
+        team_history: serializeTeamHistory(player.team_history),
         age: player.age,
         role: player.role ?? 'Rifler',
         major_championships: player.major_championships ?? 0,

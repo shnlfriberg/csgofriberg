@@ -36,6 +36,7 @@ describe('AdminPlayers', () => {
       nationality: '中国',
       region: '亚洲',
       team: 'Test',
+      team_history: ['Old Test'],
       age: 24,
       role: 'Rifler',
       major_championships: 0,

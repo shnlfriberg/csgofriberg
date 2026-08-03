@@ -21,6 +21,7 @@ export interface PlayerForm {
   nationality: string;
   region: string;
   team: string;
+  team_history: string[];
   age: number;
   role: string;
   major_championships: number;
@@ -35,6 +36,7 @@ export const emptyPlayer: PlayerForm = {
   nationality: '',
   region: '',
   team: '',
+  team_history: [],
   age: 25,
   role: 'Rifler',
   major_championships: 0,
@@ -145,6 +147,18 @@ export default function PlayerEditForm({ initial, difficultyKeys, onSubmit, onCa
             <label className="admin-player-field">
               <span>{t('admin.currentTeam')}</span>
               <input className="input" value={form.team} onChange={(event) => set({ team: event.target.value })} />
+            </label>
+            <label className="admin-player-field">
+              <span>{t('admin.teamHistory')}</span>
+              <textarea
+                className="input"
+                rows={3}
+                value={form.team_history.join('\n')}
+                onChange={(event) => set({
+                  team_history: event.target.value.split(/\r?\n/).map((team) => team.trim()).filter(Boolean),
+                })}
+                placeholder={t('admin.teamHistoryPlaceholder')}
+              />
             </label>
             <label className="admin-player-field">
               <span>{t('admin.ageRequired')}</span>

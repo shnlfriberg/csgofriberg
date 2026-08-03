@@ -8,6 +8,16 @@ function textAttr(guess: string, target: string): AttributeFeedback {
   return { value: guess, level: guess === target ? 'correct' : 'wrong' };
 }
 
+function teamAttr(guess: Player, target: Player): AttributeFeedback {
+  if (guess.team === target.team) {
+    return { value: guess.team, level: 'correct' };
+  }
+  if (guess.team && target.team_history.includes(guess.team)) {
+    return { value: guess.team, level: 'close' };
+  }
+  return { value: guess.team, level: 'wrong' };
+}
+
 /** 国家或地区:相同 correct;不同但同赛区 close */
 function nationalityAttr(guess: Player, target: Player): AttributeFeedback {
   if (guess.nationality === target.nationality)
@@ -41,7 +51,7 @@ export function compareGuess(guess: Player, target: Player): GuessFeedback {
     attributes: {
       nationality: nationalityAttr(guess, target),
       region: textAttr(guess.region, target.region),
-      team: textAttr(guess.team, target.team),
+      team: teamAttr(guess, target),
       age: numberAttr(guess.age, target.age, AGE_CLOSE_RANGE),
       role: textAttr(guess.role, target.role),
       majorChampionships: numberAttr(
@@ -68,11 +78,13 @@ export function completeGuessFeedback(
   guess?: Player,
   target?: Player
 ): GuessFeedback {
-  if (feedback.attributes.majorChampionships) return feedback;
+  const team = guess && target ? teamAttr(guess, target) : feedback.attributes.team;
+  if (feedback.attributes.majorChampionships && team === feedback.attributes.team) return feedback;
   return {
     ...feedback,
     attributes: {
       ...feedback.attributes,
+      team,
       majorChampionships: guess && target
         ? numberAttr(
             guess.major_championships,

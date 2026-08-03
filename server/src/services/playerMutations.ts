@@ -4,6 +4,7 @@ import { db } from '../db/knex';
 import { isKnownDifficultyKey } from '../difficulties';
 import { HttpError } from '../middleware/common';
 import { invalidatePlayerCache } from './playerCache';
+import { MAX_TEAM_HISTORY_ITEMS, MAX_TEAM_HISTORY_NAME_LENGTH, serializeTeamHistory } from './teamHistory';
 
 const playerRoles = ['Rifler', 'AWPer', 'Coach'] as const;
 const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
@@ -17,6 +18,9 @@ export const playerSchema = z.object({
   nationality: z.string().trim().min(1).max(64),
   region: z.string().trim().max(32).default(''),
   team: z.string().trim().max(64).default(''),
+  team_history: z.array(z.string().trim().min(1).max(MAX_TEAM_HISTORY_NAME_LENGTH))
+    .max(MAX_TEAM_HISTORY_ITEMS)
+    .default([]),
   age: z.number().int().min(10).max(100),
   role: z.enum(playerRoles).default('Rifler'),
   major_championships: z.number().int().min(0).default(0),
@@ -27,6 +31,8 @@ export const playerSchema = z.object({
 });
 
 export const importedPlayerSchema = playerSchema.extend({
+  // Legacy exports may not contain history; preserve an existing value when omitted.
+  team_history: playerSchema.shape.team_history.optional(),
   is_enabled: z.boolean().optional(),
   // Legacy import alias; it is converted to difficulty memberships and never persisted.
   is_easy: z.boolean().optional(),
@@ -72,10 +78,10 @@ export async function createPlayer(input: PlayerInput): Promise<number> {
   if (exists) throw new HttpError(409, 'NICKNAME_TAKEN');
   const difficulties = input.difficulties ?? ['normal'];
   assertDifficultyKeys(difficulties);
-  const { difficulties: _difficulties, ...values } = input;
+  const { difficulties: _difficulties, team_history, ...values } = input;
   const id = await db.transaction(async (trx) => {
     const [createdId] = await trx('players')
-      .insert(values)
+      .insert({ ...values, team_history: serializeTeamHistory(team_history) })
       .returning('id')
       .then((rows) => rows.map((row: unknown) => (
         typeof row === 'object' && row !== null && 'id' in row ? row.id : row
@@ -89,12 +95,16 @@ export async function createPlayer(input: PlayerInput): Promise<number> {
 }
 
 export async function updatePlayer(id: number, input: PlayerUpdateInput): Promise<void> {
-  const { difficulties, ...values } = input;
+  const { difficulties, team_history, ...values } = input;
   if (difficulties) assertDifficultyKeys(difficulties);
   await db.transaction(async (trx) => {
     const exists = await trx('players').where({ id }).first('id');
     if (!exists) throw new HttpError(404, 'PLAYER_NOT_FOUND');
-    if (Object.keys(values).length) await trx('players').where({ id }).update(values);
+    const updates = {
+      ...values,
+      ...(team_history === undefined ? {} : { team_history: serializeTeamHistory(team_history) }),
+    };
+    if (Object.keys(updates).length) await trx('players').where({ id }).update(updates);
     if (difficulties) await replacePlayerDifficulties(trx, id, difficulties);
   });
   await invalidatePlayerCache();
@@ -120,16 +130,19 @@ export async function importPlayers(
     const nicknames = players.map((player) => player.nickname);
     const existing = await trx('players')
       .whereIn('nickname', nicknames)
-      .select('id', 'nickname', 'is_enabled');
+      .select('id', 'nickname', 'is_enabled', 'team_history');
     const existingNames = new Set(existing.map((player) => String(player.nickname)));
     const existingEnabled = new Map(
       existing.map((player) => [String(player.nickname), Boolean(player.is_enabled)])
+    );
+    const existingTeamHistory = new Map(
+      existing.map((player) => [String(player.nickname), serializeTeamHistory(player.team_history)])
     );
     updated = players.filter((player) => existingNames.has(player.nickname)).length;
     created = players.length - updated;
     const desiredDifficulties = new Map<string, string[] | null>();
     const importedPlayers = players.map((player) => {
-      const { difficulties, is_easy, ...values } = player;
+      const { difficulties, is_easy, team_history, ...values } = player;
       const desired = difficulties
         ?? (is_easy !== undefined
           ? [
@@ -142,6 +155,9 @@ export async function importPlayers(
       desiredDifficulties.set(player.nickname, desired);
       return {
         ...values,
+        team_history: team_history === undefined && existingNames.has(player.nickname)
+          ? existingTeamHistory.get(player.nickname) ?? '[]'
+          : serializeTeamHistory(team_history ?? []),
         is_enabled: player.is_enabled ?? existingEnabled.get(player.nickname) ?? true,
       };
     });

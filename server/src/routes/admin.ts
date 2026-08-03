@@ -43,6 +43,7 @@ import { createApiToken, listApiTokens, revokeApiToken } from '../services/apiTo
 import { cacheMatchmakingRestriction } from '../services/matchmakingRestriction';
 import { cancelQueue, moveQueuedIdentityToPool } from '../services/roomStore';
 import { redis, redisKey } from '../redis';
+import { normalizeTeamHistory } from '../services/teamHistory';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -69,7 +70,7 @@ const adminImportLimit = rateLimit({
 });
 const adminAnalysisLimit = rateLimit({
   name: 'admin-analysis',
-  limit: 5,
+  limit: 20,
   windowSeconds: 60,
   key: requestIdentity,
   failClosed: true,
@@ -855,6 +856,7 @@ router.get(
     res.json({
       players: players.map((player) => ({
         ...player,
+        team_history: normalizeTeamHistory(player.team_history),
         difficulties: difficultiesByPlayer.get(Number(player.id)) ?? [],
       })),
       total,
@@ -972,6 +974,7 @@ router.get(
           'nationality',
           'region',
           'team',
+          'team_history',
           'age',
           'role',
           'major_championships',
@@ -996,6 +999,7 @@ router.get(
       nationality: String(player.nationality),
       region: String(player.region),
       team: String(player.team),
+      team_history: normalizeTeamHistory(player.team_history),
       age: Number(player.age),
       role: String(player.role),
       major_championships: Number(player.major_championships),

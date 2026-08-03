@@ -13,6 +13,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'age',
     'major_championships',
     'major_appearances',
+    'team_history',
     'is_enabled',
   ],
   difficulty_levels: ['key', 'sort_order', 'is_enabled'],
