@@ -804,6 +804,56 @@ describe('multiplayer socket integration', () => {
     }
   });
 
+  it('accepts a matchmaking report after reconnecting to a finished room', async () => {
+    const userA = await createVerifiedUser();
+    const userB = await createVerifiedUser();
+    let a = await connect(userA.cookie);
+    const b = await connect(userB.cookie);
+    try {
+      expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true }))
+        .toEqual({ queued: true });
+      const foundA = onceEvent(a, 'match:found');
+      const foundB = onceEvent(b, 'match:found');
+      expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true }))
+        .toEqual({ queued: false });
+      const [matchA] = await Promise.all([foundA, foundB]);
+      createdRoomIds.push(matchA.room.id);
+
+      const roundA = onceEvent(a, 'round:start');
+      const roundB = onceEvent(b, 'round:start');
+      expect(await emit(a, 'room:ready', { ready: true })).toEqual({ ok: true });
+      expect(await emit(b, 'room:ready', { ready: true })).toEqual({ ok: true });
+      await Promise.all([roundA, roundB]);
+      await withRoomLock(matchA.room.id, (room) => {
+        room.players.find((player) => player.key === userA.key)!.score = 1;
+        return { room };
+      });
+      const active = await getRoom(matchA.room.id);
+      const matchOver = onceEvent(a, 'match:over');
+      await emit(a, 'game:guess', {
+        playerId: active!.targetPlayerId,
+        roundId: active!.round,
+        eventId: `matchmaking-report-reconnect-${Date.now()}`,
+      });
+      await matchOver;
+
+      const previousSocketId = a.id;
+      a.disconnect();
+      a = await connect(userA.cookie);
+      expect(a.id).not.toBe(previousSocketId);
+
+      const restored = await emit(a, 'room:sync');
+      expect(restored.room).toMatchObject({ id: matchA.room.id, status: 'finished', matchmaking: true });
+      expect((await getRoom(matchA.room.id))!.players.find((player) => player.key === userA.key)?.socketId)
+        .toBe(a.id);
+      expect(await emit(a, 'match:report', { description: 'report after reconnect' }))
+        .toEqual({ ok: true, reportSubmitted: true });
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
   it('starts a rematch in a created room only after invitation, acceptance, and guest readiness', async () => {
     const stamp = Date.now();
     const keyA = `rematch-a-${stamp}`;

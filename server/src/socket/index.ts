@@ -1338,7 +1338,7 @@ export function setupSocket(io: Server) {
     const restorePromise = getRoomForIdentity(me.key, true).then(async (existing) => {
       if (!existing) return;
       let refreshed = existing;
-      if (existing.status !== 'finished' || existing.rematchAllowed) {
+      if (existing.status !== 'finished' || existing.rematchAllowed || existing.matchmaking) {
         const restored = await withRoomLock(existing.id, (room) => {
           const player = room.players.find((p) => p.key === me.key);
           const spectator = room.spectators.find((p) => p.key === me.key);
