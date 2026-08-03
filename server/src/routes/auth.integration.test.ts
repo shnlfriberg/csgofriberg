@@ -13,7 +13,13 @@ import { guestNameFromKey, optionalAuth, userNameFromUsername } from '../middlew
 
 let server: http.Server;
 let baseUrl: string;
-const TEST_IP = `198.51.100.${(Date.now() % 250) + 1}`;
+const TEST_RUN_IP_HEX = Date.now().toString(16).padStart(12, '0').slice(-12);
+
+function testIp(index = 0): string {
+  return `2001:db8:${TEST_RUN_IP_HEX.slice(0, 4)}:${TEST_RUN_IP_HEX.slice(4, 8)}:${TEST_RUN_IP_HEX.slice(8)}::${index + 1}`;
+}
+
+const TEST_IP = testIp();
 
 function mergeCookies(current: string, response: Response): string {
   const values = setCookies(response);
@@ -222,14 +228,15 @@ describe('cookie authentication', () => {
   });
 
   it.each([
-    ['short username', { username: 'a', password: 'long-enough-password' }, 'REGISTER_USERNAME_LENGTH'],
-    ['invalid username characters', { username: 'bad name', password: 'long-enough-password' }, 'REGISTER_USERNAME_CHARACTERS'],
-    ['short password', { username: 'valid_name', password: 'short' }, 'REGISTER_PASSWORD_LENGTH'],
-    ['invalid email', { username: 'valid_name', password: 'long-enough-password', email: 'invalid-email' }, 'INVALID_EMAIL'],
-  ])('returns a specific registration error for %s', async (_label, body, code) => {
+    ['short username', { username: 'a', password: 'long-enough-password' }, 'REGISTER_USERNAME_LENGTH', 1],
+    ['invalid username characters', { username: 'bad name', password: 'long-enough-password' }, 'REGISTER_USERNAME_CHARACTERS', 2],
+    ['short password', { username: 'valid_name', password: 'short' }, 'REGISTER_PASSWORD_LENGTH', 3],
+    ['invalid email', { username: 'valid_name', password: 'long-enough-password', email: 'invalid-email' }, 'INVALID_EMAIL', 4],
+  ])('returns a specific registration error for %s', async (_label, body, code, ipIndex) => {
     const result = await request('/api/auth/register', '', {
       method: 'POST',
       body: JSON.stringify(body),
+      headers: { 'X-Forwarded-For': testIp(ipIndex) },
     });
     expect(result.response.status).toBe(400);
     expect(result.data).toEqual({ code });
