@@ -127,6 +127,10 @@ export default function GameRules() {
                         <span>{t('rules.exactText')}</span>
                       </div>
                       <div>
+                        <strong>{t('rules.teamTitle')}</strong>
+                        <span>{t('rules.teamText')}</span>
+                      </div>
+                      <div>
                         <strong>{t('rules.regionTitle')}</strong>
                         <span>{t('rules.regionText')}</span>
                       </div>
