@@ -4,6 +4,7 @@ import { config } from '../config';
 import { db } from '../db/knex';
 import { HttpError } from '../middleware/common';
 import { getPublicPlayerList } from './playerCache';
+import { normalizeTeamHistory } from './teamHistory';
 
 const MAX_SINGLE_GAMES = 50;
 const MAX_MATCHES = 50;
@@ -230,6 +231,7 @@ async function buildSnapshot(subject: AnalysisSubject, locale: AnalysisLocale, t
       'nationality',
       'region',
       'team',
+      'team_history as teamHistory',
       'age',
       'role',
       'major_championships as majorChampionships',
@@ -289,6 +291,7 @@ async function buildSnapshot(subject: AnalysisSubject, locale: AnalysisLocale, t
     nationality: String(player.nationality),
     region: String(player.region),
     team: String(player.team),
+    teamHistory: normalizeTeamHistory(player.teamHistory),
     age: Number(player.age),
     role: String(player.role),
     majorChampionships: Number(player.majorChampionships),

@@ -192,6 +192,7 @@ describe('external cheat analysis', () => {
       nationality: String(targetPlayer.nationality),
       region: String(targetPlayer.region),
       team: String(targetPlayer.team),
+      teamHistory: JSON.parse(String(targetPlayer.team_history)),
       age: Number(targetPlayer.age),
       role: String(targetPlayer.role),
       majorChampionships: Number(targetPlayer.major_championships),

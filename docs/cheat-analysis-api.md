@@ -46,6 +46,7 @@ The external service should compare the bearer token using a timing-safe equalit
         "nationality": "China",
         "region": "Asia",
         "team": "Team",
+        "teamHistory": ["Former Team"],
         "age": 24,
         "role": "Rifler",
         "majorChampionships": 1,
@@ -115,7 +116,7 @@ The external service should compare the bearer token using a timing-safe equalit
 }
 ```
 
-`playerPool.players` contains the complete current player pool, including disabled players and every difficulty membership. The snapshot contains the subject's latest 50 completed single-player games and latest 50 completed multiplayer matches. Each multiplayer match contains every participant and its complete stored replay; valid game records contain at most 8 guesses per player per round. Guess times are server-recorded milliseconds from game or round start.
+`playerPool.players` contains the complete current player pool, including disabled players, every difficulty membership, and each player's normalized historical teams. `teamHistory` is optional for rolling compatibility and defaults to an empty array when omitted. The snapshot contains the subject's latest 50 completed single-player games and latest 50 completed multiplayer matches. Each multiplayer match contains every participant and its complete stored replay; valid game records contain at most 8 guesses per player per round. Guess times are server-recorded milliseconds from game or round start.
 
 The request excludes account usernames, emails, multiplayer display names, raw user/guest identity keys, report descriptions, admin notes, IP addresses, cookies, and authentication tokens. `subject.opaqueId` is generated independently for every request. Every multiplayer participant receives a per-request opaque ID, and the subject keeps the same opaque ID across `subject`, participants, winners, forfeits, guesses, and timings.
 
