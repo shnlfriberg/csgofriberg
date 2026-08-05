@@ -38,7 +38,7 @@ export const importedPlayerSchema = playerSchema.extend({
   is_easy: z.boolean().optional(),
 });
 
-export const playerUpdateSchema = playerSchema.partial()
+export const playerUpdateSchema = playerSchema.partial().strict()
   .refine((values) => Object.keys(values).length > 0);
 
 export const playerImportSchema = z.object({
@@ -52,14 +52,14 @@ export type PlayerInput = z.infer<typeof playerSchema>;
 export type PlayerUpdateInput = z.infer<typeof playerUpdateSchema>;
 export type ImportedPlayerInput = z.infer<typeof importedPlayerSchema>;
 
-function assertDifficultyKeys(keys: string[]): void {
+export function assertDifficultyKeys(keys: string[]): void {
   const unique = [...new Set(keys)];
   if (unique.some((key) => !isKnownDifficultyKey(key))) {
     throw new HttpError(400, 'INVALID_DIFFICULTY');
   }
 }
 
-async function replacePlayerDifficulties(
+export async function replacePlayerDifficulties(
   executor: Knex | Knex.Transaction,
   playerId: number,
   keys: string[]
@@ -95,19 +95,27 @@ export async function createPlayer(input: PlayerInput): Promise<number> {
 }
 
 export async function updatePlayer(id: number, input: PlayerUpdateInput): Promise<void> {
-  const { difficulties, team_history, ...values } = input;
-  if (difficulties) assertDifficultyKeys(difficulties);
   await db.transaction(async (trx) => {
     const exists = await trx('players').where({ id }).first('id');
     if (!exists) throw new HttpError(404, 'PLAYER_NOT_FOUND');
-    const updates = {
-      ...values,
-      ...(team_history === undefined ? {} : { team_history: serializeTeamHistory(team_history) }),
-    };
-    if (Object.keys(updates).length) await trx('players').where({ id }).update(updates);
-    if (difficulties) await replacePlayerDifficulties(trx, id, difficulties);
+    await applyPlayerUpdate(trx, id, input);
   });
   await invalidatePlayerCache();
+}
+
+export async function applyPlayerUpdate(
+  executor: Knex | Knex.Transaction,
+  id: number,
+  input: PlayerUpdateInput
+): Promise<void> {
+  const { difficulties, team_history, ...values } = input;
+  if (difficulties) assertDifficultyKeys(difficulties);
+  const updates = {
+    ...values,
+    ...(team_history === undefined ? {} : { team_history: serializeTeamHistory(team_history) }),
+  };
+  if (Object.keys(updates).length) await executor('players').where({ id }).update(updates);
+  if (difficulties) await replacePlayerDifficulties(executor, id, difficulties);
 }
 
 export async function deletePlayer(id: number): Promise<void> {

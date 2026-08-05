@@ -11,6 +11,10 @@ import {
   playerUpdateSchema,
   updatePlayer,
 } from '../services/playerMutations';
+import {
+  createPlayerChangeSubmission,
+  playerChangeSubmissionSchema,
+} from '../services/playerChangeSubmissions';
 
 const router = Router();
 const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -32,6 +36,15 @@ export const externalPlayerAuth = Router();
 externalPlayerAuth.use(externalPreAuthLimit, requireApiToken);
 
 router.use(externalWriteLimit);
+
+router.post(
+  '/player-change-submissions',
+  validateBody(playerChangeSubmissionSchema),
+  asyncHandler(async (req, res) => {
+    const result = await createPlayerChangeSubmission(req.body, req.apiToken!);
+    res.status(result.submissionId === null ? 200 : 201).json(result);
+  })
+);
 
 router.post(
   '/players',

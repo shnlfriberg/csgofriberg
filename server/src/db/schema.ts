@@ -440,6 +440,48 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   if (await instance.schema.hasColumn('players', 'is_easy')) {
     await instance.schema.alterTable('players', (t) => t.dropColumn('is_easy'));
   }
+  if (!(await instance.schema.hasTable('player_change_submissions'))) {
+    await instance.schema.createTable('player_change_submissions', (t) => {
+      t.increments('id').primary();
+      t.integer('api_token_id')
+        .nullable()
+        .references('id')
+        .inTable('api_tokens')
+        .onDelete('SET NULL');
+      t.string('api_token_name', 64).notNullable();
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+  }
+  if (!(await instance.schema.hasTable('player_change_items'))) {
+    await instance.schema.createTable('player_change_items', (t) => {
+      t.increments('id').primary();
+      t.integer('submission_id')
+        .notNullable()
+        .references('id')
+        .inTable('player_change_submissions')
+        .onDelete('CASCADE');
+      t.integer('player_id')
+        .nullable()
+        .references('id')
+        .inTable('players')
+        .onDelete('SET NULL');
+      t.string('player_nickname', 64).notNullable();
+      t.string('field', 32).notNullable();
+      t.text('old_value').notNullable();
+      t.text('new_value').notNullable();
+      t.string('status', 16).notNullable().defaultTo('pending');
+      t.integer('handled_by_user_id')
+        .nullable()
+        .references('id')
+        .inTable('users')
+        .onDelete('SET NULL');
+      t.timestamp('handled_at').nullable();
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+      t.index(['status', 'created_at'], 'player_change_items_status_created_idx');
+      t.index(['player_id', 'field', 'status'], 'player_change_items_player_field_status_idx');
+      t.index(['submission_id'], 'player_change_items_submission_idx');
+    });
+  }
   if (!(await instance.schema.hasColumn('games', 'first_guess_player_id'))) {
     await instance.schema.alterTable('games', (t) => t.integer('first_guess_player_id').nullable());
   }

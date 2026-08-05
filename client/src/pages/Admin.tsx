@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Gamepad2, Swords, Users, Wrench } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Gamepad2, Swords, Users, Wrench } from 'lucide-react';
 import Page from '../components/Page';
 import AdminPlayers from '../components/admin/AdminPlayers';
 import AdminAnnouncements from '../components/admin/AdminAnnouncements';
@@ -7,11 +7,12 @@ import AdminResourceVersion from '../components/admin/AdminResourceVersion';
 import AdminUsers, { AdminGuests } from '../components/admin/AdminUsers';
 import AdminApiTokens from '../components/admin/AdminApiTokens';
 import AdminReports from '../components/admin/AdminReports';
+import AdminPlayerChanges from '../components/admin/AdminPlayerChanges';
 import { getSocket } from '../api/socket';
 import { PresenceStats } from '../types';
 import { useTranslation } from 'react-i18next';
 
-type Tab = 'players' | 'users' | 'guests' | 'reports' | 'announcements' | 'apiTokens' | 'resources';
+type Tab = 'players' | 'playerChanges' | 'users' | 'guests' | 'reports' | 'announcements' | 'apiTokens' | 'resources';
 
 export default function Admin() {
   const { t } = useTranslation();
@@ -55,6 +56,10 @@ export default function Admin() {
         <button className={tab === 'players' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('players')}>
           {t('admin.playersTab')}
         </button>
+        <button className={tab === 'playerChanges' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('playerChanges')}>
+          <ClipboardCheck size={15} />
+          {t('admin.playerChangesTab')}
+        </button>
         <button className={tab === 'users' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('users')}>
           {t('admin.usersTab')}
         </button>
@@ -76,6 +81,7 @@ export default function Admin() {
         </button>
       </div>
       {tab === 'players' && <AdminPlayers />}
+      {tab === 'playerChanges' && <AdminPlayerChanges />}
       {tab === 'users' && <AdminUsers />}
       {tab === 'guests' && <AdminGuests />}
       {tab === 'reports' && <AdminReports />}

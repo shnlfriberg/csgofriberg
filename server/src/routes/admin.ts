@@ -44,6 +44,10 @@ import { cacheMatchmakingRestriction } from '../services/matchmakingRestriction'
 import { cancelQueue, moveQueuedIdentityToPool } from '../services/roomStore';
 import { redis, redisKey } from '../redis';
 import { normalizeTeamHistory } from '../services/teamHistory';
+import {
+  listPlayerChangeItems,
+  reviewPlayerChangeItems,
+} from '../services/playerChangeSubmissions';
 
 const router = Router();
 router.use(requireAuth, requireAdmin);
@@ -147,6 +151,17 @@ const reportQuickDismissSchema = z.object({
   adminNote: z.string().trim().min(1).max(500),
   reportedKeys: z.array(reportIdentityKeySchema).min(1).max(100),
 });
+const playerChangeListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(10).max(100).default(50),
+  status: z.enum(['all', 'pending', 'approved', 'rejected', 'conflict']).default('pending'),
+  search: z.string().trim().max(100).default(''),
+});
+const playerChangeReviewSchema = z.object({
+  itemIds: z.array(z.number().int().positive()).min(1).max(100)
+    .refine((ids) => new Set(ids).size === ids.length),
+  decision: z.enum(['approve', 'reject']),
+}).strict();
 
 function matchPlayerDisplayId(row: { key?: unknown; name?: unknown; username?: unknown }): string {
   const key = typeof row.key === 'string' ? row.key : '';
@@ -959,6 +974,27 @@ router.post(
       locale as AnalysisLocale,
       'guest-detail'
     ));
+  })
+);
+
+router.get(
+  '/player-change-submissions',
+  adminReadLimit,
+  validateQuery(playerChangeListQuerySchema),
+  asyncHandler(async (req, res) => {
+    res.json(await listPlayerChangeItems(
+      req.query as unknown as z.infer<typeof playerChangeListQuerySchema>
+    ));
+  })
+);
+
+router.post(
+  '/player-change-submissions/review',
+  adminWriteLimit,
+  validateBody(playerChangeReviewSchema),
+  asyncHandler(async (req, res) => {
+    const { itemIds, decision } = req.body as z.infer<typeof playerChangeReviewSchema>;
+    res.json(await reviewPlayerChangeItems(itemIds, decision, req.user!.id));
   })
 );
 

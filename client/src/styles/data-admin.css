@@ -358,6 +358,24 @@
   flex-wrap: wrap;
 }
 .admin-reports-table .btn { min-height: 32px; padding: 6px 10px; white-space: nowrap; }
+.admin-player-changes-card { width: min(1440px, 100%); }
+.admin-player-changes-card .admin-list-toolbar {
+  grid-template-columns: minmax(240px, 1fr) auto auto auto;
+  align-items: end;
+}
+.admin-player-changes-card .admin-page-size .input { width: auto; min-width: 132px; }
+.admin-player-change-action { min-height: 42px; white-space: nowrap; }
+.admin-player-changes-table table { min-width: 1280px; }
+.admin-player-changes-table table th:first-child,
+.admin-player-changes-table table td:first-child { width: 46px; }
+.admin-player-changes-table input[type='checkbox'] { width: 17px; height: 17px; }
+.admin-player-changes-table code {
+  display: inline-block;
+  max-width: 260px;
+  color: var(--text-sec);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .admin-user-actions { display: flex; justify-content: center; gap: 6px; min-width: 110px; }
 .admin-user-actions .btn { min-height: 32px; padding: 6px 10px; white-space: nowrap; }
 .admin-user-leaderboard-toggle {
