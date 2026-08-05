@@ -6,6 +6,13 @@ const readCss = (relativePath: string) =>
   readFileSync(resolve(__dirname, relativePath), 'utf8');
 
 describe('desktop/mobile layout contracts', () => {
+  it('keeps every admin tab content at the player change review width', () => {
+    const admin = readCss('./data-admin.css');
+    expect(admin).toMatch(
+      /\.admin-players-card,\s*\.admin-users-card,\s*\.admin-api-tokens-card,\s*\.admin-reports-card,\s*\.admin-player-changes-card,\s*\.admin-import-card,\s*\.admin-centered-card,\s*\.admin-announcements-card\s*\{[^}]*width:\s*min\(1440px,\s*100%\)/s
+    );
+  });
+
   it('keeps the admin user detail content vertically scrollable', () => {
     const admin = readCss('./data-admin.css');
     expect(admin).toMatch(

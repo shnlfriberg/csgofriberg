@@ -253,20 +253,19 @@
 }
 .admin-pagination-actions { display: flex; align-items: center; gap: 8px; }
 .admin-pagination-actions .btn { width: 34px; height: 34px; }
-.admin-players-card {
-  width: min(1160px, 100%);
-  margin-inline: auto;
-}
-.admin-users-card {
-  width: min(1160px, 100%);
+.admin-players-card,
+.admin-users-card,
+.admin-api-tokens-card,
+.admin-reports-card,
+.admin-player-changes-card,
+.admin-import-card,
+.admin-centered-card,
+.admin-announcements-card {
+  width: min(1440px, 100%);
   margin-inline: auto;
 }
 .admin-users-card .admin-players-header { justify-content: center; text-align: center; }
 .admin-users-card .admin-players-title h3 { justify-content: center; }
-.admin-api-tokens-card {
-  width: min(920px, 100%);
-  margin-inline: auto;
-}
 .admin-api-token-form {
   display: grid;
   grid-template-columns: minmax(220px, 1fr) 160px auto;
@@ -316,7 +315,6 @@
 .admin-users-table table { min-width: 880px; }
 .admin-users-table table th,
 .admin-users-table table td { text-align: center; vertical-align: middle; }
-.admin-reports-card { width: min(1320px, 100%); }
 .admin-reports-card .admin-list-toolbar {
   grid-template-columns: minmax(240px, 1fr) repeat(3, auto) auto;
   align-items: end;
@@ -358,7 +356,6 @@
   flex-wrap: wrap;
 }
 .admin-reports-table .btn { min-height: 32px; padding: 6px 10px; white-space: nowrap; }
-.admin-player-changes-card { width: min(1440px, 100%); }
 .admin-player-changes-card .admin-list-toolbar {
   grid-template-columns: minmax(240px, 1fr) auto auto auto;
   align-items: end;
@@ -526,18 +523,9 @@
   font-weight: 650;
 }
 .leaderboard-difficulty-select .input { width: 100%; min-height: 42px; }
-.admin-import-card {
-  width: min(1160px, 100%);
-  margin-inline: auto;
-}
 .admin-import-card h3 { justify-content: center; text-align: center; }
 .admin-import-card > .muted { text-align: center; }
 .admin-import-card > .btn { display: flex; width: fit-content; margin: 12px auto 0 !important; }
-.admin-centered-card,
-.admin-announcements-card {
-  width: min(1160px, 100%);
-  margin-inline: auto;
-}
 .admin-announcements-card > h3 { justify-content: center; text-align: center; }
 .admin-announcement-form { display: flex; flex-direction: column; gap: 8px; }
 .admin-announcement-form > .btn { width: fit-content; align-self: center; margin-top: 4px; }
