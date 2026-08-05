@@ -90,7 +90,7 @@ describe('player change submissions', () => {
       expect(submitted.data.submitted).toBe(3);
       expect((await db('players').where({ id }).first()).team).toBe('Old Team');
 
-      const pending = await request('/api/admin/player-change-submissions?status=pending&page=1&pageSize=50', { headers: { Cookie: cookie } });
+      const pending = await request(`/api/admin/player-change-submissions?status=pending&page=1&pageSize=50&search=${encodeURIComponent(nickname)}`, { headers: { Cookie: cookie } });
       expect(pending.data.items).toHaveLength(3);
       const ageItem = pending.data.items.find((item: { field: string }) => item.field === 'age');
       const teamItem = pending.data.items.find((item: { field: string }) => item.field === 'team');
@@ -110,7 +110,7 @@ describe('player change submissions', () => {
         body: JSON.stringify({ itemIds: [activeItem.id], decision: 'reject' }),
       });
       expect(rejected.data).toMatchObject({ rejected: 1 });
-      const history = await request('/api/admin/player-change-submissions?status=all&page=1&pageSize=50', { headers: { Cookie: cookie } });
+      const history = await request(`/api/admin/player-change-submissions?status=all&page=1&pageSize=50&search=${encodeURIComponent(nickname)}`, { headers: { Cookie: cookie } });
       expect(history.data.items.map((item: { status: string }) => item.status).sort()).toEqual(['approved', 'conflict', 'rejected']);
     } finally {
       await db('player_change_items').where({ player_id: id }).del();

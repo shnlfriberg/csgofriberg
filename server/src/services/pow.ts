@@ -46,8 +46,11 @@ function cookieOptions(maxAge: number) {
   };
 }
 
-export function browserFingerprint(userAgent: string | undefined): string {
-  const key = userAgent || 'unknown';
+export function browserFingerprint(
+  userAgent: string | undefined,
+  clientIp: string | undefined
+): string {
+  const key = `${userAgent || 'unknown'}\0${clientIp || 'unknown'}`;
   const cached = fingerprintCache.get(key);
   if (cached) return cached;
   const fingerprint = crypto
@@ -91,6 +94,7 @@ export function hasLeadingZeroBits(digest: Uint8Array, difficulty: number): bool
 
 export async function createChallenge(
   userAgent: string | undefined,
+  clientIp: string | undefined,
   difficulty = config.powDifficulty,
   purpose: PowPurpose = 'default'
 ) {
@@ -101,7 +105,7 @@ export async function createChallenge(
   const stored: StoredChallenge = {
     challenge,
     difficulty,
-    fingerprint: browserFingerprint(userAgent),
+    fingerprint: browserFingerprint(userAgent, clientIp),
     purpose,
   };
   await client.set(redisKey(`pow:challenge:${id}`), JSON.stringify(stored), {
@@ -121,6 +125,7 @@ export async function consumeAndVerifyChallenge(
   id: string,
   nonceText: string,
   userAgent: string | undefined,
+  clientIp: string | undefined,
   expectedPurpose: PowPurpose = 'default'
 ): Promise<number> {
   const client = redis();
@@ -142,7 +147,7 @@ export async function consumeAndVerifyChallenge(
   if ((stored.purpose ?? 'default') !== expectedPurpose) {
     throw new PowVerificationError('POW_CHALLENGE_INVALID');
   }
-  if (stored.fingerprint !== browserFingerprint(userAgent)) {
+  if (stored.fingerprint !== browserFingerprint(userAgent, clientIp)) {
     throw new PowVerificationError('POW_FINGERPRINT_MISMATCH');
   }
   let nonce: bigint;
@@ -159,11 +164,16 @@ export async function consumeAndVerifyChallenge(
   return stored.difficulty;
 }
 
-export function signPowCookie(res: Response, userAgent: string | undefined, difficulty: number): PowAccess {
+export function signPowCookie(
+  res: Response,
+  userAgent: string | undefined,
+  clientIp: string | undefined,
+  difficulty: number
+): PowAccess {
   const token = jwt.sign(
     {
       typ: 'pow',
-      fp: browserFingerprint(userAgent),
+      fp: browserFingerprint(userAgent, clientIp),
       jti: crypto.randomUUID(),
       difficulty,
     } satisfies PowTokenPayload,
@@ -176,13 +186,17 @@ export function signPowCookie(res: Response, userAgent: string | undefined, diff
 
 export function verifyPowCookie(
   cookieHeader: string | undefined,
-  userAgent: string | undefined
+  userAgent: string | undefined,
+  clientIp: string | undefined
 ): PowAccess | null {
   const token = parseCookies(cookieHeader)[POW_COOKIE];
   if (!token) return null;
   const cached = tokenCache.get(token);
   if (cached) {
-    if (cached.access.expiresAt > Date.now() && cached.fingerprint === browserFingerprint(userAgent)) {
+    if (
+      cached.access.expiresAt > Date.now()
+      && cached.fingerprint === browserFingerprint(userAgent, clientIp)
+    ) {
       return cached.access;
     }
     tokenCache.delete(token);
@@ -191,7 +205,7 @@ export function verifyPowCookie(
     const payload = jwt.verify(token, config.jwtSecret, { algorithms: ['HS256'] }) as PowTokenPayload;
     if (
       payload.typ !== 'pow' ||
-      payload.fp !== browserFingerprint(userAgent) ||
+      payload.fp !== browserFingerprint(userAgent, clientIp) ||
       !payload.jti ||
       !payload.exp ||
       payload.difficulty < 16 ||
@@ -206,8 +220,8 @@ export function verifyPowCookie(
   }
 }
 
-export function getRequestPow(req: Pick<Request, 'headers'>): PowAccess | null {
-  return verifyPowCookie(req.headers.cookie, req.headers['user-agent']);
+export function getRequestPow(req: Pick<Request, 'headers' | 'ip'>): PowAccess | null {
+  return verifyPowCookie(req.headers.cookie, req.headers['user-agent'], req.ip);
 }
 
 export class PowVerificationError extends Error {

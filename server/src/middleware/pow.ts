@@ -25,6 +25,7 @@ function requireFreshRegistrationPow(req: Request, res: Response, next: NextFunc
     proof.data.id,
     proof.data.nonce,
     req.headers['user-agent'],
+    req.ip,
     'register'
   ).then((difficulty) => {
     if (difficulty < config.powRegisterDifficulty) {

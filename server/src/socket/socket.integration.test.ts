@@ -47,7 +47,7 @@ function withPowCookie(cookie: string, expiresIn: string | number = '10m'): stri
   const token = jwt.sign(
     {
       typ: 'pow',
-      fp: browserFingerprint(TEST_USER_AGENT),
+      fp: browserFingerprint(TEST_USER_AGENT, '127.0.0.1'),
       jti: `test-${Date.now()}-${Math.random()}`,
       difficulty: 18,
     },

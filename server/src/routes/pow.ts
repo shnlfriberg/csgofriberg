@@ -45,6 +45,7 @@ router.post(
     }
     res.json(await createChallenge(
       req.headers['user-agent'],
+      req.ip,
       requiredDifficulty,
       req.body.profile ?? 'default'
     ));
@@ -60,10 +61,11 @@ router.post(
       const difficulty = await consumeAndVerifyChallenge(
         req.body.id,
         req.body.nonce,
-        req.headers['user-agent']
+        req.headers['user-agent'],
+        req.ip
       );
       res.setHeader('Cache-Control', 'no-store');
-      const access = signPowCookie(res, req.headers['user-agent'], difficulty);
+      const access = signPowCookie(res, req.headers['user-agent'], req.ip, difficulty);
       res.json({
         ok: true,
         ...access,

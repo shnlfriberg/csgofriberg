@@ -158,7 +158,7 @@ describe('proof of work gateway', () => {
     expect(await db('users').where({ username: `${username}x` }).first()).toBeUndefined();
 
     await db('users').where({ username }).del();
-  });
+  }, 15_000);
 
   it('does not exchange a registration challenge for a reusable PoW cookie', async () => {
     const challengeResult = await request('/api/pow/challenge', {
@@ -185,6 +185,60 @@ describe('proof of work gateway', () => {
     expect(result.response.status).toBe(400);
     expect(result.data.code).toBe('POW_FINGERPRINT_MISMATCH');
   });
+
+  it('binds a challenge to the requesting IP address', async () => {
+    const challengeResult = await request('/api/pow/challenge', { method: 'POST', body: '{}' });
+    const nonce = solve(challengeResult.data.challenge, challengeResult.data.difficulty);
+    const result = await request('/api/pow/verify', {
+      method: 'POST',
+      body: JSON.stringify({ id: challengeResult.data.id, nonce }),
+      headers: { 'X-Forwarded-For': '203.0.113.91' },
+    });
+    expect(result.response.status).toBe(400);
+    expect(result.data.code).toBe('POW_FINGERPRINT_MISMATCH');
+  });
+
+  it('rejects a valid PoW cookie after the client IP changes', async () => {
+    const challengeResult = await request('/api/pow/challenge', { method: 'POST', body: '{}' });
+    const nonce = solve(challengeResult.data.challenge, challengeResult.data.difficulty);
+    const verified = await request('/api/pow/verify', {
+      method: 'POST',
+      body: JSON.stringify({ id: challengeResult.data.id, nonce }),
+    });
+    const powCookie = setCookies(verified.response)
+      .map((value) => value.split(';')[0])
+      .find((value) => value.startsWith(`${POW_COOKIE}=`));
+    expect(powCookie).toBeTruthy();
+
+    const session = await request('/api/auth/session', {
+      method: 'POST',
+      body: '{}',
+      headers: { Cookie: powCookie!, 'X-Forwarded-For': '203.0.113.92' },
+    });
+    expect(session.response.status).toBe(428);
+    expect(session.data.code).toBe('POW_REQUIRED');
+  });
+
+  it('rejects a registration proof after the client IP changes', async () => {
+    const challengeResult = await request('/api/pow/challenge', {
+      method: 'POST',
+      body: JSON.stringify({ profile: 'register' }),
+    });
+    const nonce = solve(challengeResult.data.challenge, challengeResult.data.difficulty);
+    const username = `pi${Date.now().toString(36)}`;
+    const registered = await request('/api/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ username, password: 'Strong-password-123' }),
+      headers: {
+        'X-Register-PoW-Id': challengeResult.data.id,
+        'X-Register-PoW-Nonce': nonce,
+        'X-Forwarded-For': '203.0.113.93',
+      },
+    });
+    expect(registered.response.status).toBe(428);
+    expect(registered.data.code).toBe('POW_REQUIRED');
+    expect(await db('users').where({ username }).first()).toBeUndefined();
+  }, 15_000);
 
   it('rejects an invalid nonce and does not accept its challenge again', async () => {
     const challengeResult = await request('/api/pow/challenge', { method: 'POST', body: '{}' });
