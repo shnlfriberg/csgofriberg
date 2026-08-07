@@ -9,6 +9,7 @@ import { markAuthenticated } from '../api/session';
 import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import { getPowProgress, subscribePowProgress } from '../api/pow';
+import { requestGeeTest } from '../api/geetest';
 
 const INACTIVE_POW_PROGRESS = { active: false, percent: 0 };
 const USERNAME_PATTERN = /^[\w一-龥-]+$/;
@@ -65,7 +66,16 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const res = await api.post(`/auth/${mode}`, { username, password, ...(mode === 'register' && email ? { email } : {}) });
+      const geeTest = mode === 'register'
+        ? await requestGeeTest()
+        : { enabled: false, proof: null };
+      if (mode === 'register' && geeTest?.enabled && !geeTest.proof) return;
+      const res = await api.post(`/auth/${mode}`, {
+        username,
+        password,
+        ...(mode === 'register' && email ? { email } : {}),
+        ...(geeTest?.proof ?? {}),
+      });
       markAuthenticated();
       setUser(res.data.user);
       closeSocket();
@@ -78,7 +88,9 @@ export default function Login() {
       }
       navigate('/');
     } catch (err) {
-      toast.error(errMsg(err));
+      toast.error(err instanceof Error && err.message.startsWith('GEETEST_')
+        ? t('errors.GEETEST_FAILED')
+        : errMsg(err));
     } finally {
       setLoading(false);
     }

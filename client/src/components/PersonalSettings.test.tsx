@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
+import { requestGeeTest } from '../api/geetest';
 import { useAuth } from '../store/auth';
 import { renderWithProviders } from '../test/render';
 import PersonalSettings from './PersonalSettings';
@@ -11,9 +12,14 @@ vi.mock('../api/client', () => ({
   errMsg: vi.fn(() => '请求失败'),
 }));
 
+vi.mock('../api/geetest', () => ({
+  requestGeeTest: vi.fn().mockResolvedValue({ enabled: false, proof: null }),
+}));
+
 describe('PersonalSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(requestGeeTest).mockResolvedValue({ enabled: false, proof: null });
     useAuth.setState({ user: null, initialized: true });
   });
 

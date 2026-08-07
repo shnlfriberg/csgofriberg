@@ -38,10 +38,14 @@ import { requireAdmin, requireAuth } from './middleware/auth';
 import { parseJsonOnce, rejectOversizedBody } from './middleware/jsonBody';
 import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './middleware/clientAssets';
 import { injectUmamiScript } from './services/umami';
+import runtimeConfigRoutes from './routes/runtimeConfig';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = 'https://static.cloudflareinsights.com';
 const CLOUDFLARE_INSIGHTS_BEACON_ORIGIN = 'https://cloudflareinsights.com';
+const GEETEST_SCRIPT_ORIGIN = 'https://static.geetest.com';
+const GEETEST_API_ORIGIN = 'https://gcaptcha4.geetest.com';
+const GEETEST_FALLBACK_API_ORIGIN = 'https://api.geetest.com';
 
 process.on('unhandledRejection', (reason) => {
   if (isRedisTimeoutError(reason)) {
@@ -112,6 +116,7 @@ async function main() {
           "'self'",
           "'wasm-unsafe-eval'",
           CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN,
+          GEETEST_SCRIPT_ORIGIN,
           ...(config.umami ? [config.umami.origin] : []),
           ...inlineScriptHashes,
         ],
@@ -122,9 +127,12 @@ async function main() {
           "'self'",
           ...config.corsOrigins,
           CLOUDFLARE_INSIGHTS_BEACON_ORIGIN,
+          GEETEST_API_ORIGIN,
+          GEETEST_FALLBACK_API_ORIGIN,
           ...(config.umami ? [config.umami.origin] : []),
         ],
         objectSrc: ["'none'"],
+        frameSrc: ["'self'", 'https://*.geetest.com'],
         baseUri: ["'self'"],
         frameAncestors: ["'none'"],
       },
@@ -152,6 +160,9 @@ async function main() {
   app.use('/api', rateLimit({ name: 'api', limit: 600, windowSeconds: 60 }));
   app.use('/api/pow', rejectOversizedBody(16 * 1024), parseJsonOnce('16kb'));
   app.use('/api/pow', powRoutes);
+  // Public runtime configuration is deliberately mounted before the PoW gate.
+  // It contains only non-secret browser configuration such as the GeeTest ID.
+  app.use('/api/runtime-config', runtimeConfigRoutes);
   app.use('/api/external', externalPlayerAuth);
   app.use(
     '/api/external',

@@ -26,6 +26,7 @@ import {
   normalizeEmail,
   verifyEmailToken,
 } from '../services/emailVerification';
+import { GeeTestVerificationError, verifyGeeTest } from '../services/geetest';
 
 const router = Router();
 
@@ -43,8 +44,14 @@ const credentialsSchema = z.object({
     .regex(USERNAME_PATTERN),
   password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
 });
-const registerSchema = credentialsSchema.extend({ email: z.string().trim().email().max(320).optional().or(z.literal('')) });
-const emailSchema = z.object({ email: z.string().trim().email().max(320) });
+const geeTestFields = {
+  lot_number: z.string().trim().optional(),
+  captcha_output: z.string().trim().optional(),
+  pass_token: z.string().trim().optional(),
+  gen_time: z.string().trim().optional(),
+};
+const registerSchema = credentialsSchema.extend({ email: z.string().trim().email().max(320).optional().or(z.literal('')), ...geeTestFields });
+const emailSchema = z.object({ email: z.string().trim().email().max(320), ...geeTestFields });
 
 function validateRegisterBody(req: Request, res: Response, next: NextFunction) {
   const result = registerSchema.safeParse(req.body);
@@ -89,7 +96,13 @@ router.post(
   rateLimit({ name: 'register', limit: 3, windowSeconds: 3600, failClosed: true }),
   validateRegisterBody,
   asyncHandler(async (req, res) => {
-    const { username, password, email: emailInput } = req.body;
+    const { username, password, email: emailInput, lot_number, captcha_output, pass_token, gen_time } = req.body;
+    try {
+      await verifyGeeTest({ lot_number, captcha_output, pass_token, gen_time });
+    } catch (error) {
+      if (error instanceof GeeTestVerificationError) throw new HttpError(400, error.code);
+      throw error;
+    }
     let email: string | null = null;
     if (emailInput) {
       try { email = normalizeEmail(emailInput); }
@@ -211,6 +224,12 @@ router.post(
   rateLimit({ name: 'email-request', limit: 3, windowSeconds: 3600, key: requestIdentity, failClosed: true }),
   validateBody(emailSchema),
   asyncHandler(async (req, res) => {
+    try {
+      await verifyGeeTest(req.body);
+    } catch (error) {
+      if (error instanceof GeeTestVerificationError) throw new HttpError(400, error.code);
+      throw error;
+    }
     try {
       const { retryAt } = await issueEmailVerification(req.user!.id, req.body.email, { enforceCooldown: true });
       return res.json({ ok: true, retryAt, serverNow: Date.now() });

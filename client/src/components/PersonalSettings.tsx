@@ -7,6 +7,7 @@ import ModalPortal from './ModalPortal';
 import { api, errMsg } from '../api/client';
 import { useAuth } from '../store/auth';
 import { toast } from './Toast';
+import { requestGeeTest } from '../api/geetest';
 
 function maskVerifiedEmail(email: string | null | undefined): string {
   if (!email) return '';
@@ -179,7 +180,9 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
                     if (!emailToVerify) return;
                     setEmailLoading(true);
                     try {
-                      const response = await api.post('/auth/email/request', { email: emailToVerify });
+                      const geeTest = await requestGeeTest();
+                      if (geeTest?.enabled && !geeTest.proof) return;
+                      const response = await api.post('/auth/email/request', { email: emailToVerify, ...(geeTest?.proof ?? {}) });
                       applyEmailCooldown(response.data);
                       setUser({ ...user, email: emailToVerify.toLowerCase(), emailVerified: false });
                       toast.success(t('settings.emailSent'));
@@ -187,7 +190,9 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
                       if (axios.isAxiosError(error) && error.response?.data?.code === 'EMAIL_VERIFICATION_COOLDOWN') {
                         applyEmailCooldown(error.response.data);
                       }
-                      toast.error(errMsg(error));
+                      toast.error(error instanceof Error && error.message.startsWith('GEETEST_')
+                        ? t('errors.GEETEST_FAILED')
+                        : errMsg(error));
                     }
                     finally { setEmailLoading(false); }
                   }}>

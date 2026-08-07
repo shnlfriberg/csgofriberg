@@ -34,6 +34,8 @@ const configuredDisplayIdForbiddenTokens = (process.env.DISPLAY_ID_FORBIDDEN_TOK
   .map((token) => token.trim().toUpperCase())
   .filter(Boolean);
 const configuredCheatAnalysisTimeoutMs = Number(process.env.CHEAT_ANALYSIS_TIMEOUT_MS || 15_000);
+const configuredGeeTestCaptchaId = process.env.GEETEST_CAPTCHA_ID?.trim() || '';
+const configuredGeeTestPrivateKey = process.env.GEETEST_PRIVATE_KEY?.trim() || '';
 const invalidDisplayIdForbiddenToken = configuredDisplayIdForbiddenTokens.find(
   (token) => !/^[0-9A-Z]{2,5}$/.test(token)
 );
@@ -85,6 +87,13 @@ export const config = {
     allowedSuffixes: configuredEmailAllowedSuffixes,
     verifyTtlSeconds: Math.max(300, Number(process.env.EMAIL_VERIFY_TTL_SECONDS || 1800)),
   },
+  geetest: {
+    enabled: Boolean(configuredGeeTestCaptchaId && configuredGeeTestPrivateKey),
+    captchaId: configuredGeeTestCaptchaId,
+    privateKey: configuredGeeTestPrivateKey,
+    validateUrl: process.env.GEETEST_VALIDATE_URL?.trim() || 'https://gcaptcha4.geetest.com/validate',
+    timeoutMs: Math.max(1_000, Math.min(10_000, Number(process.env.GEETEST_TIMEOUT_MS || 3_000))),
+  },
   cheatAnalysis: {
     apiUrl: process.env.CHEAT_ANALYSIS_API_URL?.trim() || '',
     apiToken: process.env.CHEAT_ANALYSIS_API_TOKEN?.trim() || '',
@@ -127,6 +136,12 @@ export function validateProductionConfig(): void {
     throw new Error('CHEAT_ANALYSIS_API_URL_AND_TOKEN_MUST_BE_CONFIGURED_TOGETHER');
   }
   if (process.env.NODE_ENV !== 'production') return;
+  if (Boolean(configuredGeeTestCaptchaId) !== Boolean(configuredGeeTestPrivateKey)) {
+    throw new Error('GEETEST_CAPTCHA_ID_AND_PRIVATE_KEY_MUST_BE_CONFIGURED_TOGETHER');
+  }
+  if (!config.geetest.enabled) {
+    throw new Error('GEETEST_MUST_BE_CONFIGURED_IN_PRODUCTION');
+  }
   if (
     !configuredJwtSecret ||
     Buffer.byteLength(configuredJwtSecret, 'utf8') < 32 ||
