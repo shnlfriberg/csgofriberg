@@ -46,6 +46,7 @@ const CLOUDFLARE_INSIGHTS_BEACON_ORIGIN = 'https://cloudflareinsights.com';
 const GEETEST_SCRIPT_ORIGIN = 'https://static.geetest.com';
 const GEETEST_API_ORIGIN = 'https://gcaptcha4.geetest.com';
 const GEETEST_FALLBACK_API_ORIGIN = 'https://api.geetest.com';
+const GEETEST_GEEVISIT_ORIGIN = 'https://gcaptcha4.geevisit.com';
 const GEETEST_GSENSEBOT_ORIGIN = 'https://gcaptcha4.gsensebot.com';
 
 process.on('unhandledRejection', (reason) => {
@@ -118,23 +119,38 @@ async function main() {
           "'wasm-unsafe-eval'",
           CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN,
           GEETEST_SCRIPT_ORIGIN,
+          GEETEST_API_ORIGIN,
+          GEETEST_GEEVISIT_ORIGIN,
+          GEETEST_GSENSEBOT_ORIGIN,
           ...(config.umami ? [config.umami.origin] : []),
           ...inlineScriptHashes,
         ],
         workerSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", 'data:', GEETEST_GSENSEBOT_ORIGIN],
+        imgSrc: [
+          "'self'",
+          'data:',
+          GEETEST_API_ORIGIN,
+          GEETEST_GEEVISIT_ORIGIN,
+          GEETEST_GSENSEBOT_ORIGIN,
+        ],
         connectSrc: [
           "'self'",
           ...config.corsOrigins,
           CLOUDFLARE_INSIGHTS_BEACON_ORIGIN,
           GEETEST_API_ORIGIN,
           GEETEST_FALLBACK_API_ORIGIN,
+          GEETEST_GEEVISIT_ORIGIN,
           GEETEST_GSENSEBOT_ORIGIN,
           ...(config.umami ? [config.umami.origin] : []),
         ],
         objectSrc: ["'none'"],
-        frameSrc: ["'self'", 'https://*.geetest.com', GEETEST_GSENSEBOT_ORIGIN],
+        frameSrc: [
+          "'self'",
+          'https://*.geetest.com',
+          GEETEST_GEEVISIT_ORIGIN,
+          GEETEST_GSENSEBOT_ORIGIN,
+        ],
         baseUri: ["'self'"],
         frameAncestors: ["'none'"],
       },
