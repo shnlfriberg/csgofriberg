@@ -14,7 +14,7 @@ import {
 } from '../middleware/auth';
 import { validateBody, asyncHandler, HttpError } from '../middleware/common';
 import { User } from '../types';
-import { rateLimit, requestIdentity } from '../middleware/rateLimit';
+import { rateLimit, requestIdentity, requestIp } from '../middleware/rateLimit';
 import { invalidateCached } from '../services/queryCache';
 import { leaderboardCacheKey } from '../services/leaderboardCache';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from '../services/password';
@@ -222,6 +222,7 @@ router.post(
   '/email/request',
   requireAuth,
   rateLimit({ name: 'email-request', limit: 3, windowSeconds: 3600, key: requestIdentity, failClosed: true }),
+  rateLimit({ name: 'email-request-ip', limit: 3, windowSeconds: 3600, key: requestIp, failClosed: true }),
   validateBody(emailSchema),
   asyncHandler(async (req, res) => {
     try {

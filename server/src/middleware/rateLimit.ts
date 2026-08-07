@@ -56,7 +56,7 @@ export async function consumeRateLimit(
   return item.count <= limit;
 }
 
-function remoteIp(req: Request): string {
+export function requestIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || 'unknown';
 }
 
@@ -64,12 +64,12 @@ function remoteIp(req: Request): string {
 export function requestIdentity(req: Request): string {
   if (req.user) return `u:${req.user.id}`;
   if (req.guestKey) return `g:${req.guestKey}`;
-  return remoteIp(req);
+  return requestIp(req);
 }
 
 export function rateLimit(options: RateLimitOptions) {
   return async (req: Request, res: Response, next: NextFunction) => {
-    const identity = options.key?.(req) || remoteIp(req);
+    const identity = options.key?.(req) || requestIp(req);
     try {
       if (!(await consumeRateLimit(
         options.name,
