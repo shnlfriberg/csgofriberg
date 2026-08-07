@@ -126,14 +126,16 @@ async function main() {
           ...inlineScriptHashes,
         ],
         workerSrc: ["'self'"],
-        styleSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", GEETEST_SCRIPT_ORIGIN],
         imgSrc: [
           "'self'",
           'data:',
+          GEETEST_SCRIPT_ORIGIN,
           GEETEST_API_ORIGIN,
           GEETEST_GEEVISIT_ORIGIN,
           GEETEST_GSENSEBOT_ORIGIN,
         ],
+        fontSrc: ["'self'", 'data:', GEETEST_SCRIPT_ORIGIN],
         connectSrc: [
           "'self'",
           ...config.corsOrigins,
