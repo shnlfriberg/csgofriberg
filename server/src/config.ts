@@ -83,7 +83,6 @@ export const config = {
     username: process.env.EMAIL_SMTP_USERNAME?.trim() || '',
     password: process.env.EMAIL_SMTP_PASSWORD || '',
     from: process.env.EMAIL_FROM?.trim() || '',
-    verifyBaseUrl: process.env.EMAIL_VERIFY_BASE_URL?.trim() || '',
     allowedSuffixes: configuredEmailAllowedSuffixes,
     verifyTtlSeconds: Math.max(300, Number(process.env.EMAIL_VERIFY_TTL_SECONDS || 1800)),
   },

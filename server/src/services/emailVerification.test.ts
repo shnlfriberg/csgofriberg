@@ -32,17 +32,18 @@ describe('email verification cooldown', () => {
 });
 
 describe('verification email template', () => {
-  it('keeps the body generic while including the link and safety guidance', () => {
+  it('keeps the body generic while including the code and safety guidance', () => {
     const body = buildVerificationEmail({
-      link: 'https://game.example.com/email-verify?token=test-token',
+      code: '123456',
       ttlSeconds: 1_800,
     });
 
     expect(body).toContain('您好：');
     expect(body).not.toContain('alice');
     expect(body).not.toContain('@example.com');
-    expect(body).toContain('https://game.example.com/email-verify?token=test-token');
-    expect(body).toContain('链接有效期：30 分钟');
+    expect(body).toContain('123456');
+    expect(body).toContain('验证码有效期：30 分钟');
+    expect(body).not.toContain('http');
     expect(body).toContain('如果您没有进行此操作，请忽略本邮件。');
   });
 });

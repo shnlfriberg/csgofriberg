@@ -24,6 +24,7 @@ import {
   EmailVerificationCooldownError,
   issueEmailVerification,
   normalizeEmail,
+  verifyEmailCode,
   verifyEmailToken,
 } from '../services/emailVerification';
 import { GeeTestVerificationError, verifyGeeTest } from '../services/geetest';
@@ -52,6 +53,7 @@ const geeTestFields = {
 };
 const registerSchema = credentialsSchema.extend({ email: z.string().trim().email().max(320).optional().or(z.literal('')), ...geeTestFields });
 const emailSchema = z.object({ email: z.string().trim().email().max(320), ...geeTestFields });
+const emailCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
 
 function validateRegisterBody(req: Request, res: Response, next: NextFunction) {
   const result = registerSchema.safeParse(req.body);
@@ -259,6 +261,19 @@ router.get(
     const token = typeof req.query.token === 'string' ? req.query.token : '';
     const ok = await verifyEmailToken(token);
     res.status(ok ? 200 : 400).json({ ok });
+  })
+);
+
+router.post(
+  '/email/verify-code',
+  requireAuth,
+  rateLimit({ name: 'email-verify-code', limit: 10, windowSeconds: 600, key: requestIdentity, failClosed: true }),
+  rateLimit({ name: 'email-verify-code-ip', limit: 10, windowSeconds: 600, key: requestIp, failClosed: true }),
+  validateBody(emailCodeSchema),
+  asyncHandler(async (req, res) => {
+    const ok = await verifyEmailCode(req.user!.id, req.body.code);
+    if (!ok) throw new HttpError(400, 'EMAIL_VERIFICATION_CODE_INVALID');
+    res.json({ ok: true });
   })
 );
 

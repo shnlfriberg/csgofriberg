@@ -61,7 +61,7 @@ describe('PersonalSettings', () => {
     fireEvent.change(screen.getByPlaceholderText('可选，输入邮箱地址'), {
       target: { value: 'tester@example.com' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '发送验证邮件' }));
+    fireEvent.click(screen.getByRole('button', { name: '发送验证码' }));
 
     await waitFor(() => {
       expect(screen.getByRole('button', { name: /30 秒后可重新发送/ })).toBeDisabled();
@@ -83,13 +83,41 @@ describe('PersonalSettings', () => {
     renderWithProviders(<PersonalSettings />);
 
     fireEvent.click(screen.getByRole('button', { name: '个人设置' }));
-    const send = screen.getByRole('button', { name: '发送验证邮件' });
+    const send = screen.getByRole('button', { name: '发送验证码' });
     expect(send).toBeEnabled();
     fireEvent.click(send);
 
     await waitFor(() => {
       expect(api.post).toHaveBeenCalledWith('/auth/email/request', { email: 'registered@example.com' });
     });
+  });
+
+  it('verifies an unverified email with a six-digit code', async () => {
+    const user = {
+      id: 10,
+      username: 'code-user',
+      role: 'user' as const,
+      email: 'code@example.com',
+      emailVerified: false,
+    };
+    const verifiedUser = { ...user, emailVerified: true };
+    useAuth.setState({ user, initialized: true });
+    vi.mocked(api.get)
+      .mockResolvedValueOnce({ data: { user } } as never)
+      .mockResolvedValueOnce({ data: { user: verifiedUser } } as never);
+    vi.mocked(api.post).mockResolvedValue({ data: { ok: true } } as never);
+    renderWithProviders(<PersonalSettings />);
+
+    fireEvent.click(screen.getByRole('button', { name: '个人设置' }));
+    fireEvent.change(await screen.findByPlaceholderText('输入 6 位验证码'), {
+      target: { value: '123456' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '验证邮箱' }));
+
+    await waitFor(() => {
+      expect(api.post).toHaveBeenCalledWith('/auth/email/verify-code', { code: '123456' });
+    });
+    await waitFor(() => expect(screen.queryByPlaceholderText('输入 6 位验证码')).not.toBeInTheDocument());
   });
 
   it('masks the local part of a verified email address', async () => {

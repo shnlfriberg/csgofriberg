@@ -30,6 +30,8 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
   const setUser = useAuth((state) => state.setUser);
   const [email, setEmail] = useState('');
   const [emailLoading, setEmailLoading] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
+  const [emailCodeLoading, setEmailCodeLoading] = useState(false);
   const [emailCooldownUntil, setEmailCooldownUntil] = useState(0);
   const [emailCooldownSeconds, setEmailCooldownSeconds] = useState(0);
   const titleId = useId();
@@ -175,6 +177,7 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
                   />
                 </label>
                 {user && (
+                  <>
                   <form className="settings-email" onSubmit={async (event) => {
                     event.preventDefault();
                     if (!emailToVerify) return;
@@ -185,6 +188,7 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
                       const response = await api.post('/auth/email/request', { email: emailToVerify, ...(geeTest?.proof ?? {}) });
                       applyEmailCooldown(response.data);
                       setUser({ ...user, email: emailToVerify.toLowerCase(), emailVerified: false });
+                      setEmailCode('');
                       toast.success(t('settings.emailSent'));
                     } catch (error) {
                       if (axios.isAxiosError(error) && error.response?.data?.code === 'EMAIL_VERIFICATION_COOLDOWN') {
@@ -205,6 +209,41 @@ export default function PersonalSettings({ open: openProp, onOpenChange }: Perso
                         : t('settings.sendVerification')}
                     </button>
                   </form>
+                  {!user.emailVerified && user.email && (
+                    <form className="settings-email settings-email-code" onSubmit={async (event) => {
+                      event.preventDefault();
+                      const code = emailCode.trim();
+                      if (!/^\d{6}$/.test(code)) return;
+                      setEmailCodeLoading(true);
+                      try {
+                        await api.post('/auth/email/verify-code', { code });
+                        const current = await api.get('/auth/me');
+                        if (current.data?.user) setUser(current.data.user);
+                        setEmailCode('');
+                        toast.success(t('settings.emailVerifiedSuccess'));
+                      } catch (error) {
+                        toast.error(errMsg(error));
+                      } finally {
+                        setEmailCodeLoading(false);
+                      }
+                    }}>
+                      <span className="settings-option-label">{t('settings.emailCode')}</span>
+                      <input
+                        className="input"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="one-time-code"
+                        maxLength={6}
+                        value={emailCode}
+                        onChange={(event) => setEmailCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder={t('settings.emailCodePlaceholder')}
+                      />
+                      <button className="btn btn-sm" type="submit" disabled={emailCodeLoading || !/^\d{6}$/.test(emailCode)}>
+                        {emailCodeLoading ? t('settings.verifyingEmailCode') : t('settings.verifyEmailCode')}
+                      </button>
+                    </form>
+                  )}
+                  </>
                 )}
               </div>
             </div>

@@ -60,7 +60,7 @@ export const resources = {
       settings: {
         title: '个人设置',
         motion: '动画效果',
-        email: '邮箱', emailPlaceholder: '可选，输入邮箱地址', emailVerified: '邮箱已验证', emailUnverified: '邮箱未验证', emailLocked: '邮箱已验证，无法再次修改', sendVerification: '发送验证邮件', sendVerificationCooldown: '{{seconds}} 秒后可重新发送', emailSent: '验证邮件已发送，请查收邮箱',
+        email: '邮箱', emailPlaceholder: '可选，输入邮箱地址', emailVerified: '邮箱已验证', emailUnverified: '邮箱未验证', emailLocked: '邮箱已验证，无法再次修改', sendVerification: '发送验证码', sendVerificationCooldown: '{{seconds}} 秒后可重新发送', emailSent: '验证码已发送，请查收邮箱', emailCode: '邮箱验证码', emailCodePlaceholder: '输入 6 位验证码', verifyEmailCode: '验证邮箱', verifyingEmailCode: '正在验证…', emailVerifiedSuccess: '邮箱验证成功',
       },
       emailVerify: { title: '邮箱验证', loading: '正在验证邮箱…', success: '邮箱验证成功，现在可以使用已验证邮箱匹配。', error: '验证链接无效或已过期。', home: '返回首页' },
       home: {
@@ -247,7 +247,7 @@ export const resources = {
         apiTokensTitle: '外部 API Token', apiTokensCount: '{{count}} 个有效 Token', apiTokenName: 'Token 名称', apiTokenNamePlaceholder: '例如：选手数据同步', apiTokenExpiresIn: '有效天数（1-365）', createApiToken: '生成 Token', creatingApiToken: '生成中...', apiTokenCreated: 'API Token 已生成', newApiToken: '新 API Token', apiTokenShownOnce: '明文仅显示这一次，请妥善保管。', copyApiToken: '复制 Token', apiTokenCopied: '已复制', apiTokenCopyFailed: '复制失败，请手动选择 Token', noApiTokens: '暂无有效 API Token', apiTokenCreatedAt: '创建：{{date}}', apiTokenExpiresAt: '到期：{{date}}', revokeApiToken: '撤销', revokeApiTokenTitle: '撤销 {{name}}？', revokeApiTokenMessage: '使用该 Token 的外部调用会立即失效。', apiTokenRevoked: 'API Token 已撤销',
       },
       errors: {
-        GEETEST_REQUIRED: '请完成人机验证', GEETEST_FAILED: '人机验证失败，请重试',
+        GEETEST_REQUIRED: '请完成人机验证', GEETEST_FAILED: '人机验证失败，请重试', EMAIL_VERIFICATION_CODE_INVALID: '验证码无效或已过期',
         EMAIL_ALREADY_VERIFIED: '邮箱验证完成后不能再次修改', VALIDATION_FAILED: '输入格式不正确', REGISTER_USERNAME_REQUIRED: '请输入用户名', REGISTER_USERNAME_LENGTH: '用户名长度必须为 2-20 个字符', REGISTER_USERNAME_CHARACTERS: '用户名只能包含字母、数字、下划线、连字符和中文', REGISTER_PASSWORD_REQUIRED: '请输入密码', REGISTER_PASSWORD_LENGTH: '密码长度必须为 10-128 个字符', INVALID_REQUEST_BODY: '请求数据不完整，请重试', PAYLOAD_TOO_LARGE: '导入数据过大，请拆分后重试',
         INTERNAL_ERROR: '服务器开小差了，请稍后再试', AUTH_REQUIRED: '请先登录', AUTH_EXPIRED: '登录状态已过期，请重新登录',
         FORBIDDEN: '没有权限执行此操作', CANNOT_BAN_SELF: '不能封禁当前管理员账号', USERNAME_TAKEN: '用户名已被注册', EMAIL_TAKEN: '邮箱已被其他账号绑定', EMAIL_NOT_CONFIGURED: '服务器尚未配置发信服务', EMAIL_VERIFICATION_COOLDOWN: '验证邮件发送过于频繁，请稍后重试', INVALID_EMAIL: '邮箱格式无效', EMAIL_ALIAS_NOT_SUPPORTED: '不支持邮箱别名（+ 或点号）', EMAIL_DOMAIN_NOT_ALLOWED: '该邮箱后缀不在允许列表中', USER_BANNED: '该身份已被封禁', EMAIL_VERIFICATION_REQUIRED: '请先验证邮箱', REPORT_NOT_AVAILABLE: '当前对局暂不可举报', REPORT_ALREADY_SUBMITTED: '您已举报过本场对局', REPORT_NOT_FOUND: '举报不存在', USER_NOT_FOUND: '用户不存在', INVALID_CREDENTIALS: '用户名或密码错误',
@@ -282,7 +282,7 @@ export const resources = {
       settings: {
         title: 'Personal settings',
         motion: 'Animation effects',
-        email: 'Email', emailPlaceholder: 'Optional email address', emailVerified: 'Email verified', emailUnverified: 'Email not verified', emailLocked: 'This email is verified and can no longer be changed', sendVerification: 'Send verification', sendVerificationCooldown: 'Send again in {{seconds}}s', emailSent: 'Verification email sent',
+        email: 'Email', emailPlaceholder: 'Optional email address', emailVerified: 'Email verified', emailUnverified: 'Email not verified', emailLocked: 'This email is verified and can no longer be changed', sendVerification: 'Send code', sendVerificationCooldown: 'Send again in {{seconds}}s', emailSent: 'Verification code sent', emailCode: 'Email verification code', emailCodePlaceholder: 'Enter the 6-digit code', verifyEmailCode: 'Verify email', verifyingEmailCode: 'Verifying…', emailVerifiedSuccess: 'Email verified',
       },
       common: {
         brand: '弗一把', guest: 'Guest', home: 'Home', close: 'Close', cancel: 'Cancel', confirm: 'Confirm', loading: 'Loading...', noData: 'No data', unknown: 'Unknown',
@@ -439,7 +439,7 @@ export const resources = {
         apiTokensTitle: 'External API Tokens', apiTokensCount: '{{count}} active tokens', apiTokenName: 'Token name', apiTokenNamePlaceholder: 'For example: player data sync', apiTokenExpiresIn: 'Valid days (1-365)', createApiToken: 'Generate token', creatingApiToken: 'Generating...', apiTokenCreated: 'API token generated', newApiToken: 'New API token', apiTokenShownOnce: 'The secret is shown only once. Store it securely.', copyApiToken: 'Copy token', apiTokenCopied: 'Copied', apiTokenCopyFailed: 'Copy failed. Select and copy the token manually.', noApiTokens: 'No active API tokens', apiTokenCreatedAt: 'Created: {{date}}', apiTokenExpiresAt: 'Expires: {{date}}', revokeApiToken: 'Revoke', revokeApiTokenTitle: 'Revoke {{name}}?', revokeApiTokenMessage: 'External calls using this token will stop working immediately.', apiTokenRevoked: 'API token revoked',
       },
       errors: {
-        GEETEST_REQUIRED: 'Please complete the human verification.', GEETEST_FAILED: 'Human verification failed. Try again.',
+        GEETEST_REQUIRED: 'Please complete the human verification.', GEETEST_FAILED: 'Human verification failed. Try again.', EMAIL_VERIFICATION_CODE_INVALID: 'The verification code is invalid or expired.',
         EMAIL_ALREADY_VERIFIED: 'A verified email cannot be changed.', VALIDATION_FAILED: 'Invalid input', REGISTER_USERNAME_REQUIRED: 'Enter a username.', REGISTER_USERNAME_LENGTH: 'The username must be 2-20 characters long.', REGISTER_USERNAME_CHARACTERS: 'Use only letters, numbers, underscores, hyphens, or Chinese characters.', REGISTER_PASSWORD_REQUIRED: 'Enter a password.', REGISTER_PASSWORD_LENGTH: 'The password must be 10-128 characters long.', INVALID_REQUEST_BODY: 'The request is incomplete. Please try again.', PAYLOAD_TOO_LARGE: 'The import is too large. Split it and try again.',
         INTERNAL_ERROR: 'Something went wrong on the server. Please try again later.', AUTH_REQUIRED: 'Please log in first.', AUTH_EXPIRED: 'Your session has expired. Please log in again.',
         FORBIDDEN: 'You do not have permission to do that.', CANNOT_BAN_SELF: 'You cannot ban the current administrator account.', USERNAME_TAKEN: 'That username is already registered.', EMAIL_TAKEN: 'That email is already linked to another account.', EMAIL_NOT_CONFIGURED: 'Email delivery is not configured.', EMAIL_VERIFICATION_COOLDOWN: 'Verification emails are being sent too frequently. Try again shortly.', INVALID_EMAIL: 'Invalid email address.', EMAIL_ALIAS_NOT_SUPPORTED: 'Email aliases using + or dots are not supported.', EMAIL_DOMAIN_NOT_ALLOWED: 'That email domain is not allowed.', USER_BANNED: 'This identity has been banned.', EMAIL_VERIFICATION_REQUIRED: 'Verify your email first.', REPORT_NOT_AVAILABLE: 'This match cannot be reported now.', REPORT_ALREADY_SUBMITTED: 'You have already reported this match.', REPORT_NOT_FOUND: 'Report not found.', USER_NOT_FOUND: 'User not found.', INVALID_CREDENTIALS: 'Incorrect username or password.',
@@ -474,7 +474,7 @@ export const resources = {
       settings: {
         title: '個人設定',
         motion: 'アニメーション効果',
-        email: 'メール', emailPlaceholder: '任意のメールアドレス', emailVerified: 'メール確認済み', emailUnverified: 'メール未確認', emailLocked: '確認済みのため変更できません', sendVerification: '確認メールを送信', sendVerificationCooldown: '{{seconds}} 秒後に再送信', emailSent: '確認メールを送信しました',
+        email: 'メール', emailPlaceholder: '任意のメールアドレス', emailVerified: 'メール確認済み', emailUnverified: 'メール未確認', emailLocked: '確認済みのため変更できません', sendVerification: '確認コードを送信', sendVerificationCooldown: '{{seconds}} 秒後に再送信', emailSent: '確認コードを送信しました', emailCode: 'メール確認コード', emailCodePlaceholder: '6 桁のコードを入力', verifyEmailCode: 'メールを確認', verifyingEmailCode: '確認中…', emailVerifiedSuccess: 'メールを確認しました',
       },
       common: {
         brand: '弗一把', guest: 'ゲスト', home: 'メインメニュー', close: '閉じる', cancel: 'キャンセル', confirm: '確認', loading: '読み込み中...', noData: 'データがありません', unknown: '不明',
@@ -629,7 +629,7 @@ export const resources = {
         apiTokensTitle: '外部 API トークン', apiTokensCount: '有効なトークン {{count}} 件', apiTokenName: 'トークン名', apiTokenNamePlaceholder: '例：選手データ同期', apiTokenExpiresIn: '有効日数（1-365）', createApiToken: 'トークンを生成', creatingApiToken: '生成中...', apiTokenCreated: 'API トークンを生成しました', newApiToken: '新しい API トークン', apiTokenShownOnce: 'シークレットは一度だけ表示されます。安全に保管してください。', copyApiToken: 'トークンをコピー', apiTokenCopied: 'コピーしました', apiTokenCopyFailed: 'コピーできませんでした。トークンを手動で選択してください。', noApiTokens: '有効な API トークンはありません', apiTokenCreatedAt: '作成：{{date}}', apiTokenExpiresAt: '期限：{{date}}', revokeApiToken: '無効化', revokeApiTokenTitle: '{{name}} を無効化しますか？', revokeApiTokenMessage: 'このトークンを使用する外部呼び出しは直ちに無効になります。', apiTokenRevoked: 'API トークンを無効化しました',
       },
       errors: {
-        GEETEST_REQUIRED: '本人確認を完了してください。', GEETEST_FAILED: '本人確認に失敗しました。もう一度お試しください。',
+        GEETEST_REQUIRED: '本人確認を完了してください。', GEETEST_FAILED: '本人確認に失敗しました。もう一度お試しください。', EMAIL_VERIFICATION_CODE_INVALID: '確認コードが無効または期限切れです。',
         EMAIL_ALREADY_VERIFIED: '確認済みメールは変更できません。', VALIDATION_FAILED: '入力形式が正しくありません', REGISTER_USERNAME_REQUIRED: 'ユーザー名を入力してください。', REGISTER_USERNAME_LENGTH: 'ユーザー名は 2-20 文字で入力してください。', REGISTER_USERNAME_CHARACTERS: 'ユーザー名には英数字、アンダースコア、ハイフン、中国語文字のみ使用できます。', REGISTER_PASSWORD_REQUIRED: 'パスワードを入力してください。', REGISTER_PASSWORD_LENGTH: 'パスワードは 10-128 文字で入力してください。', INVALID_REQUEST_BODY: 'リクエストデータが不足しています。もう一度お試しください。', PAYLOAD_TOO_LARGE: 'インポートデータが大きすぎます。分割して再試行してください。',
         INTERNAL_ERROR: 'サーバーで問題が発生しました。後でもう一度お試しください。', AUTH_REQUIRED: '先にログインしてください。', AUTH_EXPIRED: 'ログインの有効期限が切れました。再度ログインしてください。',
         FORBIDDEN: 'この操作を行う権限がありません。', CANNOT_BAN_SELF: '現在の管理者アカウントは BAN できません。', USERNAME_TAKEN: 'このユーザー名は既に登録されています。', EMAIL_TAKEN: 'このメールは既に登録されています。', EMAIL_NOT_CONFIGURED: 'メール送信が設定されていません。', EMAIL_VERIFICATION_COOLDOWN: '確認メールの送信間隔が短すぎます。しばらくしてから再試行してください。', INVALID_EMAIL: 'メールアドレスが無効です。', EMAIL_ALIAS_NOT_SUPPORTED: '+ やドットを使うメール別名は利用できません。', EMAIL_DOMAIN_NOT_ALLOWED: 'このメールドメインは許可されていません。', USER_BANNED: 'この ID は BAN されています。', EMAIL_VERIFICATION_REQUIRED: '先にメールを確認してください。', REPORT_NOT_AVAILABLE: '現在この対局は通報できません。', REPORT_ALREADY_SUBMITTED: 'この対局はすでに通報済みです。', REPORT_NOT_FOUND: '通報が見つかりません。', USER_NOT_FOUND: 'ユーザーが見つかりません。', INVALID_CREDENTIALS: 'ユーザー名またはパスワードが正しくありません。',

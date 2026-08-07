@@ -34,6 +34,13 @@ function hashToken(token: string): string {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
+function hashVerificationCode(userId: number, email: string, code: string): string {
+  return crypto
+    .createHmac('sha256', config.jwtSecret)
+    .update(`${userId}:${email}:${code}`)
+    .digest('hex');
+}
+
 function response(socket: net.Socket | tls.TLSSocket): Promise<string> {
   return new Promise((resolve, reject) => {
     let buffer = '';
@@ -122,7 +129,7 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
 }
 
 export function buildVerificationEmail(input: {
-  link: string;
+  code: string;
   ttlSeconds: number;
 }): string {
   const expiresInMinutes = Math.max(1, Math.ceil(input.ttlSeconds / 60));
@@ -133,11 +140,12 @@ export function buildVerificationEmail(input: {
     '',
     '您正在为账号绑定邮箱：',
     '',
-    '请点击以下链接完成验证：',
-    input.link,
+    '您的邮箱验证码是：',
     '',
-    `链接有效期：${expiresInMinutes} 分钟`,
-    '为保障账号安全，请勿将此链接转发给他人。',
+    input.code,
+    '',
+    `验证码有效期：${expiresInMinutes} 分钟`,
+    '为保障账号安全，请勿将验证码告知他人。',
     '',
     '如果您没有进行此操作，请忽略本邮件。',
     '此邮件由系统自动发送，请勿直接回复。',
@@ -186,25 +194,51 @@ export async function issueEmailVerification(
   await db('users').where({ id: userId }).update({ email, email_verified_at: null });
   const authCache = redis();
   if (authCache) await authCache.del(redisKey(`auth:user:${userId}`)).catch(() => undefined);
-  const token = crypto.randomBytes(32).toString('base64url');
+  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
   await db('email_verifications').where({ user_id: userId }).del();
   await db('email_verifications').insert({
     user_id: userId,
     email,
-    token_hash: hashToken(token),
+    token_hash: hashVerificationCode(userId, email, code),
     expires_at: new Date(Date.now() + config.email.verifyTtlSeconds * 1000),
   });
-  const base = config.email.verifyBaseUrl || config.corsOrigins[0] || 'http://localhost:3000';
-  const link = `${base.replace(/\/$/, '')}/email-verify?token=${encodeURIComponent(token)}`;
   await sendEmail(
     email,
-    '请验证您的邮箱地址｜弗一把',
+    '您的邮箱验证码｜弗一把',
     buildVerificationEmail({
-      link,
+      code,
       ttlSeconds: config.email.verifyTtlSeconds,
     })
   );
   return { retryAt };
+}
+
+export async function verifyEmailCode(userId: number, code: string): Promise<boolean> {
+  if (!/^\d{6}$/.test(code)) return false;
+  const user = await db('users').where({ id: userId }).first('email', 'email_verified_at');
+  if (!user?.email || user.email_verified_at) return false;
+  const row = await db('email_verifications')
+    .where({
+      user_id: userId,
+      email: user.email,
+      token_hash: hashVerificationCode(userId, user.email, code),
+    })
+    .where('expires_at', '>', new Date())
+    .first('id');
+  if (!row) return false;
+  const verified = await db.transaction(async (trx) => {
+    const updated = await trx('users')
+      .where({ id: userId, email: user.email })
+      .whereNull('email_verified_at')
+      .update({ email_verified_at: trx.fn.now() });
+    if (!updated) return false;
+    await trx('email_verifications').where({ user_id: userId }).del();
+    return true;
+  });
+  if (!verified) return false;
+  const authCache = redis();
+  if (authCache) await authCache.del(redisKey(`auth:user:${userId}`)).catch(() => undefined);
+  return true;
 }
 
 export async function verifyEmailToken(token: string): Promise<boolean> {
