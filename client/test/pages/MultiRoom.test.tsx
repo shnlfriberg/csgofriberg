@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -168,7 +168,7 @@ describe('MultiRoom replay', () => {
     expect(reportEntry.parentElement?.lastElementChild).toBe(reportEntry);
     await user.click(reportEntry);
     const description = screen.getByPlaceholderText('请输入举报描述');
-    await user.type(description, '疑似使用自动化脚本');
+    fireEvent.change(description, { target: { value: '疑似使用自动化脚本' } });
     await user.click(screen.getByRole('button', { name: '提交举报' }));
 
     expect(socket.emit).toHaveBeenCalledWith(
