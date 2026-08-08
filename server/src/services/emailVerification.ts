@@ -182,7 +182,11 @@ export async function claimEmailVerificationCooldown(userId: number): Promise<nu
 export async function issueEmailVerification(
   userId: number,
   emailInput: string,
-  options: { enforceCooldown?: boolean } = {}
+  options: {
+    enforceCooldown?: boolean;
+    requestIp?: string;
+    reserveSendQuota?: (requestIp: string) => Promise<() => Promise<void>>;
+  } = {}
 ): Promise<{ retryAt: number | null }> {
   const user = await db('users').where({ id: userId }).first('id', 'email_verified_at');
   if (!user) throw new Error('USER_NOT_FOUND');
@@ -190,27 +194,35 @@ export async function issueEmailVerification(
   const email = normalizeEmail(emailInput);
   const existing = await db('users').where({ email }).whereNot({ id: userId }).first('id');
   if (existing) throw new Error('EMAIL_TAKEN');
-  const retryAt = options.enforceCooldown ? await claimEmailVerificationCooldown(userId) : null;
-  await db('users').where({ id: userId }).update({ email, email_verified_at: null });
-  const authCache = redis();
-  if (authCache) await authCache.del(redisKey(`auth:user:${userId}`)).catch(() => undefined);
-  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
-  await db('email_verifications').where({ user_id: userId }).del();
-  await db('email_verifications').insert({
-    user_id: userId,
-    email,
-    token_hash: hashVerificationCode(userId, email, code),
-    expires_at: new Date(Date.now() + config.email.verifyTtlSeconds * 1000),
-  });
-  await sendEmail(
-    email,
-    '您的邮箱验证码｜弗一把',
-    buildVerificationEmail({
-      code,
-      ttlSeconds: config.email.verifyTtlSeconds,
-    })
-  );
-  return { retryAt };
+  const releaseSendQuota = options.reserveSendQuota
+    ? await options.reserveSendQuota(options.requestIp ?? 'unknown')
+    : null;
+  try {
+    const retryAt = options.enforceCooldown ? await claimEmailVerificationCooldown(userId) : null;
+    await db('users').where({ id: userId }).update({ email, email_verified_at: null });
+    const authCache = redis();
+    if (authCache) await authCache.del(redisKey(`auth:user:${userId}`)).catch(() => undefined);
+    const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+    await db('email_verifications').where({ user_id: userId }).del();
+    await db('email_verifications').insert({
+      user_id: userId,
+      email,
+      token_hash: hashVerificationCode(userId, email, code),
+      expires_at: new Date(Date.now() + config.email.verifyTtlSeconds * 1000),
+    });
+    await sendEmail(
+      email,
+      '您的邮箱验证码｜弗一把',
+      buildVerificationEmail({
+        code,
+        ttlSeconds: config.email.verifyTtlSeconds,
+      })
+    );
+    return { retryAt };
+  } catch (error) {
+    if (releaseSendQuota) await releaseSendQuota().catch(() => undefined);
+    throw error;
+  }
 }
 
 export async function verifyEmailCode(userId: number, code: string): Promise<boolean> {

@@ -14,7 +14,14 @@ import {
 } from '../middleware/auth';
 import { validateBody, asyncHandler, HttpError } from '../middleware/common';
 import { User } from '../types';
-import { rateLimit, requestIdentity, requestIp } from '../middleware/rateLimit';
+import {
+  rateLimit,
+  RateLimitReservation,
+  releaseRateLimit,
+  requestIdentity,
+  requestIp,
+  reserveRateLimit,
+} from '../middleware/rateLimit';
 import { invalidateCached } from '../services/queryCache';
 import { leaderboardCacheKey } from '../services/leaderboardCache';
 import { hashPassword, passwordNeedsRehash, verifyPassword } from '../services/password';
@@ -36,6 +43,9 @@ const USERNAME_MAX_LENGTH = 20;
 const PASSWORD_MIN_LENGTH = 10;
 const PASSWORD_MAX_LENGTH = 128;
 const USERNAME_PATTERN = /^[\w一-龥-]+$/;
+const EMAIL_REQUEST_ATTEMPT_LIMIT = 30;
+const EMAIL_SEND_LIMIT = 3;
+const EMAIL_RATE_LIMIT_WINDOW_SECONDS = 3600;
 
 const credentialsSchema = z.object({
   username: z
@@ -91,6 +101,37 @@ function publicUser(user: { id: number; username: string; role: 'user' | 'admin'
     email: user.email ?? null,
     emailVerified: Boolean(user.emailVerified),
   };
+}
+
+async function reserveEmailSendQuota(req: Request, ip: string): Promise<() => Promise<void>> {
+  const reservations: RateLimitReservation[] = [];
+  try {
+    const userReservation = await reserveRateLimit(
+      'email-send',
+      requestIdentity(req),
+      EMAIL_SEND_LIMIT,
+      EMAIL_RATE_LIMIT_WINDOW_SECONDS
+    );
+    if (!userReservation) throw new HttpError(429, 'RATE_LIMITED');
+    reservations.push(userReservation);
+
+    const ipReservation = await reserveRateLimit(
+      'email-send-ip',
+      ip,
+      EMAIL_SEND_LIMIT,
+      EMAIL_RATE_LIMIT_WINDOW_SECONDS
+    );
+    if (!ipReservation) throw new HttpError(429, 'RATE_LIMITED');
+    reservations.push(ipReservation);
+
+    return async () => {
+      await Promise.allSettled(reservations.map((reservation) => releaseRateLimit(reservation)));
+    };
+  } catch (error) {
+    await Promise.allSettled(reservations.map((reservation) => releaseRateLimit(reservation)));
+    if (error instanceof HttpError) throw error;
+    throw new HttpError(503, 'RATE_LIMIT_UNAVAILABLE');
+  }
 }
 
 router.post(
@@ -223,8 +264,20 @@ router.post(
 router.post(
   '/email/request',
   requireAuth,
-  rateLimit({ name: 'email-request', limit: 3, windowSeconds: 3600, key: requestIdentity, failClosed: true }),
-  rateLimit({ name: 'email-request-ip', limit: 3, windowSeconds: 3600, key: requestIp, failClosed: true }),
+  rateLimit({
+    name: 'email-request',
+    limit: EMAIL_REQUEST_ATTEMPT_LIMIT,
+    windowSeconds: EMAIL_RATE_LIMIT_WINDOW_SECONDS,
+    key: requestIdentity,
+    failClosed: true,
+  }),
+  rateLimit({
+    name: 'email-request-ip',
+    limit: EMAIL_REQUEST_ATTEMPT_LIMIT,
+    windowSeconds: EMAIL_RATE_LIMIT_WINDOW_SECONDS,
+    key: requestIp,
+    failClosed: true,
+  }),
   validateBody(emailSchema),
   asyncHandler(async (req, res) => {
     try {
@@ -234,7 +287,11 @@ router.post(
       throw error;
     }
     try {
-      const { retryAt } = await issueEmailVerification(req.user!.id, req.body.email, { enforceCooldown: true });
+      const { retryAt } = await issueEmailVerification(req.user!.id, req.body.email, {
+        enforceCooldown: true,
+        requestIp: requestIp(req),
+        reserveSendQuota: (ip) => reserveEmailSendQuota(req, ip),
+      });
       return res.json({ ok: true, retryAt, serverNow: Date.now() });
     } catch (error) {
       if (error instanceof EmailVerificationCooldownError) {
