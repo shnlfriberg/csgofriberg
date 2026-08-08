@@ -10,7 +10,7 @@ import {
   userNameFromUsername,
 } from '../middleware/auth';
 import { consumeRateLimit } from '../middleware/rateLimit';
-import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
+import { compareGuess, refreshGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import {
   getEnabledPlayer,
   getPlayer,
@@ -29,7 +29,6 @@ import {
   beginMaintenanceWindow,
   cancelQueue,
   claimDueSchedules,
-  clearLegacyMatchmakingQueues,
   clearIdentityRoom,
   deleteRoom,
   getRoom,
@@ -335,7 +334,7 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     players: room.players.map((p) => {
       const guesses = p.guesses.map((feedback) => {
         const guess = getPlayer(feedback.playerId);
-        return completeGuessFeedback(feedback, guess, target);
+        return refreshGuessFeedback(feedback, guess, target);
       });
       return {
         key: p.key,
@@ -1190,7 +1189,6 @@ export function setupSocket(io: Server) {
     backgroundTasks.add(task);
     void task.catch((err) => logTransientError(label, err)).finally(() => backgroundTasks.delete(task));
   };
-  trackBackground(clearLegacyMatchmakingQueues(), 'matchmaking-legacy-queue-cleanup');
   const presenceSubscribers = new Set<string>();
   const heartbeatEntries = new Map<string, { ip: string; identity: string; socketId: string }>();
   let heartbeatRequest: Promise<void> | null = null;
@@ -1886,8 +1884,6 @@ export function setupSocket(io: Server) {
       ack?.({ ok: true, room: publicRoom(result.room, me.key) });
     };
     safeOn(socket, 'game:skip-round', handleSkipRound, activeRoundPayloadSchema);
-    // Rolling-upgrade compatibility for clients that still send the old event name.
-    safeOn(socket, 'game:surrender-round', handleSkipRound, activeRoundPayloadSchema);
 
     safeOn(socket, 'room:leave', async (_payload, ack) => {
       await restorePromise;

@@ -5,7 +5,7 @@ import { config } from '../config';
 import { db } from '../db/knex';
 import { User } from '../types';
 import { redis, redisKey } from '../redis';
-import { guestNameFromKey, userNameFromUsername } from '../services/identityDisplay';
+import { guestNameFromKey } from '../services/identityDisplay';
 import { isGuestBanned } from '../services/guestAccounts';
 
 export { guestNameFromKey, userNameFromUsername } from '../services/identityDisplay';
@@ -238,10 +238,6 @@ export function hasAuthSessionCookie(cookieHeader: string | undefined): boolean 
   return Boolean(cookies[AUTH_COOKIE] || cookies[REFRESH_COOKIE]);
 }
 
-function hasRefreshCookie(cookieHeader: string | undefined): boolean {
-  return Boolean(parseCookies(cookieHeader)[REFRESH_COOKIE]);
-}
-
 export async function authenticateCookie(
   cookieHeader: string | undefined
 ): Promise<ResolvedAuthUser | null> {
@@ -299,14 +295,10 @@ export async function refreshAuthCookies(
 
 export async function restoreAuthSession(
   cookieHeader: string | undefined,
-  res: Response,
-  issueMissingRefresh = false
+  res: Response
 ): Promise<AuthPayload | null> {
   const user = await authenticateCookie(cookieHeader);
   if (user) {
-    if (issueMissingRefresh && !hasRefreshCookie(cookieHeader)) {
-      setAuthCookies(res, { id: user.id, token_version: user.tokenVersion });
-    }
     return { id: user.id, username: user.username, role: user.role, email: user.email, emailVerified: user.emailVerified };
   }
   return refreshAuthCookies(cookieHeader, res);
@@ -322,11 +314,7 @@ async function attachIdentity(
   req: Request,
   res: Response
 ): Promise<'authenticated' | 'guest' | 'expired' | 'banned'> {
-  const user = await restoreAuthSession(
-    req.headers.cookie,
-    res,
-    req.originalUrl.startsWith('/api/auth/')
-  );
+  const user = await restoreAuthSession(req.headers.cookie, res);
   if (user) {
     req.user = user;
   } else if (req.headers['x-auth-expected'] === '1') {

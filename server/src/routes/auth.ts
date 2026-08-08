@@ -194,7 +194,7 @@ router.post(
   '/session',
   rateLimit({ name: 'session', limit: 60, windowSeconds: 60, failClosed: true }),
   asyncHandler(async (req, res) => {
-    const user = await restoreAuthSession(req.headers.cookie, res, true);
+    const user = await restoreAuthSession(req.headers.cookie, res);
     if (user) return res.json({ authenticated: true, user });
     const guest = ensureGuestCookie(req, res);
     res.json({ authenticated: false, guest: { name: guest.name } });

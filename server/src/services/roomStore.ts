@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'crypto';
+import { randomUUID } from 'crypto';
 import { evalStateScript, redisKey, redisState } from '../redis';
 import { GuessFeedback } from '../types';
 import { config } from '../config';
@@ -146,13 +146,6 @@ function stateRedis() {
   return client;
 }
 
-function legacyRecordId(roomId: string): string {
-  const hex = createHash('sha256')
-    .update(`csgofriberg-match-record-v1:${roomId}`, 'utf8')
-    .digest('hex');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-8${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
-}
-
 function evalCachedStateScript(
   name: string,
   script: string,
@@ -183,7 +176,6 @@ function matchmakingQueueKey(dbType: DbType, pool: MatchmakingPool = 'verified')
 }
 
 function normalizeRoom(room: StoredRoom): StoredRoom {
-  room.recordId ??= legacyRecordId(room.id);
   if (!Array.isArray(room.players)) room.players = [];
   if (!Array.isArray(room.spectators)) room.spectators = [];
   if (typeof room.allowSpectators !== 'boolean') room.allowSpectators = false;
@@ -1253,15 +1245,6 @@ export async function queueOrTakeOpponent(
   return typeof result === 'string' ? JSON.parse(result) as QueuedIdentity : null;
 }
 
-export async function clearLegacyMatchmakingQueues(): Promise<void> {
-  const client = stateRedis();
-  if (!client) return;
-  await Promise.all(DIFFICULTY_LEVELS.flatMap((difficulty) => [
-    client.del(redisKey(`matchmaking:${difficulty.key}`)),
-    client.del(redisKey(`matchmaking:verified-restricted:${difficulty.key}`)),
-  ]));
-}
-
 export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity): Promise<void> {
   const client = stateRedis();
   if (!client) return;
@@ -1302,7 +1285,7 @@ export async function moveQueuedIdentityToPool(
   const queueIndex = redisKey(`match-queue:${identity}`);
   const oldQueueName = await client.get(queueIndex);
   if (!oldQueueName) return;
-  const prefix = oldQueueName.match(/^(restricted|verified-restricted|verified):/);
+  const prefix = oldQueueName.match(/^(restricted|verified):/);
   const dbType = prefix ? oldQueueName.slice(prefix[0].length) : oldQueueName;
   if (!dbType) return;
   const newQueueName = matchmakingQueueName(dbType, pool);
@@ -1381,10 +1364,8 @@ export async function cancelQueue(identity: string, socketId?: string): Promise<
     }
     await Promise.all([
       ...DIFFICULTY_LEVELS.map((difficulty) => Promise.all([
-        client.zRem(redisKey(`matchmaking:${difficulty.key}`), identity),
         client.zRem(matchmakingQueueKey(difficulty.key, 'restricted'), identity),
         client.zRem(matchmakingQueueKey(difficulty.key, 'verified'), identity),
-        client.zRem(redisKey(`matchmaking:verified-restricted:${difficulty.key}`), identity),
       ])),
       client.del(profileKey),
       client.del(queueIndex),

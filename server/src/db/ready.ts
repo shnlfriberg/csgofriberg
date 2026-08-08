@@ -4,9 +4,8 @@ import { db } from './knex';
 const REQUIRED_COLUMNS: Record<string, string[]> = {
   users: ['id', 'username', 'password_hash', 'role', 'token_version', 'leaderboard_hidden', 'matchmaking_restricted', 'email', 'email_verified_at', 'banned_at'],
   email_verifications: ['id', 'user_id', 'email', 'token_hash', 'expires_at'],
-  guest_accounts: ['id', 'guest_key', 'guest_key_hash', 'display_id', 'banned_at', 'matchmaking_restricted'],
+  guest_accounts: ['id', 'guest_key', 'guest_key_hash', 'display_id', 'banned_at'],
   api_tokens: ['id', 'name', 'token_hash', 'prefix', 'created_by_user_id', 'expires_at'],
-  app_migrations: ['name', 'applied_at'],
   players: [
     'id',
     'nickname',

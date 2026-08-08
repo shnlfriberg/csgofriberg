@@ -53,18 +53,3 @@ export interface GuessFeedback {
     isActive: AttributeFeedback;
   };
 }
-
-export interface GameRow {
-  id: number;
-  session_id: string | null;
-  user_id: number | null;
-  guest_key: string | null;
-  target_player_id: number;
-  mode: string;
-  guesses: string;
-  guess_times: string;
-  status: 'playing' | 'won' | 'lost';
-  guess_count: number;
-  created_at: string;
-  finished_at: string | null;
-}

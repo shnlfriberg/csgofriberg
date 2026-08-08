@@ -4,7 +4,7 @@ import { db } from '../db/knex';
 import { optionalAuth } from '../middleware/auth';
 import { validateBody, validateParams, asyncHandler, HttpError } from '../middleware/common';
 import { GuessFeedback, Player } from '../types';
-import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
+import { compareGuess, refreshGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getEnabledPlayer, getPlayer, isDifficultyAvailable } from '../services/playerCache';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { withKeyLock } from '../services/keyLock';
@@ -57,7 +57,7 @@ function publicGuesses(game: SingleGameState): GuessFeedback[] {
   const target = getPlayer(game.targetPlayerId);
   return game.guesses.map((feedback) => {
     const guess = getPlayer(feedback.playerId);
-    return completeGuessFeedback(feedback, guess, target);
+    return refreshGuessFeedback(feedback, guess, target);
   });
 }
 

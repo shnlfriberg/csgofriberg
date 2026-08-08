@@ -72,26 +72,17 @@ export function compareGuess(guess: Player, target: Player): GuessFeedback {
   };
 }
 
-/** Upgrade Redis game snapshots created before a feedback attribute was added. */
-export function completeGuessFeedback(
+export function refreshGuessFeedback(
   feedback: GuessFeedback,
   guess?: Player,
   target?: Player
 ): GuessFeedback {
-  const team = guess && target ? teamAttr(guess, target) : feedback.attributes.team;
-  if (feedback.attributes.majorChampionships && team === feedback.attributes.team) return feedback;
+  if (!guess || !target) return feedback;
   return {
     ...feedback,
     attributes: {
       ...feedback.attributes,
-      team,
-      majorChampionships: guess && target
-        ? numberAttr(
-            guess.major_championships,
-            target.major_championships,
-            MAJOR_CHAMPIONSHIPS_CLOSE_RANGE
-          )
-        : { value: '-', level: 'wrong' },
+      team: teamAttr(guess, target),
     },
   };
 }

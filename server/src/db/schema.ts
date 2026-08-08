@@ -1,204 +1,6 @@
 import { Knex } from 'knex';
 import { db } from './knex';
-import crypto from 'crypto';
-import { config } from '../config';
-import { guestNameFromKey, userNameFromUsername } from '../services/identityDisplay';
 import { DIFFICULTY_LEVELS } from '../difficulties';
-import { winningGuessMetricsByPlayer } from '../services/matchGuessMetrics';
-
-const FIRST_GUESS_BACKFILL_BATCH_SIZE = 1000;
-const USER_DISPLAY_ID_BACKFILL_BATCH_SIZE = 1000;
-const DISPLAY_ID_FILTER_SYNC_BATCH_SIZE = 1000;
-const PLAYER_DIFFICULTIES_BACKFILL_MIGRATION = '20260724-player-difficulties-backfill';
-const MULTI_WINNING_GUESSES_BACKFILL_MIGRATION = '20260729-multi-winning-guesses-backfill';
-const MULTI_WINNING_GUESSES_BACKFILL_BATCH_SIZE = 200;
-
-export async function backfillLegacyPlayerDifficulties(instance: Knex = db): Promise<void> {
-  if (!(await instance.schema.hasColumn('players', 'is_easy'))) return;
-  await instance.transaction(async (trx) => {
-    const applied = await trx('app_migrations')
-      .where({ name: PLAYER_DIFFICULTIES_BACKFILL_MIGRATION })
-      .first();
-    if (applied) return;
-
-    const players = await trx('players').select('id', 'is_easy');
-    const memberships = players.flatMap((player) => [
-      { player_id: player.id, difficulty_key: 'normal' },
-      ...(Boolean(player.is_easy) ? [{ player_id: player.id, difficulty_key: 'easy' }] : []),
-    ]);
-    for (let index = 0; index < memberships.length; index += 500) {
-      await trx('player_difficulties')
-        .insert(memberships.slice(index, index + 500))
-        .onConflict(['player_id', 'difficulty_key'])
-        .ignore();
-    }
-    await trx('app_migrations')
-      .insert({ name: PLAYER_DIFFICULTIES_BACKFILL_MIGRATION })
-      .onConflict('name')
-      .ignore();
-  });
-}
-
-async function backfillUserDisplayIds(instance: Knex): Promise<void> {
-  let cursor = 0;
-  while (true) {
-    const users = await instance('users')
-      .select('id', 'username')
-      .where('id', '>', cursor)
-      .where((builder) => builder.whereNull('display_id').orWhere('display_id', ''))
-      .orderBy('id')
-      .limit(USER_DISPLAY_ID_BACKFILL_BATCH_SIZE);
-    if (!users.length) return;
-    cursor = Number(users[users.length - 1].id);
-    await instance.transaction(async (trx) => {
-      for (const user of users) {
-        await trx('users').where({ id: user.id }).update({
-          display_id: userNameFromUsername(user.username),
-        });
-      }
-    });
-  }
-}
-
-function firstGuessPlayerId(value: unknown): number {
-  try {
-    const guesses = JSON.parse(String(value));
-    if (!Array.isArray(guesses) || !guesses.length) return 0;
-    const first = guesses[0];
-    const id = Number(
-      typeof first === 'object' && first
-        ? (first as { playerId?: unknown }).playerId
-        : first
-    );
-    return Number.isInteger(id) && id > 0 ? id : 0;
-  } catch {
-    return 0;
-  }
-}
-
-async function backfillFirstGuessPlayerIds(instance: Knex): Promise<void> {
-  let cursor = 0;
-  while (true) {
-    const rows = await instance('games')
-      .select('id', 'guesses')
-      .where('id', '>', cursor)
-      .whereNull('first_guess_player_id')
-      .where('guess_count', '>', 0)
-      .whereNot('status', 'playing')
-      .orderBy('id')
-      .limit(FIRST_GUESS_BACKFILL_BATCH_SIZE);
-    if (!rows.length) return;
-    cursor = Number(rows[rows.length - 1].id);
-
-    const grouped = new Map<number, number[]>();
-    for (const row of rows) {
-      const playerId = firstGuessPlayerId(row.guesses);
-      const ids = grouped.get(playerId) ?? [];
-      ids.push(Number(row.id));
-      grouped.set(playerId, ids);
-    }
-    await instance.transaction(async (trx) => {
-      for (const [playerId, ids] of grouped) {
-        await trx('games').whereIn('id', ids).update({ first_guess_player_id: playerId });
-      }
-    });
-  }
-}
-
-async function syncFilteredDisplayIds(instance: Knex): Promise<void> {
-  const revision = crypto
-    .createHash('sha256')
-    .update('display-id-filter-v1\0', 'ascii')
-    .update(config.displayIdForbiddenTokens.join('\0'), 'utf8')
-    .digest('hex')
-    .slice(0, 16);
-  const migrationName = `20260801-display-id-filter-${revision}`;
-  if (await instance('app_migrations').where({ name: migrationName }).first()) return;
-
-  let userCursor = 0;
-  while (true) {
-    const users = await instance('users')
-      .select('id', 'username', 'display_id')
-      .where('id', '>', userCursor)
-      .orderBy('id')
-      .limit(DISPLAY_ID_FILTER_SYNC_BATCH_SIZE);
-    if (!users.length) break;
-    userCursor = Number(users[users.length - 1].id);
-    await instance.transaction(async (trx) => {
-      for (const user of users) {
-        const displayId = userNameFromUsername(user.username);
-        if (user.display_id !== displayId) {
-          await trx('users').where({ id: user.id }).update({ display_id: displayId });
-        }
-      }
-    });
-  }
-
-  let guestCursor = 0;
-  while (true) {
-    const guests = await instance('guest_accounts')
-      .select('id', 'guest_key', 'display_id')
-      .where('id', '>', guestCursor)
-      .orderBy('id')
-      .limit(DISPLAY_ID_FILTER_SYNC_BATCH_SIZE);
-    if (!guests.length) break;
-    guestCursor = Number(guests[guests.length - 1].id);
-    await instance.transaction(async (trx) => {
-      for (const guest of guests) {
-        if (!guest.guest_key) continue;
-        const displayId = guestNameFromKey(guest.guest_key);
-        if (guest.display_id !== displayId) {
-          await trx('guest_accounts').where({ id: guest.id }).update({ display_id: displayId });
-        }
-      }
-    });
-  }
-
-  await instance('app_migrations')
-    .insert({ name: migrationName })
-    .onConflict('name')
-    .ignore();
-}
-
-async function backfillMultiWinningGuesses(instance: Knex): Promise<void> {
-  const applied = await instance('app_migrations')
-    .where({ name: MULTI_WINNING_GUESSES_BACKFILL_MIGRATION })
-    .first();
-  if (applied) return;
-
-  let cursor = 0;
-  while (true) {
-    const matches = await instance('match_records')
-      .select('id', 'replay')
-      .where('id', '>', cursor)
-      .orderBy('id')
-      .limit(MULTI_WINNING_GUESSES_BACKFILL_BATCH_SIZE);
-    if (!matches.length) break;
-    cursor = Number(matches[matches.length - 1].id);
-    await instance.transaction(async (trx) => {
-      const matchIds = matches.map((match) => Number(match.id));
-      await trx('match_players')
-        .whereIn('match_id', matchIds)
-        .update({ winning_guess_sum: 0, winning_rounds: 0 });
-      for (const match of matches) {
-        const metrics = winningGuessMetricsByPlayer(match.replay);
-        for (const [playerKey, values] of metrics) {
-          await trx('match_players')
-            .where({ match_id: match.id, player_key: playerKey })
-            .update({
-              winning_guess_sum: values.winningGuessSum,
-              winning_rounds: values.winningRounds,
-            });
-        }
-      }
-    });
-  }
-
-  await instance('app_migrations')
-    .insert({ name: MULTI_WINNING_GUESSES_BACKFILL_MIGRATION })
-    .onConflict('name')
-    .ignore();
-}
 
 export async function ensureSchema(instance: Knex = db): Promise<void> {
   if (!(await instance.schema.hasTable('users'))) {
@@ -261,7 +63,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('guest_key_hash', 128).notNullable().unique();
       t.string('display_id', 16).notNullable();
       t.timestamp('banned_at').nullable();
-      t.boolean('matchmaking_restricted').notNullable().defaultTo(false);
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
       t.timestamp('last_seen_at').notNullable().defaultTo(instance.fn.now());
       t.index(['banned_at', 'last_seen_at']);
@@ -270,10 +71,9 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   if (!(await instance.schema.hasColumn('guest_accounts', 'guest_key'))) {
     await instance.schema.alterTable('guest_accounts', (t) => t.string('guest_key', 64).nullable());
   }
-  if (!(await instance.schema.hasColumn('guest_accounts', 'matchmaking_restricted'))) {
-    await instance.schema.alterTable('guest_accounts', (t) => t.boolean('matchmaking_restricted').notNullable().defaultTo(false));
+  if (await instance.schema.hasColumn('guest_accounts', 'matchmaking_restricted')) {
+    await instance.schema.alterTable('guest_accounts', (t) => t.dropColumn('matchmaking_restricted'));
   }
-  await backfillUserDisplayIds(instance);
   const usersIndexConcurrently = instance.client.config.client === 'pg' ? ' concurrently' : '';
   await instance.raw(
     `create index${usersIndexConcurrently} if not exists "users_display_id_idx" on "users" ("display_id")`
@@ -299,13 +99,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     `create index${apiTokensIndexConcurrently} if not exists "api_tokens_owner_created_idx" on "api_tokens" ("created_by_user_id", "created_at")`
   );
 
-  if (!(await instance.schema.hasTable('app_migrations'))) {
-    await instance.schema.createTable('app_migrations', (t) => {
-      t.string('name', 128).primary();
-      t.timestamp('applied_at').notNullable().defaultTo(instance.fn.now());
-    });
-  }
-
   if (!(await instance.schema.hasTable('players'))) {
     await instance.schema.createTable('players', (t) => {
       t.increments('id').primary();
@@ -323,33 +116,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
     });
   }
-  const hasPlayerAge = await instance.schema.hasColumn('players', 'age');
-  const hasPlayerBirthYear = await instance.schema.hasColumn('players', 'birth_year');
-  if (!hasPlayerAge) {
-    await instance.schema.alterTable('players', (t) => {
-      t.integer('age').nullable();
-    });
-  }
-  if (hasPlayerBirthYear) {
-    const currentYear = new Date().getFullYear();
-    const players = await instance('players').select('id', 'age', 'birth_year');
-    for (const player of players) {
-      if (player.age != null) continue;
-      const age = currentYear - Number(player.birth_year);
-      if (!Number.isInteger(age) || age < 0) {
-        throw new Error(`INVALID_PLAYER_BIRTH_YEAR:${player.id}`);
-      }
-      await instance('players').where({ id: player.id }).update({ age });
-    }
-  }
-  const missingPlayerAge = await instance('players').whereNull('age').first('id');
-  if (missingPlayerAge) throw new Error(`MISSING_PLAYER_AGE:${missingPlayerAge.id}`);
-  if (!hasPlayerAge || hasPlayerBirthYear) {
-    await instance.schema.alterTable('players', (t) => {
-      t.integer('age').notNullable().alter();
-      if (hasPlayerBirthYear) t.dropColumn('birth_year');
-    });
-  }
   if (!(await instance.schema.hasColumn('players', 'major_championships'))) {
     await instance.schema.alterTable('players', (t) => {
       t.integer('major_championships').notNullable().defaultTo(0);
@@ -359,12 +125,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     await instance.schema.alterTable('players', (t) => {
       t.boolean('is_enabled').notNullable().defaultTo(true);
     });
-  }
-  if (await instance.schema.hasColumn('players', 'real_name')) {
-    if (instance.client.config.client === 'pg') {
-      await instance.raw('drop index if exists "players_real_name_trgm_idx"');
-    }
-    await instance.schema.alterTable('players', (t) => t.dropColumn('real_name'));
   }
   if (instance.client.config.client === 'pg') {
     await instance.raw('create extension if not exists pg_trgm');
@@ -376,13 +136,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     );
   }
 
-  // 旧版 games 表 user_id 不可空且无 guest_key;检测到旧结构则重建(开发期数据可丢弃)
-  if (
-    (await instance.schema.hasTable('games')) &&
-    !(await instance.schema.hasColumn('games', 'guest_key'))
-  ) {
-    await instance.schema.dropTable('games');
-  }
   if (!(await instance.schema.hasTable('games'))) {
     await instance.schema.createTable('games', (t) => {
       t.increments('id').primary();
@@ -435,11 +188,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.index(['difficulty_key', 'player_id']);
     });
   }
-  await syncFilteredDisplayIds(instance);
-  await backfillLegacyPlayerDifficulties(instance);
-  if (await instance.schema.hasColumn('players', 'is_easy')) {
-    await instance.schema.alterTable('players', (t) => t.dropColumn('is_easy'));
-  }
   if (!(await instance.schema.hasTable('player_change_submissions'))) {
     await instance.schema.createTable('player_change_submissions', (t) => {
       t.increments('id').primary();
@@ -485,19 +233,12 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   if (!(await instance.schema.hasColumn('games', 'first_guess_player_id'))) {
     await instance.schema.alterTable('games', (t) => t.integer('first_guess_player_id').nullable());
   }
-  await backfillFirstGuessPlayerIds(instance);
   await instance.raw(
     'create unique index if not exists "games_session_id_unique" on "games" ("session_id")'
   );
   // Active single-player games now live only in Redis and are not historical records.
   await instance('games').where({ status: 'playing' }).del();
 
-  if (
-    (await instance.schema.hasTable('match_records')) &&
-    !(await instance.schema.hasColumn('match_records', 'bo_type'))
-  ) {
-    await instance.schema.dropTable('match_records');
-  }
   if (!(await instance.schema.hasTable('match_records'))) {
     await instance.schema.createTable('match_records', (t) => {
       t.increments('id').primary();
@@ -637,34 +378,6 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       'alter table "match_records" alter column "room_id" type varchar(64)'
     );
   }
-
-  const matchPlayerCount = Number(
-    (await instance('match_players').count<{ count: number }[]>({ count: '*' }))[0].count
-  );
-  if (matchPlayerCount === 0) {
-    const legacyMatches = await instance('match_records').select('id', 'winner_id', 'players');
-    for (const match of legacyMatches) {
-      let players: { userId: number | null; name: string; score: number }[] = [];
-      try {
-        players = JSON.parse(match.players);
-      } catch {
-        continue;
-      }
-      if (players.length) {
-        await instance('match_players').insert(
-          players.map((player, index) => ({
-            match_id: match.id,
-            user_id: player.userId,
-            player_key: player.userId != null ? `u:${player.userId}` : `legacy:${match.id}:${index}`,
-            player_name: player.name,
-            score: player.score,
-            is_winner: player.userId != null && player.userId === match.winner_id,
-          }))
-        );
-      }
-    }
-  }
-  await backfillMultiWinningGuesses(instance);
 
   const gameIndexes = [
     ['games_user_status_mode_idx', ['user_id', 'status', 'mode']],

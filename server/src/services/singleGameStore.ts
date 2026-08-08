@@ -37,7 +37,6 @@ function requiredRedis() {
 }
 
 function normalizeGuessTimes(game: SingleGameState): void {
-  if (!Array.isArray(game.guessTimes)) game.guessTimes = [];
   game.guessTimes = game.guessTimes.map((value) => (
     typeof value === 'number' && Number.isFinite(value) && value >= 0
       ? Math.floor(value)
@@ -47,16 +46,6 @@ function normalizeGuessTimes(game: SingleGameState): void {
     game.guessTimes = game.guessTimes.slice(0, game.guesses.length);
   }
   while (game.guessTimes.length < game.guesses.length) game.guessTimes.push(null);
-}
-
-export async function createOrResumeSingleGame(input: {
-  identityKey: string;
-  userId: number | null;
-  guestKey: string | null;
-  mode: SingleGameMode;
-  targetPlayerId: number;
-}): Promise<SingleGameState> {
-  return (await createOrResumeSingleGameWithStatus(input)).game;
 }
 
 export async function createOrResumeSingleGameWithStatus(input: {
@@ -111,7 +100,6 @@ export async function loadSingleGame(
   if (!raw) return null;
   const game = JSON.parse(raw) as SingleGameState;
   if (game.identityKey !== identityKey) return null;
-  if (!Array.isArray(game.guesses)) game.guesses = [];
   normalizeGuessTimes(game);
   if (game.lastActiveAt + SINGLE_GAME_TTL_SECONDS * 1000 <= Date.now()) {
     await deleteSingleGame(game);
@@ -137,7 +125,6 @@ export async function saveSingleGame(game: SingleGameState): Promise<void> {
 }
 
 export async function deleteSingleGame(game: SingleGameState): Promise<void> {
-  const client = requiredRedis();
   const active = activeKey(game.identityKey, game.mode);
   await evalCommandScript(
     'single-game-delete-v1',

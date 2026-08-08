@@ -40,24 +40,4 @@ export async function setGuestBanned(key: string, displayId: string, banned: boo
   if (cache) await cache.del(redisKey(`guest-ban:${hashGuestKey(key)}`)).catch(() => undefined);
 }
 
-export async function isGuestMatchmakingRestricted(key: string): Promise<boolean> {
-  const cache = redis();
-  const cacheKey = redisKey(`guest-matchmaking-restriction:${hashGuestKey(key)}`);
-  if (cache) {
-    const cached = await cache.get(cacheKey).catch(() => null);
-    if (cached === '1' || cached === '0') return cached === '1';
-  }
-  const row = await db('guest_accounts').where({ guest_key_hash: hashGuestKey(key) }).first('matchmaking_restricted');
-  const restricted = Boolean(row?.matchmaking_restricted);
-  if (cache && row) await cache.set(cacheKey, restricted ? '1' : '0', { EX: 300 }).catch(() => undefined);
-  return restricted;
-}
-
-export async function setGuestMatchmakingRestricted(key: string, displayId: string, restricted: boolean): Promise<void> {
-  await recordGuestSeen(key, displayId);
-  await db('guest_accounts').where({ guest_key_hash: hashGuestKey(key) }).update({ matchmaking_restricted: restricted });
-  const cache = redis();
-  if (cache) await cache.set(redisKey(`guest-matchmaking-restriction:${hashGuestKey(key)}`), restricted ? '1' : '0', { EX: 300 }).catch(() => undefined);
-}
-
 export { hashGuestKey };

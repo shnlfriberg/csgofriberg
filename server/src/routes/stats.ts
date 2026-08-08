@@ -4,7 +4,7 @@ import { db } from '../db/knex';
 import { guestNameFromKey, optionalAuth, userNameFromUsername } from '../middleware/auth';
 import { asyncHandler, HttpError, validateParams, validateQuery } from '../middleware/common';
 import { cached } from '../services/queryCache';
-import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
+import { compareGuess, refreshGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getPlayer, isDifficultyAvailable } from '../services/playerCache';
 import { getPlayerPerformance } from '../services/playerPerformance';
 import { GuessFeedback, Player } from '../types';
@@ -79,39 +79,12 @@ function multiAvgWinningGuesses(row: any): number | null {
   return winningRounds ? Number(row?.winningGuessSum ?? 0) / winningRounds : null;
 }
 
-function firstGuessPlayerId(value: unknown): number | null {
-  try {
-    const guesses = JSON.parse(String(value));
-    if (!Array.isArray(guesses) || !guesses.length) return null;
-    const first = guesses[0];
-    const id = Number(
-      typeof first === 'object' && first
-        ? (first as { playerId?: unknown }).playerId
-        : first
-    );
-    return Number.isInteger(id) && id > 0 ? id : null;
-  } catch {
-    return null;
-  }
-}
-
 async function firstGuessSummary(query: ReturnType<typeof db>) {
-  const [rows, missingRows] = await Promise.all([
-    query.clone()
-      .where('first_guess_player_id', '>', 0)
-      .select({ playerId: 'first_guess_player_id' })
-      .count({ count: '*' })
-      .groupBy('first_guess_player_id'),
-    // During a rolling update, old instances may briefly insert rows without the new column.
-    query.clone()
-      .whereNull('first_guess_player_id')
-      .where('guess_count', '>', 0)
-      .whereNot('status', 'playing')
-      .select('guesses'),
-  ]) as unknown as [
-    Array<{ playerId: unknown; count: unknown }>,
-    Array<{ guesses: unknown }>,
-  ];
+  const rows = await query.clone()
+    .where('first_guess_player_id', '>', 0)
+    .select({ playerId: 'first_guess_player_id' })
+    .count({ count: '*' })
+    .groupBy('first_guess_player_id') as unknown as Array<{ playerId: unknown; count: unknown }>;
   const counts = new Map<number, number>();
   for (const row of rows) {
     const playerId = Number(row.playerId);
@@ -119,10 +92,6 @@ async function firstGuessSummary(query: ReturnType<typeof db>) {
     if (Number.isInteger(playerId) && playerId > 0 && count > 0) {
       counts.set(playerId, (counts.get(playerId) ?? 0) + count);
     }
-  }
-  for (const row of missingRows) {
-    const playerId = firstGuessPlayerId(row.guesses);
-    if (playerId) counts.set(playerId, (counts.get(playerId) ?? 0) + 1);
   }
   const validCounts = Array.from(counts, ([playerId, count]) => ({ playerId, count }))
     .filter((row) => Boolean(getPlayer(row.playerId)));
@@ -406,7 +375,7 @@ router.get(
       }
       if (!stored || typeof stored !== 'object' || !('playerId' in stored)) return [];
       const feedback = stored as GuessFeedback;
-      return [completeGuessFeedback(feedback, getPlayer(feedback.playerId), target)];
+      return [refreshGuessFeedback(feedback, getPlayer(feedback.playerId), target)];
     });
 
     res.json({

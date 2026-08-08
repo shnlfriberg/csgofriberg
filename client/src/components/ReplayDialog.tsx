@@ -21,8 +21,6 @@ export interface SingleReplay {
   guesses: GuessFeedback[];
 }
 
-export type MultiReplayRound = MatchReplayRound;
-
 export interface MultiReplay extends MatchReplay {
   type: 'multi';
 }

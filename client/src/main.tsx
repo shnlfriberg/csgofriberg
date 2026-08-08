@@ -12,8 +12,6 @@ import ToastViewport from './components/Toast';
 import AnnouncementDialog from './components/AnnouncementDialog';
 import './i18n';
 
-localStorage.removeItem('token');
-localStorage.removeItem('user');
 initializeTheme();
 initializeMotionPreference();
 

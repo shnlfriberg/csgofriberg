@@ -4,12 +4,8 @@ import crypto from 'crypto';
 import { resolveUmamiConfig } from './services/umami';
 
 const repoEnvPath = path.resolve(__dirname, '../../.env');
-const serverEnvPath = path.resolve(__dirname, '../.env');
 
-// The repository-level .env is the primary configuration used by the root scripts.
-// Keep server/.env as a fallback for existing deployments.
 dotenv.config({ path: repoEnvPath });
-dotenv.config({ path: serverEnvPath });
 
 const configuredJwtSecret = process.env.JWT_SECRET?.trim();
 const configuredGuestIdSalt = process.env.GUEST_ID_SALT?.trim();

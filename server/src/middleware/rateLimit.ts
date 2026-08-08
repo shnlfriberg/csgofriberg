@@ -27,24 +27,12 @@ export async function consumeRateLimit(
   const localKey = `${key}:${identity}`;
   const client = redis();
   if (client) {
-    let count: number;
-    try {
-      count = Number(await evalCommandScript(
-        'rate-limit-hexpire-v1',
-        HASH_RATE_LIMIT_SCRIPT,
-        [key],
-        [identity, String(windowSeconds + 1)]
-      ));
-    } catch (err) {
-      // Keep a compatibility path for Redis versions without hash-field TTL.
-      if (!(err instanceof Error) || !/unknown command|hexpire/i.test(err.message)) throw err;
-      const legacyKey = redisKey(`rl:${name}:${identity}:${bucket}`);
-      const result = await client.multi()
-        .incr(legacyKey)
-        .expire(legacyKey, windowSeconds + 1)
-        .exec();
-      count = Number(result?.[0] ?? 0);
-    }
+    const count = Number(await evalCommandScript(
+      'rate-limit-hexpire-v1',
+      HASH_RATE_LIMIT_SCRIPT,
+      [key],
+      [identity, String(windowSeconds + 1)]
+    ));
     return count <= limit;
   }
   const now = Date.now();

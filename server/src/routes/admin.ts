@@ -21,7 +21,7 @@ import { allLeaderboardCacheKeys } from '../services/leaderboardCache';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { publishResourceVersion } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
-import { compareGuess, completeGuessFeedback, MAX_GUESSES } from '../services/gameService';
+import { compareGuess, refreshGuessFeedback, MAX_GUESSES } from '../services/gameService';
 import { getPlayer } from '../services/playerCache';
 import type { GuessFeedback, Player } from '../types';
 import { DIFFICULTY_LEVELS } from '../difficulties';
@@ -474,7 +474,7 @@ router.get(
     if (reportedKey.startsWith('g:')) {
       const guest = await db('guest_accounts')
         .where({ guest_key: reportedKey.slice(2) })
-        .first('id', 'display_id', 'banned_at', 'matchmaking_restricted', 'created_at', 'last_seen_at');
+        .first('id', 'display_id', 'banned_at', 'created_at', 'last_seen_at');
       if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
       return res.json({
         type: 'guest',
@@ -482,7 +482,6 @@ router.get(
           id: Number(guest.id),
           displayId: guest.display_id,
           banned: Boolean(guest.banned_at),
-          matchmakingRestricted: Boolean(guest.matchmaking_restricted),
           createdAt: guest.created_at,
           lastSeenAt: guest.last_seen_at,
         },
@@ -737,7 +736,7 @@ router.get(
       }
       if (!stored || typeof stored !== 'object' || !('playerId' in stored)) return [];
       const feedback = stored as GuessFeedback;
-      return [completeGuessFeedback(feedback, getPlayer(feedback.playerId), target)];
+      return [refreshGuessFeedback(feedback, getPlayer(feedback.playerId), target)];
     });
     res.json({
       id: Number(game.id),
@@ -1160,7 +1159,7 @@ router.get(
     const page = Math.min(parsed.page, totalPages);
     const guests = await query.clone().orderBy('last_seen_at', 'desc').limit(parsed.pageSize).offset((page - 1) * parsed.pageSize);
     res.json({
-      guests: guests.map((guest) => ({ id: Number(guest.id), displayId: guest.display_id, banned: Boolean(guest.banned_at), matchmakingRestricted: Boolean(guest.matchmaking_restricted), createdAt: guest.created_at, lastSeenAt: guest.last_seen_at })),
+      guests: guests.map((guest) => ({ id: Number(guest.id), displayId: guest.display_id, banned: Boolean(guest.banned_at), createdAt: guest.created_at, lastSeenAt: guest.last_seen_at })),
       total, page, pageSize: parsed.pageSize, totalPages,
     });
   })
@@ -1174,7 +1173,7 @@ router.get(
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const guest = await db('guest_accounts').where({ id }).first();
     if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
-    res.json({ guest: { id, displayId: guest.display_id, banned: Boolean(guest.banned_at), matchmakingRestricted: Boolean(guest.matchmaking_restricted) }, stats: await getPlayerPerformance({ key: `g:${guest.guest_key}`, userId: null, name: guest.display_id }) });
+    res.json({ guest: { id, displayId: guest.display_id, banned: Boolean(guest.banned_at) }, stats: await getPlayerPerformance({ key: `g:${guest.guest_key}`, userId: null, name: guest.display_id }) });
   })
 );
 
@@ -1230,22 +1229,6 @@ router.patch(
     const io = req.app.get('io') as Server | undefined;
     if (banned) io?.in(`identity:g:${guest.guest_key}`).disconnectSockets(true);
     res.json({ id, banned });
-  })
-);
-
-router.patch(
-  '/guests/:id/matchmaking-restriction',
-  adminWriteLimit,
-  validateParams(idParamsSchema),
-  validateBody(userMatchmakingRestrictionSchema),
-  asyncHandler(async (req, res) => {
-    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
-    const { restricted } = req.body as z.infer<typeof userMatchmakingRestrictionSchema>;
-    const guest = await db('guest_accounts').where({ id }).first('guest_key');
-    if (!guest) throw new HttpError(404, 'USER_NOT_FOUND');
-    await db('guest_accounts').where({ id }).update({ matchmaking_restricted: restricted });
-    await moveQueuedIdentityToPool(`g:${guest.guest_key}`, restricted ? 'restricted' : 'verified');
-    res.json({ id, matchmakingRestricted: restricted });
   })
 );
 

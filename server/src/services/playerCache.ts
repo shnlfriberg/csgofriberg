@@ -6,8 +6,7 @@ import { DIFFICULTY_LEVELS } from '../difficulties';
 import { normalizeTeamHistory } from './teamHistory';
 
 const INVALIDATE_CHANNEL = redisKey('players:invalidate');
-// v1 stored a SHA string and cannot be incremented safely during rolling upgrades.
-const VERSION_KEY = redisKey('players:revision:v2');
+const VERSION_KEY = redisKey('players:revision');
 const REFRESH_DEBOUNCE_MS = 100;
 
 type PublicPlayer = { id: number; nickname: string };
@@ -101,10 +100,6 @@ export function getPlayer(id: number): Player | undefined {
 export function getEnabledPlayer(id: number): Player | undefined {
   const player = playersById.get(id);
   return player && Boolean(player.is_enabled) ? player : undefined;
-}
-
-export function getEnabledPlayers(): Player[] {
-  return allPlayers.slice();
 }
 
 export function getDifficultyPlayers(key: string): Player[] {

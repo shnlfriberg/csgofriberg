@@ -31,11 +31,8 @@ export const playerSchema = z.object({
 });
 
 export const importedPlayerSchema = playerSchema.extend({
-  // Legacy exports may not contain history; preserve an existing value when omitted.
   team_history: playerSchema.shape.team_history.optional(),
   is_enabled: z.boolean().optional(),
-  // Legacy import alias; it is converted to difficulty memberships and never persisted.
-  is_easy: z.boolean().optional(),
 });
 
 export const playerUpdateSchema = playerSchema.partial().strict()
@@ -150,16 +147,8 @@ export async function importPlayers(
     created = players.length - updated;
     const desiredDifficulties = new Map<string, string[] | null>();
     const importedPlayers = players.map((player) => {
-      const { difficulties, is_easy, team_history, ...values } = player;
-      const desired = difficulties
-        ?? (is_easy !== undefined
-          ? [
-            'normal',
-            ...(is_easy ? ['easy'] : []),
-            ...(is_easy && player.major_championships > 0 ? ['beginner'] : []),
-          ]
-          : null)
-        ?? (existingNames.has(player.nickname) ? null : ['normal']);
+      const { difficulties, team_history, ...values } = player;
+      const desired = difficulties ?? (existingNames.has(player.nickname) ? null : ['normal']);
       desiredDifficulties.set(player.nickname, desired);
       return {
         ...values,

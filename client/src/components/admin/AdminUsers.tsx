@@ -46,7 +46,7 @@ interface UserPage {
   pageSize: number;
   totalPages: number;
 }
-export interface AdminGuest { id: number; displayId: string; banned: boolean; matchmakingRestricted: boolean; createdAt: string; lastSeenAt: string }
+export interface AdminGuest { id: number; displayId: string; banned: boolean; createdAt: string; lastSeenAt: string }
 interface GuestPage { guests: AdminGuest[]; total: number; page: number; pageSize: number; totalPages: number }
 interface GuestGamePage { type: 'single' | 'multi'; page: number; pageSize: number; hasNext: boolean; items: UserGame[] }
 
@@ -164,7 +164,7 @@ export function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: Ad
   const [analysis, setAnalysis] = useState<ExternalAnalysisView | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [updating, setUpdating] = useState<'ban' | 'restriction' | null>(null);
+  const [updating, setUpdating] = useState(false);
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -190,19 +190,16 @@ export function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: Ad
     } catch (error) { toast.error(errMsg(error)); }
     finally { setAnalysisLoading(false); }
   };
-  const update = async (kind: 'ban' | 'restriction', value: boolean) => {
-    setUpdating(kind);
+  const updateBan = async (banned: boolean) => {
+    setUpdating(true);
     try {
-      const endpoint = kind === 'ban' ? 'ban' : 'matchmaking-restriction';
-      await api.patch(`/admin/guests/${guest.id}/${endpoint}`, kind === 'ban' ? { banned: value } : { restricted: value });
-      onGuestChange(kind === 'ban' ? { ...guest, banned: value } : { ...guest, matchmakingRestricted: value });
-      toast.success(kind === 'ban'
-        ? (value ? t('admin.bannedSuccess') : t('admin.unbannedSuccess'))
-        : (value ? t('admin.matchmakingRestrictedSuccess') : t('admin.matchmakingRestoredSuccess')));
+      await api.patch(`/admin/guests/${guest.id}/ban`, { banned });
+      onGuestChange({ ...guest, banned });
+      toast.success(banned ? t('admin.bannedSuccess') : t('admin.unbannedSuccess'));
     } catch (error) { toast.error(errMsg(error)); }
-    finally { setUpdating(null); }
+    finally { setUpdating(false); }
   };
-  const fakeUser: AdminUser = { id: guest.id, username: guest.displayId, displayId: guest.displayId, role: 'user', leaderboardHidden: false, matchmakingRestricted: guest.matchmakingRestricted, email: null, emailVerified: false, banned: guest.banned, createdAt: guest.createdAt };
+  const fakeUser: AdminUser = { id: guest.id, username: guest.displayId, displayId: guest.displayId, role: 'user', leaderboardHidden: false, matchmakingRestricted: false, email: null, emailVerified: false, banned: guest.banned, createdAt: guest.createdAt };
   return <ModalPortal><div className="admin-player-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div className="admin-player-dialog admin-user-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-guest-detail-title">
     <div className="admin-player-dialog-heading"><div><h2 id="admin-guest-detail-title">{t('admin.guestDetail')}</h2><p>{guest.displayId}</p></div><button className="confirm-close" type="button" aria-label={t('common.close')} onClick={onClose}><X size={18} /></button></div>
     <div className="admin-user-detail-tabs admin-guest-detail-tabs" role="tablist" aria-label={t('admin.guestDetail')}>
@@ -213,8 +210,7 @@ export function GuestDetailDialog({ guest, onClose, onGuestChange }: { guest: Ad
       {tab === 'games' && <GuestGamesTab guest={guest} />}
       {tab === 'analysis' && <ExternalAnalysisPanel view={analysis} loading={analysisLoading} onAnalyze={(locale) => void runAnalysis(locale)} />}
       {tab === 'manage' && <div className="admin-quick-management">
-        <div className="admin-user-leaderboard-control"><div><strong>{t('admin.banStatus')}</strong><span>{guest.banned ? t('admin.banned') : t('admin.notBanned')}</span></div><label className="admin-user-leaderboard-toggle"><input type="checkbox" checked={guest.banned} disabled={updating === 'ban'} onChange={(event) => void update('ban', event.target.checked)} /><span>{guest.banned ? t('admin.banned') : t('admin.notBanned')}</span></label></div>
-        <div className="admin-user-leaderboard-control"><div><strong>{t('admin.matchmakingRestriction')}</strong><span>{guest.matchmakingRestricted ? t('admin.matchmakingRestricted') : t('admin.matchmakingNormal')}</span></div><label className="admin-user-leaderboard-toggle"><input type="checkbox" checked={guest.matchmakingRestricted} disabled={updating === 'restriction'} onChange={(event) => void update('restriction', event.target.checked)} /><span>{guest.matchmakingRestricted ? t('admin.matchmakingRestricted') : t('admin.matchmakingNormal')}</span></label></div>
+        <div className="admin-user-leaderboard-control"><div><strong>{t('admin.banStatus')}</strong><span>{guest.banned ? t('admin.banned') : t('admin.notBanned')}</span></div><label className="admin-user-leaderboard-toggle"><input type="checkbox" checked={guest.banned} disabled={updating} onChange={(event) => void updateBan(event.target.checked)} /><span>{guest.banned ? t('admin.banned') : t('admin.notBanned')}</span></label></div>
       </div>}
     </div>
   </div></div></ModalPortal>;

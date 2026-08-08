@@ -6,6 +6,7 @@ pow-wasm/target/
 .env
 .DS_Store
 target/
+*.tsbuildinfo
 origin/
 data/pgdata/
 .docker-runtime-test/

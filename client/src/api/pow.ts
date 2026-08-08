@@ -1,8 +1,6 @@
 import axios from 'axios';
 
 const powApi = axios.create({ baseURL: '/api/pow', withCredentials: true });
-const LEGACY_EXPIRY_STORAGE_KEY = 'csgofriberg_pow_expires_at';
-const LEGACY_VALIDITY_MS = 30_000;
 
 interface ChallengeResponse {
   valid?: boolean;
@@ -66,18 +64,11 @@ function stopRegisterProgress(): void {
 }
 
 function noteValidity(
-  expiresInMs: unknown,
-  legacyExpiresAt?: unknown
+  expiresInMs: unknown
 ): boolean {
   const duration = Number(expiresInMs);
-  const legacyExpiry = Number(legacyExpiresAt);
-  const validityMs = Number.isFinite(duration) && duration > 0
-    ? duration
-    : Number.isFinite(legacyExpiry) && legacyExpiry > 0
-      ? LEGACY_VALIDITY_MS
-      : 0;
-  if (validityMs <= 0) return false;
-  validUntil = performance.now() + validityMs;
+  if (!Number.isFinite(duration) || duration <= 0) return false;
+  validUntil = performance.now() + duration;
   return true;
 }
 
@@ -148,19 +139,19 @@ function requireSolvableChallenge(data: ChallengeResponse): asserts data is Requ
 
 async function refreshPow(): Promise<void> {
   const data = await requestChallenge();
-  if (data.valid && data.expiresAt) {
-    noteValidity(data.expiresInMs, data.expiresAt);
+  if (data.valid && data.expiresInMs) {
+    noteValidity(data.expiresInMs);
     scheduleRefresh();
     return;
   }
   requireSolvableChallenge(data);
 
   const nonce = await solveChallenge(data.challenge, data.difficulty);
-  const verifyResponse = await powApi.post<{ expiresAt: number; expiresInMs?: number; difficulty?: number }>('/verify', {
+  const verifyResponse = await powApi.post<{ expiresAt: number; expiresInMs: number; difficulty?: number }>('/verify', {
     id: data.id,
     nonce,
   });
-  noteValidity(verifyResponse.data.expiresInMs, verifyResponse.data.expiresAt);
+  noteValidity(verifyResponse.data.expiresInMs);
   scheduleRefresh();
 }
 
@@ -204,12 +195,6 @@ export async function createRegisterPow(): Promise<RegisterPowProof> {
   }
 }
 
-export function notePowExpiry(expiresAt: unknown, expiresInMs?: unknown): void {
-  if (noteValidity(expiresInMs, expiresAt)) scheduleRefresh();
-}
-
-try {
-  localStorage.removeItem(LEGACY_EXPIRY_STORAGE_KEY);
-} catch {
-  /* Storage may be unavailable in strict privacy modes. */
+export function notePowExpiry(expiresInMs: unknown): void {
+  if (noteValidity(expiresInMs)) scheduleRefresh();
 }
