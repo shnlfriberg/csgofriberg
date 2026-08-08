@@ -63,9 +63,9 @@ import { logTransientError, logTransientWarning } from '../services/transientLog
 import { getResourceVersionNotice } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
 import {
-  clearMatchmakingCooldown,
   getMatchmakingCooldown,
   readyExitPenaltyMultiplier,
+  reduceMatchmakingCooldown,
   recordMatchmakingExit,
 } from '../services/matchmakingCooldown';
 import { isMatchmakingRestricted } from '../services/matchmakingRestriction';
@@ -514,7 +514,9 @@ async function persistMatch(
     reports: room.reports,
     rounds: room.replayRounds,
   });
-  await Promise.allSettled(room.players.map((player) => clearMatchmakingCooldown(player.key)));
+  if ((room.matchResult?.reason ?? 'score') === 'score') {
+    await Promise.allSettled(room.players.map((player) => reduceMatchmakingCooldown(player.key)));
+  }
   await acknowledgeSchedule(`persist|${room.id}|0`);
 }
 

@@ -3,21 +3,35 @@ import { config } from '../config';
 
 const WINDOW_MS = 30 * 60_000;
 const MAX_LOCAL_ENTRIES = 10_000;
-const local = new Map<string, { strikes: number; retryAt: number; expiresAt: number }>();
+const FIRST_COOLDOWN_SECONDS = 20;
+const local = new Map<string, {
+  strikes: number;
+  seconds: number;
+  retryAt: number;
+  expiresAt: number;
+}>();
 
 export interface MatchmakingCooldown {
   strikes: number;
   retryAt: number;
 }
 
-function cooldownSeconds(strikes: number, durationMultiplier: number): number {
-  const fullSeconds = Math.min(120, Math.ceil(10 * Math.pow(1.5, Math.max(0, strikes - 1))));
-  return Math.ceil(fullSeconds * durationMultiplier);
+function nextCooldownSeconds(currentSeconds: number, durationMultiplier: number): number {
+  const fullSeconds = currentSeconds > 0 ? currentSeconds * 2 : FIRST_COOLDOWN_SECONDS;
+  return Math.max(1, Math.ceil(fullSeconds * durationMultiplier));
+}
+
+function reducedCooldownSeconds(currentSeconds: number): number {
+  return Math.max(1, Math.ceil(currentSeconds / 2));
+}
+
+function ttlFor(retryAt: number, now: number): number {
+  return Math.max(WINDOW_MS, retryAt - now + WINDOW_MS);
 }
 
 export function readyExitPenaltyMultiplier(averageGuesses: number | null): 0 | 0.5 | 1 {
-  if (averageGuesses !== null && averageGuesses < 3.5) return 0;
-  if (averageGuesses !== null && averageGuesses <= 4.5) return 0.5;
+  if (averageGuesses !== null && averageGuesses < 3) return 0;
+  if (averageGuesses !== null && averageGuesses <= 4) return 0.5;
   return 1;
 }
 
@@ -65,25 +79,62 @@ export async function recordMatchmakingExit(
   if (!client) {
     pruneLocal(now);
     const current = local.get(identity);
-    const strikes = current && current.expiresAt > now ? current.strikes + 1 : 1;
-    const retryAt = now + cooldownSeconds(strikes, durationMultiplier) * 1000;
+    const validCurrent = current && current.expiresAt > now ? current : null;
+    const strikes = validCurrent ? validCurrent.strikes + 1 : 1;
+    const seconds = nextCooldownSeconds(validCurrent?.seconds ?? 0, durationMultiplier);
+    const retryAt = now + seconds * 1000;
     local.delete(identity);
-    local.set(identity, { strikes, retryAt, expiresAt: now + WINDOW_MS });
+    local.set(identity, { strikes, seconds, retryAt, expiresAt: now + ttlFor(retryAt, now) });
     return { strikes, retryAt };
   }
   const result = await evalStateScript(
-    'matchmaking-cooldown-record-v1',
+    'matchmaking-cooldown-record-v2',
     `local strikes = tonumber(redis.call('HGET', KEYS[1], 'strikes') or 0) + 1
-     local fullSeconds = math.min(120, math.ceil(10 * (1.5 ^ math.max(0, strikes - 1))))
-     local seconds = math.ceil(fullSeconds * tonumber(ARGV[3]))
+     local currentSeconds = tonumber(redis.call('HGET', KEYS[1], 'seconds') or 0)
+     local fullSeconds = tonumber(ARGV[4])
+     if currentSeconds > 0 then fullSeconds = currentSeconds * 2 end
+     local seconds = math.max(1, math.ceil(fullSeconds * tonumber(ARGV[3])))
      local retryAt = tonumber(ARGV[1]) + seconds * 1000
-     redis.call('HSET', KEYS[1], 'strikes', tostring(strikes), 'retryAt', tostring(retryAt))
-     redis.call('PEXPIRE', KEYS[1], ARGV[2])
+     local ttl = math.max(tonumber(ARGV[2]), retryAt - tonumber(ARGV[1]) + tonumber(ARGV[2]))
+     redis.call('HSET', KEYS[1], 'strikes', tostring(strikes), 'seconds', tostring(seconds), 'retryAt', tostring(retryAt))
+     redis.call('PEXPIRE', KEYS[1], ttl)
      return { strikes, retryAt }`,
     [redisKey(`matchmaking-cooldown:${identity}`)],
-    [String(now), String(WINDOW_MS), String(durationMultiplier)]
+    [String(now), String(WINDOW_MS), String(durationMultiplier), String(FIRST_COOLDOWN_SECONDS)]
   ) as [number | string, number | string];
   return { strikes: Number(result[0]), retryAt: Number(result[1]) };
+}
+
+export async function reduceMatchmakingCooldown(identity: string): Promise<void> {
+  const now = Date.now();
+  const client = redisState();
+  if (!client && config.redisRequired) throw new Error('REDIS_UNAVAILABLE');
+  if (!client) {
+    pruneLocal(now);
+    const current = local.get(identity);
+    if (!current || current.expiresAt <= now) {
+      local.delete(identity);
+      return;
+    }
+    local.set(identity, {
+      strikes: current.strikes,
+      seconds: reducedCooldownSeconds(current.seconds),
+      retryAt: now,
+      expiresAt: now + WINDOW_MS,
+    });
+    return;
+  }
+  await evalStateScript(
+    'matchmaking-cooldown-reduce-v1',
+    `local seconds = tonumber(redis.call('HGET', KEYS[1], 'seconds') or 0)
+     if seconds <= 0 then return 0 end
+     local reduced = math.max(1, math.ceil(seconds / 2))
+     redis.call('HSET', KEYS[1], 'seconds', tostring(reduced), 'retryAt', ARGV[1])
+     redis.call('PEXPIRE', KEYS[1], ARGV[2])
+     return 1`,
+    [redisKey(`matchmaking-cooldown:${identity}`)],
+    [String(now), String(WINDOW_MS)]
+  );
 }
 
 export async function clearMatchmakingCooldown(identity: string): Promise<void> {

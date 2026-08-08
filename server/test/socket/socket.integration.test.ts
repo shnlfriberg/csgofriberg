@@ -17,6 +17,7 @@ import { cancelQueue, getRoom, queueOrTakeOpponent, withRoomLock } from '../../s
 import {
   clearMatchmakingCooldown,
   readyExitPenaltyMultiplier,
+  reduceMatchmakingCooldown,
   recordMatchmakingExit,
 } from '../../src/services/matchmakingCooldown';
 
@@ -210,33 +211,34 @@ describe('multiplayer socket integration', () => {
     }
   });
 
-  it('uses a 1.5 cooldown multiplier, supports half duration, and caps full penalties', async () => {
+  it('doubles matchmaking exit cooldowns and halves the stored cooldown after normal matches', async () => {
     const identity = `g:cooldown-${Date.now()}`;
     const halfIdentity = `g:cooldown-half-${Date.now()}`;
+    const expectRemaining = (retryAt: number, minMs: number, maxMs: number) => {
+      const remaining = retryAt - Date.now();
+      expect(remaining).toBeGreaterThanOrEqual(minMs);
+      expect(remaining).toBeLessThanOrEqual(maxMs);
+    };
     try {
-      expect(readyExitPenaltyMultiplier(3.49)).toBe(0);
-      expect(readyExitPenaltyMultiplier(3.5)).toBe(0.5);
-      expect(readyExitPenaltyMultiplier(4.5)).toBe(0.5);
-      expect(readyExitPenaltyMultiplier(4.51)).toBe(1);
+      expect(readyExitPenaltyMultiplier(2.99)).toBe(0);
+      expect(readyExitPenaltyMultiplier(3)).toBe(0.5);
+      expect(readyExitPenaltyMultiplier(4)).toBe(0.5);
+      expect(readyExitPenaltyMultiplier(4.01)).toBe(1);
       expect(readyExitPenaltyMultiplier(null)).toBe(1);
 
       const first = await recordMatchmakingExit(identity);
-      expect(first.retryAt - Date.now()).toBeGreaterThanOrEqual(9_500);
-      expect(first.retryAt - Date.now()).toBeLessThanOrEqual(10_000);
+      expectRemaining(first.retryAt, 19_000, 20_000);
       const second = await recordMatchmakingExit(identity);
-      expect(second.retryAt - Date.now()).toBeGreaterThanOrEqual(14_500);
-      expect(second.retryAt - Date.now()).toBeLessThanOrEqual(15_000);
+      expectRemaining(second.retryAt, 39_000, 40_000);
       const third = await recordMatchmakingExit(identity);
-      expect(third.retryAt - Date.now()).toBeGreaterThanOrEqual(22_500);
-      expect(third.retryAt - Date.now()).toBeLessThanOrEqual(23_000);
-      let capped = third;
-      for (let index = 3; index < 20; index += 1) capped = await recordMatchmakingExit(identity);
-      expect(capped.retryAt - Date.now()).toBeGreaterThanOrEqual(119_500);
-      expect(capped.retryAt - Date.now()).toBeLessThanOrEqual(120_000);
+      expectRemaining(third.retryAt, 79_000, 80_000);
+
+      await reduceMatchmakingCooldown(identity);
+      const afterReduction = await recordMatchmakingExit(identity);
+      expectRemaining(afterReduction.retryAt, 79_000, 80_000);
 
       const half = await recordMatchmakingExit(halfIdentity, 0.5);
-      expect(half.retryAt - Date.now()).toBeGreaterThanOrEqual(4_500);
-      expect(half.retryAt - Date.now()).toBeLessThanOrEqual(5_000);
+      expectRemaining(half.retryAt, 9_000, 10_000);
     } finally {
       await Promise.all([
         clearMatchmakingCooldown(identity),
