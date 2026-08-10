@@ -148,6 +148,29 @@ describe('MultiRoom replay', () => {
     expect(screen.queryByText('Opponent Round 1')).not.toBeInTheDocument();
   });
 
+  it('offers a rematch invitation after matchmaking settlement', async () => {
+    const user = userEvent.setup();
+    const matchmakingFinishedRoom = { ...room, matchmaking: true, rematchAllowed: true };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: matchmakingFinishedRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+      if (event === 'match:rematch-invite' && typeof ack === 'function') {
+        ack({ ok: true, stateVersion: matchmakingFinishedRoom.stateVersion + 1 });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    await user.click(await screen.findByRole('button', { name: '邀请再来一局' }));
+    expect(socket.emit).toHaveBeenCalledWith(
+      'match:rematch-invite',
+      {},
+      expect.any(Function)
+    );
+  });
+
   it('shows the report entry only after matchmaking settlement and submits it once', async () => {
     const user = userEvent.setup();
     const matchmakingFinishedRoom = { ...room, matchmaking: true };

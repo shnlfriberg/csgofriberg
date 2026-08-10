@@ -462,6 +462,7 @@ describe('multiplayer socket integration', () => {
       expect(matchA.room).toMatchObject({
         status: 'waiting',
         matchmaking: true,
+        rematchAllowed: true,
         round: 0,
         players: [{ ready: false }, { ready: false }],
       });
@@ -923,6 +924,87 @@ describe('multiplayer socket integration', () => {
       expect((await emit(a, 'game:start')).ok).toBe(true);
       const restarted = await getRoom(created.room.id);
       expect(restarted).toMatchObject({ status: 'playing', round: 1 });
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
+  it('turns an accepted matchmaking rematch into a created room and waits for guest readiness', async () => {
+    const userA = await createVerifiedUser();
+    const userB = await createVerifiedUser();
+    const a = await connect(userA.cookie);
+    const b = await connect(userB.cookie);
+    try {
+      expect(await emit(a, 'match:start', { dbType: 'easy', anonymous: true }))
+        .toEqual({ queued: true });
+      const foundA = onceEvent(a, 'match:found');
+      const foundB = onceEvent(b, 'match:found');
+      expect(await emit(b, 'match:start', { dbType: 'easy', anonymous: true }))
+        .toEqual({ queued: false });
+      const [matchedA] = await Promise.all([foundA, foundB]);
+      createdRoomIds.push(matchedA.room.id);
+      expect(matchedA.room.rematchAllowed).toBe(true);
+
+      const roundA = onceEvent(a, 'round:start');
+      const roundB = onceEvent(b, 'round:start');
+      expect(await emit(a, 'room:ready', { ready: true })).toEqual({ ok: true });
+      expect(await emit(b, 'room:ready', { ready: true })).toEqual({ ok: true });
+      await Promise.all([roundA, roundB]);
+
+      await withRoomLock(matchedA.room.id, (room) => {
+        room.players.find((player) => player.key === userA.key)!.score = 1;
+        return { room };
+      });
+      const active = await getRoom(matchedA.room.id);
+      const originalRecordId = active!.recordId;
+      const matchOver = onceEvent(a, 'match:over');
+      await emit(a, 'game:guess', {
+        playerId: active!.targetPlayerId,
+        roundId: active!.round,
+        eventId: `matchmaking-rematch-finish-${Date.now()}`,
+      });
+      await matchOver;
+
+      const invitedEvent = onceEvent(b, 'match:rematch:update');
+      expect(await emit(a, 'match:rematch-invite'))
+        .toEqual({ ok: true, stateVersion: expect.any(Number) });
+      expect(await invitedEvent).toMatchObject({
+        roomId: matchedA.room.id,
+        outcome: 'invited',
+        actorKey: userA.key,
+      });
+
+      const acceptedEvent = onceEvent(a, 'match:rematch:update');
+      expect(await emit(b, 'match:rematch-respond', { accept: true }))
+        .toEqual({ ok: true, stateVersion: expect.any(Number) });
+      expect(await acceptedEvent).toMatchObject({
+        roomId: matchedA.room.id,
+        outcome: 'accepted',
+        actorKey: userB.key,
+      });
+
+      const rematchRoom = await getRoom(matchedA.room.id);
+      expect(rematchRoom).toMatchObject({
+        status: 'waiting',
+        matchmaking: false,
+        readyCheckEndsAt: null,
+        rematchAllowed: true,
+      });
+      expect(rematchRoom?.recordId).not.toBe(originalRecordId);
+      expect(rematchRoom?.players.map((player) => ({
+        key: player.key,
+        ready: player.ready,
+        score: player.score,
+      }))).toEqual([
+        { key: userA.key, ready: true, score: 0 },
+        { key: userB.key, ready: false, score: 0 },
+      ]);
+      expect(await emit(a, 'match:report', { description: 'after rematch' }))
+        .toEqual({ code: 'REPORT_NOT_AVAILABLE' });
+      expect((await emit(a, 'game:start')).code).toBe('PLAYERS_NOT_READY');
+      expect(await emit(b, 'room:ready', { ready: true })).toEqual({ ok: true });
+      expect((await emit(a, 'game:start')).ok).toBe(true);
     } finally {
       a.disconnect();
       b.disconnect();

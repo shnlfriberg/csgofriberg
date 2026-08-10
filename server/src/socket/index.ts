@@ -2085,7 +2085,7 @@ export function setupSocket(io: Server) {
         readyCheckEndsAt: now + config.matchReadyTimeoutMs,
         dbType,
         boType: 3,
-        rematchAllowed: false,
+        rematchAllowed: true,
         rematchInviterKey: null,
         allowSpectators: false,
         verifiedOnly: true,
