@@ -63,7 +63,9 @@ function publicGuesses(game: SingleGameState): GuessFeedback[] {
 
 async function loadOwnedGame(id: string, identityKey: string): Promise<SingleGameState> {
   const game = await loadSingleGame(id, identityKey);
-  if (!game) throw new HttpError(404, 'GAME_NOT_FOUND');
+  if (!game || (game.kind ?? 'single') !== 'single') {
+    throw new HttpError(404, 'GAME_NOT_FOUND');
+  }
   game.guesses = publicGuesses(game);
   return game;
 }
@@ -234,7 +236,7 @@ router.post(
     const gameId = req.params.id;
     await withKeyLock(`single-game:${gameId}`, async () => {
       const game = await loadSingleGame(gameId, owner.identityKey);
-      if (game) await deleteSingleGame(game);
+      if (game && (game.kind ?? 'single') === 'single') await deleteSingleGame(game);
     });
     res.json({ ok: true });
   })

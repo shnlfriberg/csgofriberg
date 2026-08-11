@@ -11,6 +11,7 @@ import {
   LogIn,
   LogOut,
   Wrench,
+  CalendarDays,
 } from 'lucide-react';
 import MenuCard from '../components/MenuCard';
 import GameRules from '../components/GameRules';
@@ -191,6 +192,14 @@ export default function Home() {
           )}
         </div>
         <div className="menu-grid">
+          <MenuCard
+            to="/daily"
+            icon={<CalendarDays size={22} />}
+            label={t('home.dailyChallenge')}
+            description={t('home.dailyChallengeDescription')}
+            color="#f25f5c"
+            eventName="home-daily-challenge"
+          />
           <MenuCard
             to="/single"
             icon={<Gamepad2 size={22} />}

@@ -35,6 +35,7 @@ import {
   verifyEmailToken,
 } from '../services/emailVerification';
 import { GeeTestVerificationError, verifyGeeTest } from '../services/geetest';
+import { claimDailyChallengeAttempts } from '../services/dailyChallenge';
 
 const router = Router();
 
@@ -348,7 +349,12 @@ router.post(
   asyncHandler(async (req, res) => {
     if (!req.guestKey) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
     const guestKey = req.guestKey;
-    const claimed = await db('games')
+    const dailyClaimed = await claimDailyChallengeAttempts({
+      guestKey,
+      userId: req.user!.id,
+      username: req.user!.username,
+    });
+    const gameClaimed = await db('games')
       .where({ guest_key: guestKey })
       .whereNull('user_id')
       .update({ user_id: req.user!.id, guest_key: null });
@@ -360,7 +366,7 @@ router.post(
       `room-player-performance:g:${guestKey}`,
       `room-player-performance:u:${req.user!.id}`
     );
-    res.json({ claimed });
+    res.json({ claimed: Number(gameClaimed) + dailyClaimed });
   })
 );
 

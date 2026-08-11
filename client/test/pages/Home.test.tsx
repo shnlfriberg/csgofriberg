@@ -48,6 +48,13 @@ describe('Home email verification reminder', () => {
     expect(api.get).toHaveBeenCalledWith('/auth/me');
   });
 
+  it('places the daily challenge as the first home menu entry', () => {
+    renderAtRoute(<Home />);
+
+    const daily = screen.getByRole('link', { name: /每日挑战/ });
+    expect(daily.parentElement?.firstElementChild).toBe(daily);
+  });
+
   it.each([
     ['verified email', { email: 'tester@example.com', emailVerified: true }],
     ['no email', { email: null, emailVerified: false }],

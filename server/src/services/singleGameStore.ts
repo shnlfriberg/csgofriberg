@@ -3,19 +3,24 @@ import { evalCommandScript, redis, redisKey } from '../redis';
 import { GuessFeedback } from '../types';
 
 export type SingleGameMode = string;
+export type SingleGameKind = 'single' | 'daily';
 
 export interface SingleGameState {
   id: string;
+  kind?: SingleGameKind;
   identityKey: string;
   userId: number | null;
   guestKey: string | null;
   mode: SingleGameMode;
   targetPlayerId: number;
+  dailyChallengeId?: number;
   guesses: GuessFeedback[];
   /** Milliseconds from game creation for each accepted guess. */
   guessTimes: Array<number | null>;
   createdAt: number;
   lastActiveAt: number;
+  /** Absolute expiry for fixed-window games such as the daily challenge. */
+  expiresAt?: number;
 }
 
 // Active single-player games expire after thirty minutes without a write/guess.
@@ -54,6 +59,9 @@ export async function createOrResumeSingleGameWithStatus(input: {
   guestKey: string | null;
   mode: SingleGameMode;
   targetPlayerId: number;
+  kind?: SingleGameKind;
+  expiresAt?: number;
+  dailyChallengeId?: number;
 }): Promise<{ game: SingleGameState; created: boolean }> {
   const existing = await loadActiveSingleGame(input.identityKey, input.mode);
   if (existing) return { game: existing, created: false };
@@ -61,15 +69,18 @@ export async function createOrResumeSingleGameWithStatus(input: {
   const now = Date.now();
   const game: SingleGameState = {
     id: randomUUID(),
+    kind: input.kind ?? 'single',
     identityKey: input.identityKey,
     userId: input.userId,
     guestKey: input.guestKey,
     mode: input.mode,
     targetPlayerId: input.targetPlayerId,
+    dailyChallengeId: input.dailyChallengeId,
     guesses: [],
     guessTimes: [],
     createdAt: now,
     lastActiveAt: now,
+    expiresAt: input.expiresAt,
   };
   await saveSingleGame(game);
   return { game, created: true };
@@ -101,7 +112,8 @@ export async function loadSingleGame(
   const game = JSON.parse(raw) as SingleGameState;
   if (game.identityKey !== identityKey) return null;
   normalizeGuessTimes(game);
-  if (game.lastActiveAt + SINGLE_GAME_TTL_SECONDS * 1000 <= Date.now()) {
+  const expiresAt = game.expiresAt ?? game.lastActiveAt + SINGLE_GAME_TTL_SECONDS * 1000;
+  if (expiresAt <= Date.now()) {
     await deleteSingleGame(game);
     return null;
   }
@@ -116,10 +128,11 @@ export async function saveSingleGame(game: SingleGameState): Promise<void> {
   const client = requiredRedis();
   normalizeGuessTimes(game);
   game.lastActiveAt = Date.now();
-  const expiresAt = game.lastActiveAt + SINGLE_GAME_TTL_SECONDS * 1000;
+  const expiresAt = game.expiresAt ?? game.lastActiveAt + SINGLE_GAME_TTL_SECONDS * 1000;
+  const ttlSeconds = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
   await client.multi()
-    .set(gameKey(game.id), JSON.stringify(game), { EX: SINGLE_GAME_TTL_SECONDS })
-    .set(activeKey(game.identityKey, game.mode), game.id, { EX: SINGLE_GAME_TTL_SECONDS })
+    .set(gameKey(game.id), JSON.stringify(game), { EX: ttlSeconds })
+    .set(activeKey(game.identityKey, game.mode), game.id, { EX: ttlSeconds })
     .zAdd(redisKey('presence:single'), { score: expiresAt, value: game.id })
     .exec();
 }

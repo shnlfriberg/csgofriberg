@@ -65,6 +65,29 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
   ],
   report_whitelist: ['identity_key', 'display_name', 'admin_note', 'created_by_user_id', 'created_at'],
   announcements: ['id', 'title', 'content', 'is_popup'],
+  daily_challenges: [
+    'id',
+    'challenge_date',
+    'difficulty_key',
+    'target_player_id',
+    'solved_count',
+    'created_at',
+  ],
+  daily_challenge_attempts: [
+    'id',
+    'challenge_id',
+    'identity_key',
+    'user_id',
+    'guest_key',
+    'display_name',
+    'status',
+    'guess_count',
+    'solve_order',
+    'guesses',
+    'guess_times',
+    'created_at',
+    'finished_at',
+  ],
 };
 
 /** Applications only verify the migrated schema; DDL remains owned by the migrate service. */

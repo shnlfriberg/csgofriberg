@@ -11,6 +11,8 @@ import MultiRoom from './pages/MultiRoom';
 import Stats from './pages/Stats';
 import Leaderboard from './pages/Leaderboard';
 import Announcements from './pages/Announcements';
+import DailyLobby from './pages/DailyLobby';
+import DailyChallenge from './pages/DailyChallenge';
 import Admin from './pages/Admin';
 import NotFound from './pages/NotFound';
 import RouteError from './components/RouteError';
@@ -44,6 +46,8 @@ export const router = createBrowserRouter([
       { path: '/search', element: <Search /> },
       { path: '/single', element: <SingleLobby /> },
       { path: '/single/:mode', element: <SingleGame /> },
+      { path: '/daily', element: <DailyLobby /> },
+      { path: '/daily/:mode', element: <DailyChallenge /> },
       { path: '/multi', element: <MultiLobby /> },
       { path: '/multi/room', element: <MultiRoom /> },
       { path: '/stats', element: <Stats /> },

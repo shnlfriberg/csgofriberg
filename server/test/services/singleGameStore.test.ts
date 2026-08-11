@@ -89,4 +89,25 @@ describe('singleGameStore', () => {
     expect(await redis()!.get(redisKey(`single:active:${identityKey}:normal`))).toBeNull();
     expect(await redis()!.zScore(redisKey('presence:single'), created.id)).toBeNull();
   });
+
+  it('keeps fixed-window daily games until their absolute expiry', async () => {
+    await initRedis();
+    const identityKey = `g:daily-window-${Date.now()}`;
+    const expiresAt = Date.now() + 120_000;
+    const created = await createGame({
+      identityKey,
+      userId: null,
+      guestKey: identityKey.slice(2),
+      mode: 'daily:2099-01-01:easy',
+      targetPlayerId: 1,
+      kind: 'daily',
+      expiresAt,
+    });
+
+    created.lastActiveAt = Date.now() - 1_801_000;
+    await redis()!.set(redisKey(`single:game:${created.id}`), JSON.stringify(created), { EX: 120 });
+    const restored = await loadSingleGame(created.id, identityKey);
+    expect(restored).toMatchObject({ id: created.id, kind: 'daily', expiresAt });
+    await deleteSingleGame(created);
+  });
 });

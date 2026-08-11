@@ -18,6 +18,7 @@ import {
 } from '../middleware/common';
 import { invalidateCached } from '../services/queryCache';
 import { allLeaderboardCacheKeys } from '../services/leaderboardCache';
+import { currentDailyLeaderboardCacheKeys } from '../services/dailyChallenge';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { publishResourceVersion } from '../services/resourceVersion';
 import { getPlayerPerformance } from '../services/playerPerformance';
@@ -1100,7 +1101,8 @@ router.patch(
     const updated = await db('users').where({ id }).update({ leaderboard_hidden: hidden });
     if (!updated) throw new HttpError(404, 'USER_NOT_FOUND');
     await invalidateCached(
-      ...allLeaderboardCacheKeys()
+      ...allLeaderboardCacheKeys(),
+      ...currentDailyLeaderboardCacheKeys()
     );
     res.json({ id, leaderboardHidden: hidden });
   })

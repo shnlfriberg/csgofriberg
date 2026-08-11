@@ -39,6 +39,7 @@ import { parseJsonOnce, rejectOversizedBody } from './middleware/jsonBody';
 import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './middleware/clientAssets';
 import { injectUmamiScript } from './services/umami';
 import runtimeConfigRoutes from './routes/runtimeConfig';
+import dailyChallengeRoutes from './routes/dailyChallenge';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = 'https://static.cloudflareinsights.com';
@@ -202,6 +203,7 @@ async function main() {
   app.use('/api/auth', authRoutes);
   app.use('/api/players', playerRoutes);
   app.use('/api/game', gameRoutes);
+  app.use('/api/daily-challenge', dailyChallengeRoutes);
   app.use('/api/stats', statsRoutes);
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/announcements', announcementRoutes);

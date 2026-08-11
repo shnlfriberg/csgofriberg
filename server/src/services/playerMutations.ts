@@ -119,8 +119,11 @@ export async function deletePlayer(id: number): Promise<void> {
   const player = await db('players').where({ id }).first('id', 'is_enabled');
   if (!player) throw new HttpError(404, 'PLAYER_NOT_FOUND');
   if (Boolean(player.is_enabled)) throw new HttpError(409, 'PLAYER_MUST_BE_DISABLED');
-  const used = await db('games').where({ target_player_id: id }).first('id');
-  if (used) throw new HttpError(409, 'PLAYER_HAS_HISTORY');
+  const [usedInGame, usedInDailyChallenge] = await Promise.all([
+    db('games').where({ target_player_id: id }).first('id'),
+    db('daily_challenges').where({ target_player_id: id }).first('id'),
+  ]);
+  if (usedInGame || usedInDailyChallenge) throw new HttpError(409, 'PLAYER_HAS_HISTORY');
   const count = await db('players').where({ id }).del();
   if (!count) throw new HttpError(404, 'PLAYER_NOT_FOUND');
   await invalidatePlayerCache();

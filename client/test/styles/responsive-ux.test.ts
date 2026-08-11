@@ -89,6 +89,19 @@ describe('desktop/mobile layout contracts', () => {
     );
   });
 
+  it('keeps the completed daily leaderboard in a capped desktop side column', () => {
+    const daily = readCss('../../src/styles/daily.css');
+    expect(daily).toMatch(
+      /@media\s*\(min-width:\s*960px\)\s*\{[\s\S]*\.daily-content-layout\.has-leaderboard\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*7fr\)\s+minmax\(0,\s*3fr\)/s
+    );
+    expect(daily).toMatch(
+      /\.daily-leaderboard-section\s*\{[^}]*border-top:\s*1px\s+solid\s+var\(--border\)/s
+    );
+    expect(daily).toMatch(
+      /\.daily-content-layout\.has-leaderboard\s+\.daily-leaderboard-section\s*\{[^}]*border-top:\s*0;[^}]*border-left:\s*1px\s+solid\s+var\(--border\)/s
+    );
+  });
+
   it('keeps wide low-zoom layouts at the 1920px design scale', () => {
     const tokens = readCss('../../src/styles/tokens.css');
     // 单一根字号刻度,不再包媒体查询:下界 100% 已覆盖 1600–1920 区间

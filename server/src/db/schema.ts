@@ -430,4 +430,121 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     });
   }
 
+  if (!(await instance.schema.hasTable('daily_challenges'))) {
+    await instance.schema.createTable('daily_challenges', (t) => {
+      t.increments('id').primary();
+      t.string('challenge_date', 10).notNullable();
+      t.string('difficulty_key', 32)
+        .notNullable()
+        .references('key')
+        .inTable('difficulty_levels');
+      t.integer('target_player_id')
+        .notNullable()
+        .references('id')
+        .inTable('players');
+      t.integer('solved_count').notNullable().defaultTo(0);
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+      t.unique(['challenge_date', 'difficulty_key']);
+      t.index(['challenge_date']);
+    });
+  }
+  const dailyChallengesHadSolvedCount = await instance.schema.hasColumn(
+    'daily_challenges',
+    'solved_count'
+  );
+  if (!dailyChallengesHadSolvedCount) {
+    await instance.schema.alterTable('daily_challenges', (t) => {
+      t.integer('solved_count').notNullable().defaultTo(0);
+    });
+  }
+
+  if (!(await instance.schema.hasTable('daily_challenge_attempts'))) {
+    await instance.schema.createTable('daily_challenge_attempts', (t) => {
+      t.increments('id').primary();
+      t.integer('challenge_id')
+        .notNullable()
+        .references('id')
+        .inTable('daily_challenges')
+        .onDelete('CASCADE');
+      t.string('identity_key', 80).notNullable();
+      t.integer('user_id').nullable().references('id').inTable('users').onDelete('SET NULL');
+      t.string('guest_key', 64).nullable();
+      t.string('display_name', 32).notNullable();
+      t.string('status', 16).notNullable();
+      t.integer('guess_count').notNullable();
+      t.integer('solve_order').nullable();
+      t.text('guesses').notNullable().defaultTo('[]');
+      t.text('guess_times').notNullable().defaultTo('[]');
+      t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+      t.timestamp('finished_at').notNullable().defaultTo(instance.fn.now());
+      t.unique(['challenge_id', 'identity_key']);
+      t.index(
+        ['challenge_id', 'status', 'guess_count', 'finished_at', 'id'],
+        'daily_attempts_leaderboard_idx'
+      );
+      t.index(['user_id', 'finished_at'], 'daily_attempts_user_finished_idx');
+      t.index(['guest_key', 'finished_at'], 'daily_attempts_guest_finished_idx');
+    });
+  }
+  const dailyAttemptsHadSolveOrder = await instance.schema.hasColumn(
+    'daily_challenge_attempts',
+    'solve_order'
+  );
+  if (!dailyAttemptsHadSolveOrder) {
+    await instance.schema.alterTable('daily_challenge_attempts', (t) => {
+      t.integer('solve_order').nullable();
+    });
+    if (instance.client.config.client === 'pg') {
+      await instance.raw(`
+        with ranked as (
+          select
+            "id",
+            row_number() over (
+              partition by "challenge_id"
+              order by "finished_at" asc, "id" asc
+            ) as "solve_order"
+          from "daily_challenge_attempts"
+          where "status" = 'won'
+        )
+        update "daily_challenge_attempts" as "attempt"
+        set "solve_order" = "ranked"."solve_order"
+        from "ranked"
+        where "attempt"."id" = "ranked"."id"
+      `);
+    } else {
+      await instance.raw(`
+        with ranked as (
+          select
+            "id",
+            row_number() over (
+              partition by "challenge_id"
+              order by "finished_at" asc, "id" asc
+            ) as "solve_order"
+          from "daily_challenge_attempts"
+          where "status" = 'won'
+        )
+        update "daily_challenge_attempts"
+        set "solve_order" = (
+          select "ranked"."solve_order"
+          from "ranked"
+          where "ranked"."id" = "daily_challenge_attempts"."id"
+        )
+        where "id" in (select "id" from "ranked")
+      `);
+    }
+  }
+  if (!dailyChallengesHadSolvedCount || !dailyAttemptsHadSolveOrder) {
+    await instance.raw(`
+      update "daily_challenges"
+      set "solved_count" = coalesce((
+        select max("attempt"."solve_order")
+        from "daily_challenge_attempts" as "attempt"
+        where "attempt"."challenge_id" = "daily_challenges"."id"
+      ), 0)
+    `);
+  }
+  await instance.raw(
+    'create unique index if not exists "daily_attempts_solve_order_unique" on "daily_challenge_attempts" ("challenge_id", "solve_order") where "solve_order" is not null'
+  );
+
 }
