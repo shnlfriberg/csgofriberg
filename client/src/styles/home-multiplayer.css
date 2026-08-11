@@ -696,6 +696,53 @@
   margin: 8px 0 0 92px;
 }
 .room-create-options .spectator-option { margin: 0; }
+.room-more-settings {
+  margin: 14px 0 0 92px;
+  border-top: 1px solid var(--border);
+}
+.room-more-settings summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  width: fit-content;
+  color: var(--text-sec);
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+  list-style: none;
+}
+.room-more-settings summary::-webkit-details-marker { display: none; }
+.room-more-settings summary:hover { color: var(--primary); }
+.room-more-settings summary:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.room-more-settings-chevron { transition: transform 0.16s ease; }
+.room-more-settings[open] .room-more-settings-chevron { transform: rotate(180deg); }
+.room-more-settings-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 4px 0 2px;
+}
+.room-number-setting {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: var(--text-sec);
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+.room-number-input {
+  display: grid;
+  grid-template-columns: minmax(0, 92px) auto;
+  align-items: center;
+  gap: 8px;
+}
+.room-number-input .input {
+  width: 100%;
+  min-height: 38px;
+  padding-inline: 10px;
+}
+.room-number-input > span { color: var(--text-light); white-space: nowrap; }
 .matchmaking-requirement { margin: 8px 0 0; color: var(--warning); }
 .match-report-dialog { width: min(540px, 100%); }
 .match-report-link {

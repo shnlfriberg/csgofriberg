@@ -23,6 +23,8 @@ function makeRoom(id: string): StoredRoom {
     readyCheckEndsAt: null,
     dbType: 'normal',
     boType: 3,
+    maxGuesses: 8,
+    guessIntervalMs: 1_500,
     rematchAllowed: true,
     rematchInviterKey: null,
     allowSpectators: false,
@@ -49,6 +51,17 @@ function makeRoom(id: string): StoredRoom {
 }
 
 describe('roomStore local fallback', () => {
+  it('backfills defaults for rooms created before custom settings existed', async () => {
+    const room = makeRoom(`LEGACY${Date.now()}`);
+    const legacy = room as unknown as Record<string, unknown>;
+    delete legacy.maxGuesses;
+    delete legacy.guessIntervalMs;
+    await saveRoom(room);
+    const stored = await getRoom(room.id);
+    expect(stored).toMatchObject({ maxGuesses: 8, guessIntervalMs: 1_500 });
+    if (stored) await deleteRoom(stored);
+  });
+
   it('serializes concurrent room updates and indexes identities', async () => {
     const room = makeRoom(`T${Date.now()}`);
     await saveRoom(room);

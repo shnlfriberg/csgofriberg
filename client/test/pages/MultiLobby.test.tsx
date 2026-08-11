@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -59,6 +59,12 @@ describe('MultiLobby matchmaking', () => {
     await user.click(screen.getByRole('button', { name: 'BO5' }));
     await user.click(screen.getByRole('checkbox', { name: '允许观战' }));
     await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
+    expect(screen.getByRole('group')).not.toHaveAttribute('open');
+    await user.click(screen.getByText('更多设置'));
+    const maxGuesses = screen.getByRole('spinbutton', { name: '最大猜测次数' });
+    const guessInterval = screen.getByRole('spinbutton', { name: '猜测间隔' });
+    fireEvent.change(maxGuesses, { target: { value: '12' } });
+    fireEvent.change(guessInterval, { target: { value: '2.5' } });
     await user.click(easyButtons[1]);
 
     await waitFor(() => {
@@ -68,6 +74,8 @@ describe('MultiLobby matchmaking', () => {
         boType: 5,
         allowSpectators: true,
         verifiedEmailOnly: true,
+        maxGuesses: 12,
+        guessIntervalSeconds: 2.5,
         matchmakingDifficulty: 'easy',
         });
     });
@@ -80,6 +88,9 @@ describe('MultiLobby matchmaking', () => {
     expect(screen.getByRole('button', { name: 'BO5' })).toHaveClass('active');
     expect(screen.getByRole('checkbox', { name: '允许观战' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' })).toBeChecked();
+    await user.click(screen.getByText('更多设置'));
+    expect(screen.getByRole('spinbutton', { name: '最大猜测次数' })).toHaveValue(12);
+    expect(screen.getByRole('spinbutton', { name: '猜测间隔' })).toHaveValue(2.5);
   });
 
   it('requires a verified email before starting quick match', () => {
@@ -98,10 +109,17 @@ describe('MultiLobby matchmaking', () => {
     renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
 
     await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
+    await user.click(screen.getByText('更多设置'));
+    const maxGuesses = screen.getByRole('spinbutton', { name: '最大猜测次数' });
+    const guessInterval = screen.getByRole('spinbutton', { name: '猜测间隔' });
+    fireEvent.change(maxGuesses, { target: { value: '15' } });
+    fireEvent.change(guessInterval, { target: { value: '0' } });
     await user.click(screen.getByRole('button', { name: '创建房间' }));
 
     expect(socket.emit).toHaveBeenCalledWith('room:create', expect.objectContaining({
       verifiedOnly: true,
+      maxGuesses: 15,
+      guessIntervalMs: 0,
     }), expect.any(Function));
   });
 });

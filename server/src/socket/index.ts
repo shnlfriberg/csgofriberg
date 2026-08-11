@@ -10,7 +10,7 @@ import {
   userNameFromUsername,
 } from '../middleware/auth';
 import { consumeRateLimit } from '../middleware/rateLimit';
-import { compareGuess, refreshGuessFeedback, MAX_GUESSES } from '../services/gameService';
+import { compareGuess, refreshGuessFeedback } from '../services/gameService';
 import {
   getEnabledPlayer,
   getPlayer,
@@ -46,6 +46,12 @@ import {
   saveRoom,
   schedule,
   withRoomLock,
+  DEFAULT_ROOM_GUESS_INTERVAL_MS,
+  DEFAULT_ROOM_MAX_GUESSES,
+  MAX_ROOM_GUESS_INTERVAL_MS,
+  MAX_ROOM_MAX_GUESSES,
+  MIN_ROOM_GUESS_INTERVAL_MS,
+  MIN_ROOM_MAX_GUESSES,
 } from '../services/roomStore';
 import {
   evalCommandScript,
@@ -74,7 +80,6 @@ import { pickTargetAvoidingRecent, rememberTargetSelection } from '../services/t
 
 const NEXT_ROUND_DELAY_MS = 6_000;
 const ROUND_TIME_MS = 120_000;
-const MULTI_GUESS_INTERVAL_MS = 1_500;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
 const LOCAL_GUESS_LIMIT = 12;
 const LOCAL_GUESS_WINDOW_MS = 10_000;
@@ -112,6 +117,12 @@ const roomCreatePayloadSchema = z.object({
   allowSpectators: z.boolean().default(false),
   verifiedOnly: z.boolean().default(false),
   anonymous: z.boolean().default(false),
+  maxGuesses: z.number().int().min(MIN_ROOM_MAX_GUESSES).max(MAX_ROOM_MAX_GUESSES)
+    .default(DEFAULT_ROOM_MAX_GUESSES),
+  guessIntervalMs: z.number().int()
+    .min(MIN_ROOM_GUESS_INTERVAL_MS)
+    .max(MAX_ROOM_GUESS_INTERVAL_MS)
+    .default(DEFAULT_ROOM_GUESS_INTERVAL_MS),
 });
 const roomJoinPayloadSchema = z.object({
   roomId: z.string().trim().toUpperCase().regex(/^[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{5}$/),
@@ -237,8 +248,8 @@ function replayAnswer(target: Player) {
   };
 }
 
-function replayGuesses(target: Player, playerIds: number[]) {
-  return playerIds.slice(0, MAX_GUESSES).flatMap((playerId) => {
+function replayGuesses(target: Player, playerIds: number[], maxGuesses: number) {
+  return playerIds.slice(0, maxGuesses).flatMap((playerId) => {
     const guess = getPlayer(playerId);
     return guess ? [visibleGuess(compareGuess(guess, target))] : [];
   });
@@ -277,9 +288,9 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
             ? 'opponent' as const
             : null,
         answer: replayAnswer(target),
-        me: { guesses: replayGuesses(target, round.guessesByPlayer[me.key] ?? []) },
+        me: { guesses: replayGuesses(target, round.guessesByPlayer[me.key] ?? [], room.maxGuesses) },
         opponent: {
-          guesses: replayGuesses(target, round.guessesByPlayer[opponent.key] ?? []),
+          guesses: replayGuesses(target, round.guessesByPlayer[opponent.key] ?? [], room.maxGuesses),
         },
       }];
     }),
@@ -308,7 +319,8 @@ function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     anonymous: room.anonymous,
     round: room.round,
     winsNeeded: winsNeeded(room.boType),
-    maxGuesses: MAX_GUESSES,
+    maxGuesses: room.maxGuesses,
+    guessIntervalMs: room.guessIntervalMs,
     roundEndsAt: room.roundEndsAt,
     matchStartsAt: room.status === 'starting' ? room.nextRoundAt : null,
     roundId: room.round,
@@ -747,7 +759,7 @@ async function skipRound(
 
     player.skipped = true;
     const roundFinished = room.players.every(
-      (candidate) => candidate.skipped || candidate.guesses.length >= MAX_GUESSES
+      (candidate) => candidate.skipped || candidate.guesses.length >= room.maxGuesses
     );
     if (roundFinished) {
       room.roundEndsAt = null;
@@ -1467,6 +1479,8 @@ export function setupSocket(io: Server) {
         readyCheckEndsAt: null,
         dbType,
         boType,
+        maxGuesses: payload.maxGuesses,
+        guessIntervalMs: payload.guessIntervalMs,
         rematchAllowed: true,
         rematchInviterKey: null,
         allowSpectators: payload.allowSpectators,
@@ -1794,10 +1808,10 @@ export function setupSocket(io: Server) {
         eventId,
         targetPlayerId: targetState.targetPlayerId,
         feedback: compareGuess(guess, target),
-        maxGuesses: MAX_GUESSES,
+        maxGuesses: targetState.maxGuesses,
         roundDurationMs: ROUND_TIME_MS,
         nextRoundDelayMs: NEXT_ROUND_DELAY_MS,
-        minGuessIntervalMs: MULTI_GUESS_INTERVAL_MS,
+        minGuessIntervalMs: targetState.guessIntervalMs,
         rateLimit: 12,
         rateWindowSeconds: 10,
       });
@@ -1823,7 +1837,7 @@ export function setupSocket(io: Server) {
         stateVersion: result.revision,
       };
       if (result.kind === 'duplicate') {
-        ack?.({ cooldownMs: MULTI_GUESS_INTERVAL_MS });
+        ack?.({ cooldownMs: targetState.guessIntervalMs });
         socket.emit('game:guess:applied', { ...delta, feedback: visibleGuess(result.feedback) });
         return;
       }
@@ -1831,7 +1845,7 @@ export function setupSocket(io: Server) {
       if (result.shouldFinish) {
         finishedRoom = await recordReplayRound(roomId, result.round) ?? finishedRoom;
       }
-      ack?.({ cooldownMs: MULTI_GUESS_INTERVAL_MS });
+      ack?.({ cooldownMs: targetState.guessIntervalMs });
       if (!result.shouldFinish) {
         for (const playerKey of result.playerKeys) {
           io.to(identityChannel(playerKey)).emit('game:guess:applied', {
@@ -2085,6 +2099,8 @@ export function setupSocket(io: Server) {
         readyCheckEndsAt: now + config.matchReadyTimeoutMs,
         dbType,
         boType: 3,
+        maxGuesses: DEFAULT_ROOM_MAX_GUESSES,
+        guessIntervalMs: DEFAULT_ROOM_GUESS_INTERVAL_MS,
         rematchAllowed: true,
         rematchInviterKey: null,
         allowSpectators: false,

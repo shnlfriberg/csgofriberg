@@ -265,6 +265,8 @@
   .opt-btn { min-height: 36px; padding-inline: 14px; }
   .spectator-option { margin-left: 0; }
   .room-create-options { margin-left: 0; }
+  .room-more-settings { margin-left: 0; }
+  .room-more-settings-fields { grid-template-columns: 1fr; }
   .join-room-form { grid-template-columns: 1fr 1fr; }
   .join-room-form .input { grid-column: 1 / -1; }
   .join-room-form .btn { width: 100%; }

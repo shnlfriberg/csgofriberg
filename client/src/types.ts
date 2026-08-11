@@ -143,6 +143,7 @@ export interface RoomState {
   stateVersion: number;
   winsNeeded: number;
   maxGuesses: number;
+  guessIntervalMs: number;
   roundEndsAt: number | null;
   matchStartsAt: number | null;
   spectatorCount: number;

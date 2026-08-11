@@ -183,6 +183,37 @@
 .room-waiting-card .room-player-row {
   justify-content: center;
 }
+.room-attributes {
+  margin-bottom: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.room-attributes h3 {
+  justify-content: center;
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+}
+.room-attributes ul {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.room-attributes li {
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card-soft);
+  color: var(--text-sec);
+  font-size: 0.82rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
 .room-waiting-card .room-player-row > b {
   flex: 0 1 auto;
   max-width: min(320px, 52vw);

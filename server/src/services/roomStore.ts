@@ -82,6 +82,8 @@ export interface StoredRoom {
   readyCheckEndsAt: number | null;
   dbType: DbType;
   boType: BoType;
+  maxGuesses: number;
+  guessIntervalMs: number;
   rematchAllowed: boolean;
   rematchInviterKey: string | null;
   allowSpectators: boolean;
@@ -103,6 +105,13 @@ export interface StoredRoom {
   updatedAt: number;
 }
 
+export const DEFAULT_ROOM_MAX_GUESSES = 8;
+export const MIN_ROOM_MAX_GUESSES = 1;
+export const MAX_ROOM_MAX_GUESSES = 15;
+export const DEFAULT_ROOM_GUESS_INTERVAL_MS = 1_500;
+export const MIN_ROOM_GUESS_INTERVAL_MS = 0;
+export const MAX_ROOM_GUESS_INTERVAL_MS = 10_000;
+
 const ROOM_TTL_SECONDS = 6 * 60 * 60;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
 const MAX_GLOBAL_ROOMS = 10_000;
@@ -110,7 +119,14 @@ const MAX_ROOMS_PER_IP = 50;
 const localRooms = new Map<string, StoredRoom>();
 const localIdentityRooms = new Map<string, string>();
 const localLocks = new Map<string, Promise<void>>();
-const roomTargetCache = new Map<string, { round: number; targetPlayerId: number }>();
+interface RoomGuessTarget {
+  round: number;
+  targetPlayerId: number;
+  maxGuesses: number;
+  guessIntervalMs: number;
+}
+
+const roomTargetCache = new Map<string, RoomGuessTarget>();
 
 function roomKey(id: string) {
   return redisKey(`room:${id}`);
@@ -182,6 +198,16 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   if (typeof room.verifiedOnly !== 'boolean') room.verifiedOnly = false;
   if (typeof room.anonymous !== 'boolean') room.anonymous = false;
   if (typeof room.matchmaking !== 'boolean') room.matchmaking = false;
+  if (
+    !Number.isInteger(room.maxGuesses)
+    || room.maxGuesses < MIN_ROOM_MAX_GUESSES
+    || room.maxGuesses > MAX_ROOM_MAX_GUESSES
+  ) room.maxGuesses = DEFAULT_ROOM_MAX_GUESSES;
+  if (
+    !Number.isInteger(room.guessIntervalMs)
+    || room.guessIntervalMs < MIN_ROOM_GUESS_INTERVAL_MS
+    || room.guessIntervalMs > MAX_ROOM_GUESS_INTERVAL_MS
+  ) room.guessIntervalMs = DEFAULT_ROOM_GUESS_INTERVAL_MS;
   room.readyCheckEndsAt ??= null;
   if (typeof room.rematchAllowed !== 'boolean') room.rematchAllowed = false;
   room.rematchInviterKey ??= null;
@@ -311,6 +337,8 @@ export async function getRoom(id: string): Promise<StoredRoom | null> {
   room.round = Number(meta.round || room.round);
   room.revision = Number(meta.revision || room.revision);
   room.updatedAt = Number(meta.updatedAt || room.updatedAt);
+  if (meta.maxGuesses) room.maxGuesses = Number(meta.maxGuesses);
+  if (meta.guessIntervalMs) room.guessIntervalMs = Number(meta.guessIntervalMs);
   room.roundEndsAt = parseNullableNumber(meta.roundEndsAt);
   room.nextRoundAt = parseNullableNumber(meta.nextRoundAt);
   room.roundResult = parseNullableJson<StoredRoundResult>(meta.roundResult);
@@ -540,25 +568,45 @@ return cjson.encode({
 export async function getRoomGuessTarget(
   roomId: string,
   expectedRound: number
-): Promise<{ targetPlayerId: number; round: number } | null> {
+): Promise<RoomGuessTarget | null> {
   const cached = roomTargetCache.get(roomId);
   if (cached?.round === expectedRound) return cached;
   const client = stateRedis();
   if (!client) {
     const room = localRooms.get(roomId);
     return room?.targetPlayerId
-      ? { targetPlayerId: room.targetPlayerId, round: room.round }
+      ? {
+          targetPlayerId: room.targetPlayerId,
+          round: room.round,
+          maxGuesses: room.maxGuesses,
+          guessIntervalMs: room.guessIntervalMs,
+        }
       : null;
   }
-  const [targetRaw, roundRaw] = await client.hmGet(roomMetaKey(roomId), [
+  const [targetRaw, roundRaw, maxGuessesRaw, guessIntervalMsRaw] = await client.hmGet(roomMetaKey(roomId), [
     'targetPlayerId',
     'round',
+    'maxGuesses',
+    'guessIntervalMs',
   ]);
   const targetPlayerId = Number(targetRaw);
   const round = Number(roundRaw);
-  if (Number.isInteger(targetPlayerId) && targetPlayerId > 0 && round === expectedRound) {
-    roomTargetCache.set(roomId, { round, targetPlayerId });
-    return { round, targetPlayerId };
+  const maxGuesses = Number(maxGuessesRaw);
+  const guessIntervalMs = Number(guessIntervalMsRaw);
+  if (
+    Number.isInteger(targetPlayerId)
+    && targetPlayerId > 0
+    && round === expectedRound
+    && Number.isInteger(maxGuesses)
+    && maxGuesses >= MIN_ROOM_MAX_GUESSES
+    && maxGuesses <= MAX_ROOM_MAX_GUESSES
+    && Number.isInteger(guessIntervalMs)
+    && guessIntervalMs >= MIN_ROOM_GUESS_INTERVAL_MS
+    && guessIntervalMs <= MAX_ROOM_GUESS_INTERVAL_MS
+  ) {
+    const target = { round, targetPlayerId, maxGuesses, guessIntervalMs };
+    roomTargetCache.set(roomId, target);
+    return target;
   }
 
   // Lazy upgrade for rooms created before the hot metadata hash existed.
@@ -568,12 +616,20 @@ export async function getRoomGuessTarget(
     targetPlayerId: String(room.targetPlayerId),
     status: room.status,
     round: String(room.round),
+    maxGuesses: String(room.maxGuesses),
+    guessIntervalMs: String(room.guessIntervalMs),
     revision: String(room.revision),
     updatedAt: String(room.updatedAt),
   });
   await client.expire(roomMetaKey(roomId), ROOM_TTL_SECONDS);
-  roomTargetCache.set(roomId, { round: room.round, targetPlayerId: room.targetPlayerId });
-  return { round: room.round, targetPlayerId: room.targetPlayerId };
+  const target = {
+    round: room.round,
+    targetPlayerId: room.targetPlayerId,
+    maxGuesses: room.maxGuesses,
+    guessIntervalMs: room.guessIntervalMs,
+  };
+  roomTargetCache.set(roomId, target);
+  return target;
 }
 
 export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyRoomGuessResult> {
@@ -757,7 +813,12 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
     localRooms.set(room.id, structuredClone(room));
     if (room.targetPlayerId) {
-      roomTargetCache.set(room.id, { round: room.round, targetPlayerId: room.targetPlayerId });
+      roomTargetCache.set(room.id, {
+        round: room.round,
+        targetPlayerId: room.targetPlayerId,
+        maxGuesses: room.maxGuesses,
+        guessIntervalMs: room.guessIntervalMs,
+      });
     } else {
       roomTargetCache.delete(room.id);
     }
@@ -820,7 +881,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
   }
   const result = await evalCachedStateScript(
-    'room-save-v5',
+    'room-save-v6',
     `local incoming = cjson.decode(ARGV[1])
      local identityCount = tonumber(ARGV[6])
      local metaKey = KEYS[4 + identityCount]
@@ -878,6 +939,8 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
        'roundResult', nullableJson(incoming.roundResult),
        'matchResult', nullableJson(incoming.matchResult),
        'boType', tostring(incoming.boType or 1),
+       'maxGuesses', tostring(incoming.maxGuesses or 8),
+       'guessIntervalMs', tostring(incoming.guessIntervalMs or 1500),
        'revision', tostring(incoming.revision or 0),
        'updatedAt', tostring(incoming.updatedAt or 0))
      redis.call('DEL', playersKey, guessesKey, eventsKey, spectatorsKey)
@@ -969,7 +1032,12 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     throw new Error('STALE_ROOM_WRITE');
   }
   if (room.targetPlayerId) {
-    roomTargetCache.set(room.id, { round: room.round, targetPlayerId: room.targetPlayerId });
+    roomTargetCache.set(room.id, {
+      round: room.round,
+      targetPlayerId: room.targetPlayerId,
+      maxGuesses: room.maxGuesses,
+      guessIntervalMs: room.guessIntervalMs,
+    });
   } else {
     roomTargetCache.delete(room.id);
   }

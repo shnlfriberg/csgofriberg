@@ -1,11 +1,19 @@
 const STORAGE_KEY = 'csgofriberg.multi-lobby-preferences';
 const BO_OPTIONS = new Set([1, 3, 5, 7]);
+export const DEFAULT_MULTI_MAX_GUESSES = 8;
+export const MIN_MULTI_MAX_GUESSES = 1;
+export const MAX_MULTI_MAX_GUESSES = 15;
+export const DEFAULT_MULTI_GUESS_INTERVAL_SECONDS = 1.5;
+export const MIN_MULTI_GUESS_INTERVAL_SECONDS = 0;
+export const MAX_MULTI_GUESS_INTERVAL_SECONDS = 10;
 
 export interface MultiLobbyPreferences {
   createDifficulty: string;
   boType: number;
   allowSpectators: boolean;
   verifiedEmailOnly: boolean;
+  maxGuesses: number;
+  guessIntervalSeconds: number;
   matchmakingDifficulty: string;
 }
 
@@ -18,6 +26,8 @@ export function loadMultiLobbyPreferences(
     boType: 3,
     allowSpectators: false,
     verifiedEmailOnly: false,
+    maxGuesses: DEFAULT_MULTI_MAX_GUESSES,
+    guessIntervalSeconds: DEFAULT_MULTI_GUESS_INTERVAL_SECONDS,
     matchmakingDifficulty: fallbackDifficulty,
   };
   try {
@@ -39,6 +49,17 @@ export function loadMultiLobbyPreferences(
       verifiedEmailOnly: typeof stored.verifiedEmailOnly === 'boolean'
         ? stored.verifiedEmailOnly
         : defaults.verifiedEmailOnly,
+      maxGuesses: Number.isInteger(stored.maxGuesses)
+        && Number(stored.maxGuesses) >= MIN_MULTI_MAX_GUESSES
+        && Number(stored.maxGuesses) <= MAX_MULTI_MAX_GUESSES
+        ? Number(stored.maxGuesses)
+        : defaults.maxGuesses,
+      guessIntervalSeconds: typeof stored.guessIntervalSeconds === 'number'
+        && Number.isFinite(stored.guessIntervalSeconds)
+        && stored.guessIntervalSeconds >= MIN_MULTI_GUESS_INTERVAL_SECONDS
+        && stored.guessIntervalSeconds <= MAX_MULTI_GUESS_INTERVAL_SECONDS
+        ? stored.guessIntervalSeconds
+        : defaults.guessIntervalSeconds,
       matchmakingDifficulty: typeof stored.matchmakingDifficulty === 'string'
         && difficultySet.has(stored.matchmakingDifficulty)
         ? stored.matchmakingDifficulty

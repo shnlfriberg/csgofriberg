@@ -54,7 +54,6 @@ interface MatchOver {
   answer: AnswerInfo | null;
 }
 
-const MULTI_GUESS_INTERVAL_MS = 1_500;
 const ROUND_TIME_MS = 120_000;
 const NEXT_ROUND_DELAY_MS = 6_000;
 
@@ -81,6 +80,12 @@ function matchmakingAverageClass(value: number | null | undefined): string {
   if (value < 3.5) return ' matchmaking-average-low';
   if (value <= 4.5) return ' matchmaking-average-medium';
   return ' matchmaking-average-high';
+}
+
+export function resolveGuessCooldownMs(serverValue: unknown, roomValue: number): number {
+  return typeof serverValue === 'number' && Number.isFinite(serverValue)
+    ? Math.max(0, serverValue)
+    : Math.max(0, roomValue);
 }
 
 function applyRoomPatchState(current: RoomState, patch: RoomPatch): RoomState {
@@ -596,9 +601,9 @@ export default function MultiRoom() {
         finish(false);
         return;
       }
-      setGuessCooldownUntil(performance.now() + Math.max(
-        MULTI_GUESS_INTERVAL_MS,
-        Number(res?.cooldownMs) || 0
+      setGuessCooldownUntil(performance.now() + resolveGuessCooldownMs(
+        res?.cooldownMs,
+        current.guessIntervalMs
       ));
       finish(true);
     });
@@ -1024,6 +1029,26 @@ export default function MultiRoom() {
       {/* 等待区 */}
       {room.status === 'waiting' && (
         <div className="card room-waiting-card">
+          {!room.matchmaking && (
+            <section className="room-attributes" aria-labelledby="room-attributes-title">
+              <h3 id="room-attributes-title">{t('multi.roomAttributes')}</h3>
+              <ul>
+                <li>{t('multi.database', { type: difficultyLabel(t, room.dbType) })}</li>
+                <li>{t('multi.format', { bo: room.boType })}</li>
+                <li>{t('multi.customRulesSummary', {
+                  guesses: room.maxGuesses,
+                  seconds: room.guessIntervalMs / 1000,
+                })}</li>
+                <li>{room.allowSpectators
+                  ? t('multi.allowSpectating')
+                  : t('multi.denySpectating')}</li>
+                <li>{room.verifiedOnly
+                  ? t('multi.verifiedRoomOnly')
+                  : t('multi.anyoneCanJoin')}</li>
+                <li>{room.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}</li>
+              </ul>
+            </section>
+          )}
           {room.players.map((p) => (
             <div
               key={p.key}

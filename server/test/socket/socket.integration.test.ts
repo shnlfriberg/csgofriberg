@@ -253,7 +253,12 @@ describe('multiplayer socket integration', () => {
     const socket = await connect(withPowCookie(`csgofriberg_guest=${token}`));
     try {
       const created = await emit(socket, 'room:create', { dbType: 'beginner', boType: 1 });
-      expect(created.room).toMatchObject({ dbType: 'beginner', boType: 1 });
+      expect(created.room).toMatchObject({
+        dbType: 'beginner',
+        boType: 1,
+        maxGuesses: 8,
+        guessIntervalMs: 1_500,
+      });
       createdRoomIds.push(created.room.id);
     } finally {
       socket.disconnect();
@@ -864,7 +869,9 @@ describe('multiplayer socket integration', () => {
     const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
     const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
     try {
-      const created = await emit(a, 'room:create', { dbType: 'easy', boType: 1 });
+      const created = await emit(a, 'room:create', {
+        dbType: 'easy', boType: 1, maxGuesses: 11, guessIntervalMs: 2_500,
+      });
       createdRoomIds.push(created.room.id);
       expect(created.room.rematchAllowed).toBe(true);
       await emit(b, 'room:join', { roomId: created.room.id });
@@ -918,12 +925,67 @@ describe('multiplayer socket integration', () => {
           { key: `g:${keyB}`, ready: false, score: 0 },
         ]);
       expect(rematchRoom?.replayRounds).toEqual([]);
+      expect(rematchRoom).toMatchObject({ maxGuesses: 11, guessIntervalMs: 2_500 });
       expect((await emit(a, 'game:start')).code).toBe('PLAYERS_NOT_READY');
 
       expect((await emit(b, 'room:ready', { ready: true })).ok).toBe(true);
       expect((await emit(a, 'game:start')).ok).toBe(true);
       const restarted = await getRoom(created.room.id);
       expect(restarted).toMatchObject({ status: 'playing', round: 1 });
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
+  it('validates and applies custom room guess limits and intervals', async () => {
+    const stamp = Date.now();
+    const tokenA = jwt.sign({ key: `custom-a-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const tokenB = jwt.sign({ key: `custom-b-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
+    const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
+    try {
+      expect(await emit(a, 'room:create', {
+        dbType: 'easy', boType: 1, maxGuesses: 0, guessIntervalMs: 1_500,
+      })).toEqual({ code: 'VALIDATION_FAILED' });
+      expect(await emit(a, 'room:create', {
+        dbType: 'easy', boType: 1, maxGuesses: 8, guessIntervalMs: 10_001,
+      })).toEqual({ code: 'VALIDATION_FAILED' });
+
+      const created = await emit(a, 'room:create', {
+        dbType: 'easy',
+        boType: 1,
+        maxGuesses: 2,
+        guessIntervalMs: 0,
+      });
+      createdRoomIds.push(created.room.id);
+      expect(created.room).toMatchObject({ maxGuesses: 2, guessIntervalMs: 0 });
+      await emit(b, 'room:join', { roomId: created.room.id });
+      await emit(b, 'room:ready');
+      expect((await emit(a, 'game:start')).ok).toBe(true);
+
+      const active = await getRoom(created.room.id);
+      const wrongGuesses = await db('players')
+        .whereNot({ id: active!.targetPlayerId })
+        .where({ is_enabled: true })
+        .select('id')
+        .limit(2);
+      expect(wrongGuesses).toHaveLength(2);
+      expect(await emit(a, 'game:guess', {
+        playerId: wrongGuesses[0].id,
+        roundId: active!.round,
+        eventId: `custom-${stamp}-0001`,
+      })).toEqual({ cooldownMs: 0 });
+      expect(await emit(a, 'game:guess', {
+        playerId: wrongGuesses[1].id,
+        roundId: active!.round,
+        eventId: `custom-${stamp}-0002`,
+      })).toEqual({ cooldownMs: 0 });
+      expect(await emit(a, 'game:guess', {
+        playerId: wrongGuesses[0].id,
+        roundId: active!.round,
+        eventId: `custom-${stamp}-0003`,
+      })).toEqual({ code: 'GUESS_LIMIT_REACHED' });
     } finally {
       a.disconnect();
       b.disconnect();
@@ -945,6 +1007,7 @@ describe('multiplayer socket integration', () => {
       const [matchedA] = await Promise.all([foundA, foundB]);
       createdRoomIds.push(matchedA.room.id);
       expect(matchedA.room.rematchAllowed).toBe(true);
+      expect(matchedA.room).toMatchObject({ maxGuesses: 8, guessIntervalMs: 1_500 });
 
       const roundA = onceEvent(a, 'round:start');
       const roundB = onceEvent(b, 'round:start');
@@ -990,6 +1053,8 @@ describe('multiplayer socket integration', () => {
         matchmaking: false,
         readyCheckEndsAt: null,
         rematchAllowed: true,
+        maxGuesses: 8,
+        guessIntervalMs: 1_500,
       });
       expect(rematchRoom?.recordId).not.toBe(originalRecordId);
       expect(rematchRoom?.players.map((player) => ({

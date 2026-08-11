@@ -1,11 +1,11 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuessFeedback, PlayerInfo, RoomState } from '../../src/types';
 import { renderAtRoute } from '../render';
 import MultiLobby from '../../src/pages/MultiLobby';
-import MultiRoom from '../../src/pages/MultiRoom';
+import MultiRoom, { resolveGuessCooldownMs } from '../../src/pages/MultiRoom';
 
 const socket = vi.hoisted(() => ({
   on: vi.fn(),
@@ -14,8 +14,16 @@ const socket = vi.hoisted(() => ({
   connect: vi.fn(),
   disconnect: vi.fn(),
 }));
+const playerList = vi.hoisted(() => [{ id: 99, nickname: 's1mple' }]);
 
 vi.mock('../../src/api/socket', () => ({ getSocket: () => socket }));
+vi.mock('../../src/api/playerList', () => ({
+  getPlayerList: vi.fn(async () => playerList),
+  subscribePlayerList: vi.fn(() => () => undefined),
+  searchPlayerList: (list: typeof playerList, query: string) => list.filter(
+    (item) => item.nickname.toLowerCase().includes(query.trim().toLowerCase())
+  ),
+}));
 
 const answer: PlayerInfo = {
   id: 1,
@@ -66,6 +74,7 @@ const room: RoomState = {
   stateVersion: 8,
   winsNeeded: 2,
   maxGuesses: 8,
+  guessIntervalMs: 1_500,
   roundEndsAt: null,
   matchStartsAt: null,
   spectatorCount: 0,
@@ -146,6 +155,12 @@ describe('MultiRoom replay', () => {
     expect(screen.getByText('第 2 / 2 轮')).toBeInTheDocument();
     expect(screen.getByText('Opponent Round 2')).toBeInTheDocument();
     expect(screen.queryByText('Opponent Round 1')).not.toBeInTheDocument();
+  });
+
+  it('uses the room guess interval without enforcing a fixed client minimum', () => {
+    expect(resolveGuessCooldownMs(0, 1_500)).toBe(0);
+    expect(resolveGuessCooldownMs(2_500, 1_500)).toBe(2_500);
+    expect(resolveGuessCooldownMs(undefined, 3_000)).toBe(3_000);
   });
 
   it('offers a rematch invitation after matchmaking settlement', async () => {
@@ -265,11 +280,53 @@ describe('MultiRoom replay', () => {
 
     renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
     const ready = await screen.findByRole('button', { name: '准备' });
+    expect(screen.queryByRole('heading', { name: '房间设置' })).not.toBeInTheDocument();
     expect(screen.getByText('对方近 10 场胜局平均猜测')).toBeInTheDocument();
     expect(await screen.findByText('3.4')).toHaveClass('matchmaking-average-low');
     expect(screen.queryByRole('button', { name: '开始对局' })).not.toBeInTheDocument();
     await user.click(ready);
     expect(socket.emit).toHaveBeenCalledWith('room:ready', { ready: true }, expect.any(Function));
+  });
+
+  it('shows invited players the current room settings before they ready up', async () => {
+    const invitedRoom: RoomState = {
+      ...room,
+      status: 'waiting',
+      matchmaking: false,
+      dbType: 'easy',
+      boType: 5,
+      maxGuesses: 12,
+      guessIntervalMs: 2_500,
+      verifiedOnly: true,
+      anonymous: true,
+      round: 0,
+      roundId: 0,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({
+        ...player,
+        ready: player.key === room.hostKey,
+        score: 0,
+      })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: invitedRoom, selfKey: 'g:opponent', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    const attributes = await screen.findByRole('region', { name: '房间设置' });
+    expect(within(attributes).getByText('数据库：简单版')).toBeInTheDocument();
+    expect(within(attributes).getByText('赛制：BO5')).toBeInTheDocument();
+    expect(within(attributes).getByText('每局最多 12 次 · 猜测间隔 2.5 秒'))
+      .toBeInTheDocument();
+    expect(within(attributes).getByText('允许观战')).toBeInTheDocument();
+    expect(within(attributes).getByText('仅允许已验证邮箱用户加入')).toBeInTheDocument();
+    expect(within(attributes).getByText('匿名房间')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '准备' })).toBeInTheDocument();
   });
 
   it('warns before leaving a ready check and shows the returned cooldown in the lobby', async () => {
@@ -365,5 +422,46 @@ describe('MultiRoom replay', () => {
 
     expect(socket.emit).toHaveBeenCalledWith('game:skip-round', { roundId: 1 }, expect.any(Function));
     expect(await screen.findByRole('button', { name: '已跳过' })).toBeDisabled();
+  });
+
+  it('allows another guess immediately when the room interval is zero', async () => {
+    const user = userEvent.setup();
+    const activeRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      guessIntervalMs: 0,
+      round: 1,
+      roundId: 1,
+      roundEndsAt: Date.now() + 60_000,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({
+        ...player,
+        score: 0,
+        skipped: false,
+        guessCount: 0,
+        guesses: [],
+      })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: activeRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+      if (event === 'game:guess' && typeof ack === 'function') ack({ cooldownMs: 0 });
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    const input = await screen.findByPlaceholderText('输入选手昵称...');
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await user.type(input, 's1');
+      await screen.findByRole('option', { name: 's1mple' });
+      await user.click(screen.getByRole('button', { name: '提交猜测' }));
+      await waitFor(() => {
+        expect(socket.emit.mock.calls.filter(([event]) => event === 'game:guess'))
+          .toHaveLength(attempt);
+      });
+    }
   });
 });

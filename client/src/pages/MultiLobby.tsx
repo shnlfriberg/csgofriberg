@@ -11,6 +11,8 @@ import {
   Rocket,
   XCircle,
   Eye,
+  Settings2,
+  ChevronDown,
 } from 'lucide-react';
 import Page from '../components/Page';
 import { getSocket } from '../api/socket';
@@ -21,7 +23,14 @@ import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
 import { difficultyLabel } from '../utils/difficulty';
-import { loadMultiLobbyPreferences, saveMultiLobbyPreferences } from '../store/multiLobbyPreferences';
+import {
+  loadMultiLobbyPreferences,
+  saveMultiLobbyPreferences,
+  MAX_MULTI_GUESS_INTERVAL_SECONDS,
+  MAX_MULTI_MAX_GUESSES,
+  MIN_MULTI_GUESS_INTERVAL_SECONDS,
+  MIN_MULTI_MAX_GUESSES,
+} from '../store/multiLobbyPreferences';
 import { useAuth } from '../store/auth';
 
 type DbType = string;
@@ -70,6 +79,10 @@ export default function MultiLobby() {
   const [boType, setBoType] = useState(initialPreferences.boType);
   const [allowSpectators, setAllowSpectators] = useState(initialPreferences.allowSpectators);
   const [verifiedEmailOnly, setVerifiedEmailOnly] = useState(initialPreferences.verifiedEmailOnly);
+  const [maxGuesses, setMaxGuesses] = useState(initialPreferences.maxGuesses);
+  const [guessIntervalSeconds, setGuessIntervalSeconds] = useState(
+    initialPreferences.guessIntervalSeconds
+  );
   const anonymous = true;
   const [mmDbType, setMmDbType] = useState<DbType>(initialPreferences.matchmakingDifficulty);
   const mmAnonymous = true;
@@ -116,9 +129,19 @@ export default function MultiLobby() {
       boType,
       allowSpectators,
       verifiedEmailOnly,
+      maxGuesses,
+      guessIntervalSeconds,
       matchmakingDifficulty: mmDbType,
     });
-  }, [allowSpectators, boType, dbType, mmDbType, verifiedEmailOnly]);
+  }, [
+    allowSpectators,
+    boType,
+    dbType,
+    guessIntervalSeconds,
+    maxGuesses,
+    mmDbType,
+    verifiedEmailOnly,
+  ]);
 
   useEffect(() => {
     if (!matchCooldownDeadline) {
@@ -268,6 +291,8 @@ export default function MultiLobby() {
       allowSpectators,
       verifiedOnly: verifiedEmailOnly,
       anonymous,
+      maxGuesses,
+      guessIntervalMs: Math.round(guessIntervalSeconds * 1000),
     }, (res: any) => {
       if (res?.code === 'ALREADY_IN_ROOM' && res.room) {
         setCreating(false);
@@ -410,6 +435,10 @@ export default function MultiLobby() {
           <p className="muted multi-lobby-created-meta">
             {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')} · {createdRoom.verifiedOnly ? t('multi.verifiedRoomOnly') : t('multi.anyoneCanJoin')}
             {' · '}{createdRoom.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}
+            {' · '}{t('multi.customRulesSummary', {
+              guesses: createdRoom.maxGuesses,
+              seconds: createdRoom.guessIntervalMs / 1000,
+            })}
           </p>
           <button className="btn btn-lg" onClick={() => navigate('/multi/room')}>
             <Rocket size={16} />
@@ -455,6 +484,65 @@ export default function MultiLobby() {
                 <span>{t('multi.verifiedRoomOnly')}</span>
               </label>
             </div>
+            <details className="room-more-settings">
+              <summary>
+                <Settings2 size={16} aria-hidden="true" />
+                <span>{t('multi.moreSettings')}</span>
+                <ChevronDown className="room-more-settings-chevron" size={16} aria-hidden="true" />
+              </summary>
+              <div className="room-more-settings-fields">
+                <label className="room-number-setting">
+                  <span>{t('multi.maxGuessesLabel')}</span>
+                  <span className="room-number-input">
+                    <input
+                      className="input"
+                      type="number"
+                      min={MIN_MULTI_MAX_GUESSES}
+                      max={MAX_MULTI_MAX_GUESSES}
+                      step={1}
+                      aria-label={t('multi.maxGuessesLabel')}
+                      value={maxGuesses}
+                      onChange={(event) => {
+                        const value = event.currentTarget.valueAsNumber;
+                        if (
+                          Number.isInteger(value)
+                          && value >= MIN_MULTI_MAX_GUESSES
+                          && value <= MAX_MULTI_MAX_GUESSES
+                        ) {
+                          setMaxGuesses(value);
+                        }
+                      }}
+                    />
+                    <span>{t('multi.guessCountUnit')}</span>
+                  </span>
+                </label>
+                <label className="room-number-setting">
+                  <span>{t('multi.guessIntervalLabel')}</span>
+                  <span className="room-number-input">
+                    <input
+                      className="input"
+                      type="number"
+                      min={MIN_MULTI_GUESS_INTERVAL_SECONDS}
+                      max={MAX_MULTI_GUESS_INTERVAL_SECONDS}
+                      step={0.1}
+                      aria-label={t('multi.guessIntervalLabel')}
+                      value={guessIntervalSeconds}
+                      onChange={(event) => {
+                        const value = event.currentTarget.valueAsNumber;
+                        if (
+                          Number.isFinite(value)
+                          && value >= MIN_MULTI_GUESS_INTERVAL_SECONDS
+                          && value <= MAX_MULTI_GUESS_INTERVAL_SECONDS
+                        ) {
+                          setGuessIntervalSeconds(value);
+                        }
+                      }}
+                    />
+                    <span>{t('multi.secondsUnit')}</span>
+                  </span>
+                </label>
+              </div>
+            </details>
             <div style={{ textAlign: 'center', marginTop: 14 }}>
               <button className="btn btn-lg" onClick={() => void create()} disabled={creating}>
                 {creating ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <Zap size={16} />}
