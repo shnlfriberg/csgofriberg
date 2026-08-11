@@ -135,29 +135,51 @@ Docker Compose 部署、自动数据库迁移、管理员创建、更新和回�
 
 管理员可在管理后台的 **API Token** 页生成最长 365 天有效的 Bearer Token。明文只在创建时返回一次，服务端仅保存 SHA-256 哈希；每位管理员最多保留 20 个有效 Token，撤销后立即失效。
 
-外部 API 不需要浏览器 PoW，但保留全局限流与独立的失效关闭限流。请求统一携带：
+外部 API 不需要浏览器 PoW。当前 Token 不区分端点权限，持有者既能提交待审核变更，也能调用直接写入端点，因此只应发放给可信服务。请求统一携带：
 
 ```http
 Authorization: Bearer csgf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 Content-Type: application/json
 ```
 
-可用端点：
+当前限流为全局每 IP 600 次/分钟、外部 API 鉴权前每 IP 120 次/分钟、鉴权后每 Token 60 次/分钟。外部 API 的专用限流失效关闭：超过限制返回 `429 RATE_LIMITED`，限流服务异常返回 `503 RATE_LIMIT_UNAVAILABLE`。
 
-- `POST /api/external/players`：新增单个选手，body 与管理后台新增选手格式相同。
-- `PUT /api/external/players/:id`：部分更新选手，只传需要修改的字段。
-- `POST /api/external/players/import`：按昵称批量 upsert，body 为 `{ "players": [...] }`，单次最多 1000 名。
+可用端点如下：
 
-示例：
+| 端点 | 当前行为 |
+| --- | --- |
+| `POST /api/external/player-change-submissions` | 为已有选手提交字段级待审核变更；单次 1-100 名，不会立即修改选手数据 |
+| `POST /api/external/players` | 直接新增单个选手，成功返回 `201 { "id": number }` |
+| `PUT /api/external/players/:id` | 按 ID 直接部分更新选手，成功返回 `200 { "ok": true }` |
+| `POST /api/external/players/import` | 按昵称直接批量 upsert；单次 1-1000 名且请求内昵称不可重复，返回 `created`/`updated` 数量 |
+
+待审核接口适合外部数据源报送现有选手的纠错。每项使用 `playerId`、`nickname` 或二者定位选手；同时提供时必须指向同一人，同一请求不能重复提交同一选手。`changes` 必须至少包含一个字段：
 
 ```bash
-curl -X PUT 'https://example.com/api/external/players/123' \
+curl -X POST 'https://example.com/api/external/player-change-submissions' \
   -H 'Authorization: Bearer csgf_your_token' \
   -H 'Content-Type: application/json' \
-  -d '{"team":"NAVI","age":27,"difficulties":["normal","easy"]}'
+  -d '{
+    "players": [
+      {
+        "playerId": 123,
+        "changes": {
+          "team": "NAVI",
+          "age": 27,
+          "difficulties": ["normal", "easy"]
+        }
+      }
+    ]
+  }'
 ```
 
-外部 API 不提供永久删除；同步源可将 `is_enabled` 设为 `false`，使选手立即退出目标池与猜测列表，同时保留历史对局。
+有实际差异时返回 `201 { "submissionId": number, "submitted": number, "unchanged": number }`；所有值均未变化时返回 `200`，其中 `submissionId` 为 `null`。`submitted` 与 `unchanged` 统计的是字段数，不是选手数。管理员在 **选手变更审核** 页逐项批准或拒绝；批准前若该字段已被其他操作改动，该项会标记为 `conflict`，不会覆盖新值。
+
+可写字段为 `nickname`、`nationality`、`region`、`team`、`team_history`、`age`、`role`、`major_championships`、`major_appearances`、`is_active`、`is_enabled`、`difficulties`。其中 `role` 仅接受 `Rifler`、`AWPer`、`Coach`，`difficulties` 当前仅接受 `beginner`、`easy`、`normal`，`team_history` 最多 50 项。
+
+直接写入端点用于受信任的完整同步任务。新增选手至少需要 `nickname`、`nationality` 和 `age`；批量导入应按完整记录提交。更新已有选手时，导入项省略 `difficulties`、`team_history` 或 `is_enabled` 会保留原值，其他带默认值的字段若省略则可能写入默认值。部分更新接口只修改显式传入的字段。
+
+外部 API 不提供读取或永久删除端点。同步源可将 `is_enabled` 设为 `false`，使选手立即退出目标池与猜测列表，同时保留历史对局。所有错误响应均使用 `{ "code": "..." }` 的机器可读格式。
 
 ## 项目结构
 
