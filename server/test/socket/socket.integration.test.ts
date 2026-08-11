@@ -1308,6 +1308,7 @@ describe('multiplayer socket integration', () => {
       const stored = JSON.parse((await redis()!.get(redisKey(`room:${created.room.id}`)))!);
       const wrongGuesses = await db('players')
         .whereNot({ id: stored.targetPlayerId })
+        .where({ is_enabled: true })
         .select('id')
         .limit(2);
 
