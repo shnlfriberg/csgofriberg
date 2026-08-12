@@ -92,6 +92,15 @@ describe('desktop/mobile layout contracts', () => {
   it('keeps the completed daily leaderboard in a capped desktop side column', () => {
     const daily = readCss('../../src/styles/daily.css');
     expect(daily).toMatch(
+      /\.daily-game-section\s*>\s*\.game-table-wrap\s*\{[^}]*align-self:\s*start/s
+    );
+    expect(daily).toMatch(
+      /\.daily-leaderboard-table\s+table\s*\{[^}]*width:\s*100%;[^}]*min-width:\s*0;[^}]*table-layout:\s*fixed/s
+    );
+    expect(daily).toMatch(
+      /\.daily-leaderboard-player-name\s*\{[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;[^}]*white-space:\s*nowrap/s
+    );
+    expect(daily).toMatch(
       /@media\s*\(min-width:\s*960px\)\s*\{[\s\S]*\.daily-content-layout\.has-leaderboard\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*7fr\)\s+minmax\(0,\s*3fr\)/s
     );
     expect(daily).toMatch(

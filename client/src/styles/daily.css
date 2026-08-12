@@ -22,6 +22,7 @@
   min-width: 0;
 }
 .daily-game-section { min-height: 300px; }
+.daily-game-section > .game-table-wrap { align-self: start; }
 .daily-leaderboard-section { border-top: 1px solid var(--border); }
 
 @media (min-width: 960px) {
@@ -136,10 +137,19 @@
 .daily-overlay-order { color: var(--success); font-weight: 700; }
 
 .daily-leaderboard-table {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 190px;
   padding: 4px 0;
+  overflow: hidden;
 }
-.daily-leaderboard-table table { width: 100%; }
+.daily-leaderboard-table > div { min-width: 0; max-width: 100%; }
+.daily-leaderboard-table table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
 .daily-leaderboard-table table th:first-child,
 .daily-leaderboard-table table td:first-child { width: 72px; text-align: center; }
 .daily-leaderboard-table table th:last-child,
@@ -148,6 +158,14 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  width: 100%;
   min-width: 0;
 }
+.daily-leaderboard-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.daily-leaderboard-player .leaderboard-self-marker { flex: 0 0 auto; }
 .daily-status-divider { color: var(--border-strong); }

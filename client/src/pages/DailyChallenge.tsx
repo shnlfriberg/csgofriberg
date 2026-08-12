@@ -274,7 +274,7 @@ export default function DailyChallenge() {
       title: t('daily.player'),
       render: (row) => (
         <span className="daily-leaderboard-player">
-          {row.displayId}
+          <span className="daily-leaderboard-player-name">{row.displayId}</span>
           {row.isCurrent && <span className="leaderboard-self-marker">{t('leaderboard.self')}</span>}
         </span>
       ),
