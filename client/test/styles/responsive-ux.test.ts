@@ -107,6 +107,13 @@ describe('desktop/mobile layout contracts', () => {
     expect(multiplayer).toMatch(/\.multi-lobby-join-card\s*\{\s*grid-area:\s*join/);
   });
 
+  it('centers a single answer overlay action on mobile', () => {
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /\.overlay-card\s+\.btns\s*>\s*\.btn:only-child\s*\{[^}]*grid-column:\s*1\s*\/\s*-1;[^}]*justify-self:\s*center;[^}]*width:\s*min\(100%,\s*220px\)/s
+    );
+  });
+
   it('keeps the completed daily leaderboard in a capped desktop side column', () => {
     const daily = readCss('../../src/styles/daily.css');
     expect(daily).toMatch(

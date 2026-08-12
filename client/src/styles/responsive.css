@@ -388,6 +388,11 @@
   .announcement-popup-actions { display: flex; }
   .overlay-card .btns .btn,
   .confirm-actions .btn { width: 100%; }
+  .overlay-card .btns > .btn:only-child {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: min(100%, 220px);
+  }
   .room-player-row { flex-wrap: wrap; }
   .room-player-row > b { flex: 1 1 140px; }
   .room-ready-actions .btn { flex: 1; }
