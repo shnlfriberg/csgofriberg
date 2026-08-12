@@ -131,6 +131,8 @@ export async function handleRoomCreate(
     return;
   }
   const boType = payload.boType;
+  const gameMode = payload.gameMode;
+  const totalRounds = gameMode === 'relay' ? payload.totalRounds : boType;
   const dbType = payload.dbType;
   if (!isDifficultyAvailable(dbType)) {
     ack?.({ code: 'DIFFICULTY_UNAVAILABLE' });
@@ -152,6 +154,11 @@ export async function handleRoomCreate(
     readyCheckEndsAt: null,
     dbType,
     boType,
+    gameMode,
+    totalRounds,
+    currentTurnKey: null,
+    relaySolvedRounds: 0,
+    relayGuesses: [],
     maxGuesses: payload.maxGuesses,
     guessIntervalMs: payload.guessIntervalMs,
     rematchAllowed: true,
@@ -450,6 +457,33 @@ export async function handleRoomLeave(
   if (currentPlayer && (
     room.status === 'playing' || room.status === 'round_over' || room.status === 'starting'
   )) {
+    if (room.gameMode === 'relay') {
+      const aborted = await withRoomLock(room.id, async (locked) => {
+        const player = locked.players.find((candidate) => candidate.key === me.key);
+        if (!player || player.socketId !== socket.id) return 'STALE_CONNECTION' as const;
+        await deleteRoom(locked);
+        return { room: locked };
+      }, () => false);
+      if (aborted === 'STALE_CONNECTION') {
+        ack?.({ code: aborted });
+        return;
+      }
+      if (aborted && typeof aborted === 'object') {
+        await Promise.all([...aborted.room.players, ...aborted.room.spectators]
+          .map((member) => clearIdentityRoom(member.key, aborted.room.id)));
+        io.to(aborted.room.id).emit('relay:aborted', {
+          roomId: aborted.room.id,
+          reason: 'player_left',
+          playerKey: me.key,
+          serverNow: Date.now(),
+        });
+      }
+      socket.leave(room.id);
+      socket.leave(spectatorChannel(room.id));
+      socket.data.roomId = undefined;
+      ack?.({ ok: true });
+      return;
+    }
     const opponent = room.players.find((candidate) => candidate.key !== me.key);
     const finished = await lifecycle.finishMatch(
       io,

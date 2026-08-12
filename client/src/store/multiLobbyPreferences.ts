@@ -8,6 +8,8 @@ export const MIN_MULTI_GUESS_INTERVAL_SECONDS = 0;
 export const MAX_MULTI_GUESS_INTERVAL_SECONDS = 10;
 
 export interface MultiLobbyPreferences {
+  gameMode: 'classic' | 'relay';
+  totalRounds: number;
   createDifficulty: string;
   boType: number;
   allowSpectators: boolean;
@@ -22,6 +24,8 @@ export function loadMultiLobbyPreferences(
   fallbackDifficulty: string
 ): MultiLobbyPreferences {
   const defaults: MultiLobbyPreferences = {
+    gameMode: 'classic',
+    totalRounds: 3,
     createDifficulty: fallbackDifficulty,
     boType: 3,
     allowSpectators: false,
@@ -36,6 +40,10 @@ export function loadMultiLobbyPreferences(
     const stored = JSON.parse(raw) as Partial<MultiLobbyPreferences>;
     const difficultySet = new Set(availableDifficulties);
     return {
+      gameMode: stored.gameMode === 'relay' ? 'relay' : 'classic',
+      totalRounds: typeof stored.totalRounds === 'number' && BO_OPTIONS.has(stored.totalRounds)
+        ? stored.totalRounds
+        : defaults.totalRounds,
       createDifficulty: typeof stored.createDifficulty === 'string'
         && difficultySet.has(stored.createDifficulty)
         ? stored.createDifficulty

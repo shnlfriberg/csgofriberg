@@ -14,6 +14,9 @@ export interface MatchResultPayload {
   recordId: string;
   dbType: string;
   boType: number;
+  gameMode?: 'classic' | 'relay';
+  totalRounds?: number;
+  relaySolvedRounds?: number;
   winnerKey: string | null;
   reason: string;
   forfeitedKey: string | null;
@@ -36,6 +39,7 @@ export interface MatchResultPayload {
     reason: string;
     guessesByPlayer: Record<string, number[]>;
     guessTimesByPlayer: Record<string, Array<number | null>>;
+    sharedGuesses?: Array<{ actorKey: string; playerId: number; guessedAt: number; guessTime: number }>;
   }>;
 }
 
@@ -47,6 +51,9 @@ let workerClient: NonNullable<ReturnType<typeof duplicateRedisClient>> | null = 
 let pendingClaimCursor = '0-0';
 
 export async function persistMatchResult(payload: MatchResultPayload): Promise<void> {
+  const gameMode = payload.gameMode === 'relay' ? 'relay' : 'classic';
+  const totalRounds = payload.totalRounds ?? payload.boType;
+  const relaySolvedRounds = payload.relaySolvedRounds ?? 0;
   const winner = payload.participants.find((player) => player.key === payload.winnerKey);
   const guessMetrics = winningGuessMetricsByPlayer(payload.rounds);
   const participantUserIds = [...new Set(
@@ -90,7 +97,7 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
         player_key: player.key,
         player_name: player.name ?? '',
         score: player.score,
-        is_winner: player.key === payload.winnerKey,
+        is_winner: gameMode === 'classic' && player.key === payload.winnerKey,
         winning_guess_sum: metrics?.winningGuessSum ?? 0,
         winning_rounds: metrics?.winningRounds ?? 0,
       };
@@ -100,6 +107,9 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
         room_id: payload.recordId,
         db_type: payload.dbType,
         bo_type: payload.boType,
+        game_mode: gameMode,
+        total_rounds: totalRounds,
+        relay_solved_rounds: relaySolvedRounds,
         winner_id: persistedUserId(winner?.userId ?? null),
         winner_key: payload.winnerKey,
         finish_reason: payload.reason,
@@ -149,8 +159,10 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
   });
   if (insertedMatch) {
     await invalidateCached(
-      leaderboardCacheKey('multi', payload.dbType),
-      ...globalStatsCacheKeysForDifficulty(payload.dbType),
+      ...(gameMode === 'classic' ? [
+        leaderboardCacheKey('multi', payload.dbType),
+        ...globalStatsCacheKeysForDifficulty(payload.dbType),
+      ] : []),
       ...payload.participants.flatMap((player) => [
         ...personalStatsCacheKeysForDifficulty(player.key, payload.dbType),
         `room-player-performance:${player.key}`,

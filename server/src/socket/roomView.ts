@@ -98,12 +98,17 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
     id: room.recordId,
     mode: room.dbType,
     boType: room.boType,
+    gameMode: room.gameMode,
+    totalRounds: room.totalRounds,
+    relaySolvedRounds: room.relaySolvedRounds,
     finishedAt: new Date(room.updatedAt).toISOString(),
-    result: room.matchResult.winnerKey === me.key
-      ? 'won' as const
-      : room.matchResult.winnerKey === opponent.key
-        ? 'lost' as const
-        : 'draw' as const,
+    result: room.gameMode === 'relay'
+      ? 'cooperative' as const
+      : room.matchResult.winnerKey === me.key
+        ? 'won' as const
+        : room.matchResult.winnerKey === opponent.key
+          ? 'lost' as const
+          : 'draw' as const,
     me: { score: me.score },
     opponent: {
       displayId: identityDisplayName(opponent),
@@ -125,6 +130,17 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
         opponent: {
           guesses: replayGuesses(target, round.guessesByPlayer[opponent.key] ?? [], room.maxGuesses),
         },
+        sharedGuesses: round.sharedGuesses?.flatMap((guess) => {
+          const player = getPlayer(guess.playerId);
+          if (!player) return [];
+          return [{
+            actor: guess.actorKey === me.key
+              ? 'me' as const
+              : guess.actorKey === opponent.key ? 'opponent' as const : null,
+            feedback: visibleGuess(compareGuess(player, target)),
+            guessTime: guess.guessTime,
+          }];
+        }) ?? [],
       }];
     }),
   };
@@ -158,6 +174,15 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     readyCheckEndsAt: room.readyCheckEndsAt,
     dbType: room.dbType,
     boType: room.boType,
+    gameMode: room.gameMode,
+    totalRounds: room.totalRounds,
+    currentTurnKey: room.currentTurnKey,
+    relaySolvedRounds: room.relaySolvedRounds,
+    relayGuesses: room.relayGuesses.map((guess) => ({
+      actorKey: guess.actorKey,
+      guessedAt: guess.guessedAt,
+      feedback: visibleGuess(guess.feedback),
+    })),
     rematchAllowed: room.rematchAllowed,
     rematchInvite: room.rematchInviterKey
       ? { inviterKey: room.rematchInviterKey }

@@ -56,6 +56,9 @@ describe('database schema initialization', () => {
     expect(await instance.schema.hasColumn('games', 'guess_times')).toBe(true);
     expect(await instance.schema.hasColumn('match_records', 'winner_key')).toBe(true);
     expect(await instance.schema.hasColumn('match_records', 'finish_reason')).toBe(true);
+    expect(await instance.schema.hasColumn('match_records', 'game_mode')).toBe(true);
+    expect(await instance.schema.hasColumn('match_records', 'total_rounds')).toBe(true);
+    expect(await instance.schema.hasColumn('match_records', 'relay_solved_rounds')).toBe(true);
     expect(await instance.schema.hasColumn('match_players', 'winning_guess_sum')).toBe(true);
     expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
     expect(await instance.schema.hasColumn('daily_challenges', 'target_player_id')).toBe(true);
@@ -140,5 +143,26 @@ describe('database schema initialization', () => {
       { id: 3, solveOrder: null },
     ]);
     expect(Number((await instance('daily_challenges').where({ id: 1 }).first()).solved_count)).toBe(2);
+  });
+
+  it('backfills classic match total rounds from the existing BO format', async () => {
+    const instance = createInstance();
+    await instance.schema.createTable('match_records', (table) => {
+      table.increments('id').primary();
+      table.string('room_id', 64).notNullable().unique();
+      table.string('db_type', 16).notNullable().defaultTo('easy');
+      table.integer('bo_type').notNullable().defaultTo(3);
+      table.integer('winner_id').nullable();
+      table.text('players').notNullable().defaultTo('[]');
+      table.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
+    });
+    await instance('match_records').insert({ room_id: 'classic-bo5', bo_type: 5 });
+
+    await ensureSchema(instance);
+
+    const match = await instance('match_records').where({ room_id: 'classic-bo5' }).first();
+    expect(match.game_mode).toBe('classic');
+    expect(Number(match.total_rounds)).toBe(5);
+    expect(Number(match.relay_solved_rounds)).toBe(0);
   });
 });

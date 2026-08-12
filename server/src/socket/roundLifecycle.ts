@@ -43,6 +43,10 @@ export async function startRound(io: Server, roomId: string): Promise<boolean> {
     room.eventResults = {};
     room.roundResult = null;
     room.matchResult = null;
+    room.relayGuesses = [];
+    room.currentTurnKey = room.gameMode === 'relay'
+      ? room.players[Math.floor(Math.random() * room.players.length)]?.key ?? null
+      : null;
     for (const player of room.players) {
       player.guesses = [];
       player.guessTimes = [];
@@ -88,7 +92,11 @@ export async function finishRound(
     const winner = room.players.find((player) => player.key === winnerKey);
     if (winner) winner.score += 1;
     room.roundEndsAt = null;
-    const matchOver = Boolean(winner && winner.score >= winsNeeded(room.boType));
+    room.currentTurnKey = null;
+    if (room.gameMode === 'relay' && winnerKey) room.relaySolvedRounds += 1;
+    const matchOver = room.gameMode === 'relay'
+      ? room.round >= room.totalRounds
+      : Boolean(winner && winner.score >= winsNeeded(room.boType));
     if (matchOver) room.status = 'finished';
     else {
       room.status = 'round_over';
@@ -96,13 +104,15 @@ export async function finishRound(
     }
     room.roundResult = {
       round: room.round,
-      winnerKey,
+      winnerKey: room.gameMode === 'relay' ? null : winnerKey,
       reason,
       matchOver,
       nextRoundAt: room.nextRoundAt,
     };
     appendReplayRound(room);
-    if (matchOver) room.matchResult = { winnerKey, reason: 'score', forfeitedKey: null };
+    if (matchOver) room.matchResult = room.gameMode === 'relay'
+      ? { winnerKey: null, reason: 'cooperative_score', forfeitedKey: null }
+      : { winnerKey, reason: 'score', forfeitedKey: null };
     return { room, matchOver };
   }, (value) => Boolean(value));
   if (!result) return;

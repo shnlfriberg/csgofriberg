@@ -1,5 +1,6 @@
 import { ArrowUp, ArrowDown } from 'lucide-react';
 import { memo } from 'react';
+import type { ReactNode } from 'react';
 import {
   AttributeFeedback,
   HiddenAttributeFeedback,
@@ -53,7 +54,13 @@ function Cell({
 }
 
 /** 猜测反馈表:原版 game-table 布局,每行一次猜测的逐属性对比 */
-function GuessBoard({ guesses }: { guesses: MultiplayerGuessFeedback[] }) {
+function GuessBoard({
+  guesses,
+  rowAnnotations,
+}: {
+  guesses: MultiplayerGuessFeedback[];
+  rowAnnotations?: Array<{ content: ReactNode; title?: string; tone?: 'self' | 'other' }>;
+}) {
   const { t } = useTranslation();
   const columns = [
     t('guess.columns.nickname'),
@@ -76,30 +83,41 @@ function GuessBoard({ guesses }: { guesses: MultiplayerGuessFeedback[] }) {
           </tr>
         </thead>
         <tbody>
-          {guesses.map((g, i) => (
-            <tr
-              key={'hidden' in g ? `hidden-${i}` : `${g.playerId}-${i}`}
-              className={`${i === guesses.length - 1 ? 'row-latest' : ''} ${g.correct ? 'row-correct' : ''}`}
-            >
-              <td
-                className={`name ${g.correct ? 'correct' : ''} ${'hidden' in g ? 'masked-cell' : ''}`}
-                data-label={columns[0]}
+          {guesses.map((g, i) => {
+            const annotation = rowAnnotations?.[i];
+            return (
+              <tr
+                key={'hidden' in g ? `hidden-${i}` : `${g.playerId}-${i}`}
+                className={`${i === guesses.length - 1 ? 'row-latest' : ''} ${g.correct ? 'row-correct' : ''}`}
               >
-                {'hidden' in g ? null : g.nickname}
-              </td>
-              <Cell attr={g.attributes.team} label={columns[1]} />
-              <Cell
-                attr={g.attributes.nationality}
-                label={columns[2]}
-                format={(value) => countryLabel(t, value)}
-              />
-              <Cell attr={g.attributes.age} label={columns[3]} />
-              <Cell attr={g.attributes.role} label={columns[4]} format={playerRoleLabel} />
-              <Cell attr={g.attributes.majorChampionships} label={columns[5]} />
-              <Cell attr={g.attributes.majorAppearances} label={columns[6]} />
-              <Cell attr={g.attributes.isActive} label={columns[7]} bool />
-            </tr>
-          ))}
+                <td
+                  className={`name ${g.correct ? 'correct' : ''} ${'hidden' in g ? 'masked-cell' : ''}`}
+                  data-label={columns[0]}
+                >
+                  {annotation && (
+                    <span
+                      className={`guess-row-actor${annotation.tone ? ` guess-row-actor-${annotation.tone}` : ''}`}
+                      title={annotation.title}
+                    >
+                      {annotation.content}
+                    </span>
+                  )}
+                  {'hidden' in g ? null : g.nickname}
+                </td>
+                <Cell attr={g.attributes.team} label={columns[1]} />
+                <Cell
+                  attr={g.attributes.nationality}
+                  label={columns[2]}
+                  format={(value) => countryLabel(t, value)}
+                />
+                <Cell attr={g.attributes.age} label={columns[3]} />
+                <Cell attr={g.attributes.role} label={columns[4]} format={playerRoleLabel} />
+                <Cell attr={g.attributes.majorChampionships} label={columns[5]} />
+                <Cell attr={g.attributes.majorAppearances} label={columns[6]} />
+                <Cell attr={g.attributes.isActive} label={columns[7]} bool />
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -32,6 +32,14 @@ export function appendReplayRound(room: StoredRoom): void {
     guessTimesByPlayer: Object.fromEntries(
       room.players.map((player) => [player.key, player.guessTimes.slice()])
     ),
+    ...(room.gameMode === 'relay' ? {
+      sharedGuesses: room.relayGuesses.map((guess) => ({
+        actorKey: guess.actorKey,
+        playerId: guess.playerId,
+        guessedAt: guess.guessedAt,
+        guessTime: guess.guessTime,
+      })),
+    } : {}),
   });
   if (room.replayRounds.length > 30) room.replayRounds = room.replayRounds.slice(-30);
 }
@@ -57,6 +65,9 @@ export async function persistMatch(
     recordId: room.recordId,
     dbType: room.dbType,
     boType: room.boType,
+    gameMode: room.gameMode,
+    totalRounds: room.totalRounds,
+    relaySolvedRounds: room.relaySolvedRounds,
     winnerKey,
     reason: room.matchResult?.reason ?? 'score',
     forfeitedKey,
@@ -69,7 +80,7 @@ export async function persistMatch(
     reports: room.reports,
     rounds: room.replayRounds,
   });
-  if ((room.matchResult?.reason ?? 'score') === 'score') {
+  if (room.gameMode === 'classic' && (room.matchResult?.reason ?? 'score') === 'score') {
     await Promise.allSettled(room.players.map((player) => reduceMatchmakingCooldown(player.key)));
   }
   await acknowledgeSchedule(`persist|${room.id}|0`);
@@ -128,6 +139,9 @@ export function resetForRematch(room: StoredRoom): void {
   room.reports = [];
   room.rematchInviterKey = null;
   room.replayRounds = [];
+  room.currentTurnKey = null;
+  room.relaySolvedRounds = 0;
+  room.relayGuesses = [];
   room.createdAt = now;
   for (const player of room.players) {
     player.ready = player.key === room.hostKey;

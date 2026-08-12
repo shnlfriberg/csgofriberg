@@ -11,7 +11,7 @@ import {
   withRoomLock,
 } from '../services/roomStore';
 import { FINISHED_ROOM_TTL_MS } from './constants';
-import { persistMatch } from './matchLifecycle';
+import { appendReplayRound, persistMatch } from './matchLifecycle';
 import { cleanupRoom } from './roomMaintenance';
 import { finishRound, startRound } from './roundLifecycle';
 import {
@@ -51,6 +51,10 @@ async function processDisconnectedPlayer(
     }
     if (!['starting', 'playing', 'round_over'].includes(room.status)) return null;
 
+    if (room.gameMode === 'relay') {
+      return { kind: 'relay_abort' as const, room };
+    }
+
     const opponent = room.players.find((player) => player.key !== disconnectedKey);
     let winnerKey = opponent?.key ?? null;
     let forfeitedKey: string | null = disconnectedKey;
@@ -75,7 +79,9 @@ async function processDisconnectedPlayer(
       forfeitedKey,
     };
     return { kind: 'finished' as const, room, winnerKey, forfeitedKey };
-  }, (value) => Boolean(value && (value.kind === 'waiting' || value.kind === 'finished')));
+  }, (value) => Boolean(value && (
+    value.kind === 'waiting' || value.kind === 'finished' || value.kind === 'relay_abort'
+  )));
 
   if (!result) return null;
   if (result.kind === 'ready') return result.retryAt;
@@ -95,6 +101,19 @@ async function processDisconnectedPlayer(
         },
       });
     }
+    return null;
+  }
+  if (result.kind === 'relay_abort') {
+    for (const member of [...result.room.players, ...result.room.spectators]) {
+      await clearIdentityRoom(member.key, roomId);
+    }
+    await deleteRoom(result.room);
+    io.to(roomId).emit('relay:aborted', {
+      roomId,
+      reason: 'disconnect_timeout',
+      playerKey: disconnectedKey,
+      serverNow: Date.now(),
+    });
     return null;
   }
 
@@ -189,6 +208,9 @@ async function processSchedule(io: Server, item: string): Promise<number | null>
     await cleanupRoom(roomId);
   } else if (kind === 'persist') {
     if (room.status !== 'finished' || !room.matchResult) return null;
+    // Guess Lua can enqueue persistence before the event handler records the
+    // terminal round. Rebuild it from authoritative room state if necessary.
+    appendReplayRound(room);
     await persistMatch(room, room.matchResult.winnerKey);
   }
   return null;

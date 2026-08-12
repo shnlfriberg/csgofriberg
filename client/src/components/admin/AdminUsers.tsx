@@ -55,7 +55,8 @@ interface SingleUserGame {
   type: 'single'; id: number; mode: string; status: string; guessCount: number; answer: string; finishedAt: string;
 }
 interface MultiUserGame {
-  type: 'multi'; id: number; mode: string; boType: number; result: 'won' | 'lost' | 'draw';
+  type: 'multi'; id: number; mode: string; boType: number; gameMode?: 'classic' | 'relay';
+  totalRounds?: number; relaySolvedRounds?: number; result: 'won' | 'lost' | 'draw' | 'cooperative';
   me: { score: number }; opponent: { displayId: string; score: number } | null; finishedAt: string;
 }
 type UserGame = SingleUserGame | MultiUserGame;
@@ -145,10 +146,12 @@ function GuestGamesTab({ guest }: { guest: AdminGuest }) {
     <div className="admin-user-game-list">
       {items.length ? items.map((game) => {
         const result = game.type === 'single' ? game.status : game.result;
-        const label = result === 'won' ? t('common.win') : result === 'draw' ? t('common.draw') : t('common.loss');
+        const label = result === 'cooperative' && game.type === 'multi'
+          ? t('multi.relayProgress', { solved: game.relaySolvedRounds ?? 0, total: game.totalRounds ?? 0 })
+          : result === 'won' ? t('common.win') : result === 'draw' ? t('common.draw') : t('common.loss');
         return <article className="admin-user-game-item" key={`${game.type}:${game.id}`}>
-          <div className="admin-user-game-heading"><strong>{game.type === 'single' ? difficultyLabel(t, game.mode) : `${difficultyLabel(t, game.mode)} · BO${game.boType}`}</strong><Badge text={label} color={result === 'won' ? 'green' : 'gray'} /></div>
-          <div className="admin-user-game-details">{game.type === 'single' ? <><span>{t('stats.answer')} <strong>{game.answer}</strong></span><span>{t('stats.guesses')} <strong>{game.guessCount}</strong></span></> : <><span>{t('admin.opponent')} <strong>{game.opponent?.displayId ?? t('stats.unknownOpponent')}</strong></span><span>{t('stats.score')} <strong>{game.me.score}:{game.opponent?.score ?? 0}</strong></span></>}</div>
+          <div className="admin-user-game-heading"><strong>{game.type === 'single' ? difficultyLabel(t, game.mode) : game.gameMode === 'relay' ? `${difficultyLabel(t, game.mode)} · ${t('multi.relayMode')}` : `${difficultyLabel(t, game.mode)} · BO${game.boType}`}</strong><Badge text={label} color={result === 'won' || result === 'cooperative' ? 'green' : 'gray'} /></div>
+          <div className="admin-user-game-details">{game.type === 'single' ? <><span>{t('stats.answer')} <strong>{game.answer}</strong></span><span>{t('stats.guesses')} <strong>{game.guessCount}</strong></span></> : <><span>{t('admin.opponent')} <strong>{game.opponent?.displayId ?? t('stats.unknownOpponent')}</strong></span>{game.gameMode !== 'relay' && <span>{t('stats.score')} <strong>{game.me.score}:{game.opponent?.score ?? 0}</strong></span>}</>}</div>
           <div className="admin-user-game-footer"><time dateTime={game.finishedAt}>{formatDate(game.finishedAt)}</time></div>
         </article>;
       }) : <p className="muted admin-user-game-empty">{loading ? t('common.loading') : type === 'single' ? t('admin.noSingleGames') : t('admin.noMultiGames')}</p>}
@@ -280,12 +283,14 @@ function GamesTab({ user, onReplayOpenChange }: { user: AdminUser; onReplayOpenC
       <div className="admin-user-game-list">
         {items.length ? items.map((game) => {
           const result = game.type === 'single' ? game.status : game.result;
-          const label = result === 'won' ? t('common.win') : result === 'draw' ? t('common.draw') : t('common.loss');
+          const label = result === 'cooperative' && game.type === 'multi'
+            ? t('multi.relayProgress', { solved: game.relaySolvedRounds ?? 0, total: game.totalRounds ?? 0 })
+            : result === 'won' ? t('common.win') : result === 'draw' ? t('common.draw') : t('common.loss');
           return (
             <article className="admin-user-game-item" key={`${game.type}:${game.id}`}>
               <div className="admin-user-game-heading">
-                <strong>{game.type === 'single' ? difficultyLabel(t, game.mode) : `${difficultyLabel(t, game.mode)} · BO${game.boType}`}</strong>
-                <Badge text={label} color={result === 'won' ? 'green' : 'gray'} />
+                <strong>{game.type === 'single' ? difficultyLabel(t, game.mode) : game.gameMode === 'relay' ? `${difficultyLabel(t, game.mode)} · ${t('multi.relayMode')}` : `${difficultyLabel(t, game.mode)} · BO${game.boType}`}</strong>
+                <Badge text={label} color={result === 'won' || result === 'cooperative' ? 'green' : 'gray'} />
               </div>
               <div className="admin-user-game-details">
                 {game.type === 'single' ? <>
@@ -293,7 +298,7 @@ function GamesTab({ user, onReplayOpenChange }: { user: AdminUser; onReplayOpenC
                   <span>{t('stats.guesses')} <strong>{game.guessCount}</strong></span>
                 </> : <>
                   <span>{t('admin.opponent')} <strong>{game.opponent?.displayId ?? t('stats.unknownOpponent')}</strong></span>
-                  <span>{t('stats.score')} <strong>{game.me.score}:{game.opponent?.score ?? 0}</strong></span>
+                  {game.gameMode !== 'relay' && <span>{t('stats.score')} <strong>{game.me.score}:{game.opponent?.score ?? 0}</strong></span>}
                 </>}
               </div>
               <div className="admin-user-game-footer">

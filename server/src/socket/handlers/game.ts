@@ -129,6 +129,7 @@ export async function handleGameGuess(
     minGuessIntervalMs: targetState.guessIntervalMs,
     rateLimit: 12,
     rateWindowSeconds: 10,
+    gameMode: targetState.gameMode,
   });
   if (result.kind === 'error') {
     if (result.code === 'GUESS_COOLDOWN') {
@@ -156,6 +157,17 @@ export async function handleGameGuess(
   };
   if (result.kind === 'duplicate') {
     ack?.({ cooldownMs: targetState.guessIntervalMs });
+    if (targetState.gameMode === 'relay') {
+      const current = await getRoom(roomId);
+      if (current && result.relayGuess) socket.emit('game:guess:applied', {
+        ...delta,
+        feedback: visibleGuess(result.feedback),
+        guessedAt: result.relayGuess.guessedAt,
+        currentTurnKey: current.currentTurnKey,
+        serverNow: Date.now(),
+      });
+      return;
+    }
     socket.emit('game:guess:applied', { ...delta, feedback: visibleGuess(result.feedback) });
     return;
   }
@@ -165,6 +177,17 @@ export async function handleGameGuess(
   }
   ack?.({ cooldownMs: targetState.guessIntervalMs });
   if (!result.shouldFinish) {
+    if (result.room?.gameMode === 'relay') {
+      if (!result.relayGuess) throw new Error('MISSING_RELAY_GUESS_DELTA');
+      emitRoomViews(io, result.room, 'game:guess:applied', () => ({
+        ...delta,
+        feedback: visibleGuess(result.feedback),
+        guessedAt: result.relayGuess!.guessedAt,
+        currentTurnKey: result.room!.currentTurnKey,
+        serverNow: Date.now(),
+      }));
+      return;
+    }
     for (const playerKey of result.playerKeys) {
       io.to(identityChannel(playerKey)).emit('game:guess:applied', {
         ...delta,
@@ -178,7 +201,7 @@ export async function handleGameGuess(
   }
   if (!result.shouldFinish) return;
   if (!finishedRoom) throw new Error('MISSING_FINISHED_ROOM_SNAPSHOT');
-  const winnerKey = result.correct ? me.key : null;
+  const winnerKey = finishedRoom.gameMode === 'relay' ? null : result.correct ? me.key : null;
   if (result.matchOver) {
     emitRoomViews(io, finishedRoom, 'match:over', (viewerKey) => ({
       room: publicRoom(finishedRoom, viewerKey),
@@ -207,6 +230,11 @@ export async function handleGameSkipRound(
 ): Promise<void> {
   const { io, socket, me, restorePromise, lifecycle } = context;
   await restorePromise;
+  const activeRoom = await getRoomForIdentity(me.key);
+  if (activeRoom?.gameMode === 'relay') {
+    ack?.({ code: 'RELAY_SKIP_DISABLED' });
+    return;
+  }
   if (!(await socketAllowed('skip-round', me.key, 5, 60))) {
     ack?.({ code: 'RATE_LIMITED' });
     return;

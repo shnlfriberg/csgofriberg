@@ -112,14 +112,22 @@ export interface MatchReplayRound {
   answer: PlayerInfo;
   me: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
   opponent: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
+  sharedGuesses?: Array<{
+    actor: 'me' | 'opponent' | null;
+    feedback: GuessFeedback;
+    guessTime: number | null;
+  }>;
 }
 
 export interface MatchReplay {
   id: number | string;
   mode: string;
   boType: number;
+  gameMode?: 'classic' | 'relay';
+  totalRounds?: number;
+  relaySolvedRounds?: number;
   finishedAt: string;
-  result: 'won' | 'lost' | 'draw';
+  result: 'won' | 'lost' | 'draw' | 'cooperative';
   me: { score: number };
   opponent: { displayId: string; score: number };
   rounds: MatchReplayRound[];
@@ -133,6 +141,15 @@ export interface RoomState {
   readyCheckEndsAt: number | null;
   dbType: string;
   boType: number;
+  gameMode?: 'classic' | 'relay';
+  totalRounds?: number;
+  currentTurnKey?: string | null;
+  relaySolvedRounds?: number;
+  relayGuesses?: Array<{
+    actorKey: string;
+    guessedAt: number;
+    feedback: GuessFeedback;
+  }>;
   rematchAllowed: boolean;
   rematchInvite: { inviterKey: string } | null;
   allowSpectators: boolean;

@@ -147,10 +147,14 @@ export default function ReplayDialog({
                   })
                   : t('replay.multiSummary', {
                     mode: difficultyLabel(t, replay.mode),
-                    bo: replay.boType,
+                    bo: replay.gameMode === 'relay' ? replay.totalRounds : replay.boType,
                     opponent: replay.opponent.displayId,
-                    result: replay.result === 'won' ? t('common.win') : replay.result === 'lost' ? t('common.loss') : t('common.draw'),
-                    score: `${replay.me.score}:${replay.opponent.score}`,
+                    result: replay.result === 'cooperative'
+                      ? t('multi.relayProgress', { solved: replay.relaySolvedRounds ?? 0, total: replay.totalRounds ?? 0 })
+                      : replay.result === 'won' ? t('common.win') : replay.result === 'lost' ? t('common.loss') : t('common.draw'),
+                    score: replay.gameMode === 'relay'
+                      ? `${replay.relaySolvedRounds ?? 0}/${replay.totalRounds ?? 0}`
+                      : `${replay.me.score}:${replay.opponent.score}`,
                   })}
               </p>
             </div>
@@ -176,12 +180,36 @@ export default function ReplayDialog({
                     <div className="replay-round-heading">
                       <h3>{t('replay.round', { round: activeRound.round })}</h3>
                       <Badge
-                        text={activeRound.winner === 'me' ? t('replay.meWon') : activeRound.winner === 'opponent' ? t('replay.opponentWon') : t('common.draw')}
-                        color={activeRound.winner === 'me' ? 'green' : 'gray'}
+                        text={replay.gameMode === 'relay'
+                          ? activeRound.reason === 'guessed' ? t('multi.relayRoundSolved') : t('multi.relayRoundMissed')
+                          : activeRound.winner === 'me' ? t('replay.meWon') : activeRound.winner === 'opponent' ? t('replay.opponentWon') : t('common.draw')}
+                        color={activeRound.winner === 'me' || (replay.gameMode === 'relay' && activeRound.reason === 'guessed') ? 'green' : 'gray'}
                       />
                     </div>
                     <AnswerSection answer={activeRound.answer} />
-                    <div className="replay-sides">
+                    {replay.gameMode === 'relay' ? (
+                      <div className="replay-side">
+                        <h4><Swords size={15} />{t('multi.sharedGuesses')}</h4>
+                        {activeRound.sharedGuesses?.length ? <>
+                          <GuessBoard
+                            guesses={activeRound.sharedGuesses.map((guess) => guess.feedback)}
+                            rowAnnotations={activeRound.sharedGuesses.map((guess) => {
+                              const label = guess.actor === 'me'
+                                ? t('replay.mySide')
+                                : guess.actor === 'opponent' ? replay.opponent.displayId : '-';
+                              return {
+                                content: label,
+                                title: label,
+                                tone: guess.actor === 'me' ? 'self' as const : guess.actor === 'opponent' ? 'other' as const : undefined,
+                              };
+                            })}
+                          />
+                          {showDecisionTimes && (
+                            <DecisionTimes values={activeRound.sharedGuesses.map((guess) => guess.guessTime)} />
+                          )}
+                        </> : <p className="muted">{t('replay.noRoundGuesses')}</p>}
+                      </div>
+                    ) : <div className="replay-sides">
                       <div className="replay-side">
                         <h4><User size={15} />{t('replay.mySide')}</h4>
                         {activeRound.me.guesses.length
@@ -212,7 +240,7 @@ export default function ReplayDialog({
                           ? <><GuessBoard guesses={activeRound.opponent.guesses} />{showDecisionTimes && <DecisionTimes values={activeRound.opponent.guessTimes} />}</>
                           : <p className="muted">{t('replay.noRoundGuesses')}</p>}
                       </div>
-                    </div>
+                    </div>}
                   </section>
                 ) : <p className="muted">{t('replay.noRounds')}</p>}
                 {roundCount > 0 && (

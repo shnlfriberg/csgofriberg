@@ -116,11 +116,12 @@ describe('stats and replay', () => {
       expect(easyStats.data.difficulties).toEqual(['easy']);
       const [expectedEasySingle, expectedEasyMulti] = await Promise.all([
         db('games').where({ mode: 'easy' }).whereNot({ status: 'playing' }).count({ count: 'id' }).first(),
-        db('match_records').where({ db_type: 'easy' }).count({ count: 'id' }).first(),
+        db('match_records').where({ db_type: 'easy', game_mode: 'classic' }).count({ count: 'id' }).first(),
       ]);
       const expectedEasyMultiGuesses = await db('match_players as mp')
         .join('match_records as m', 'm.id', 'mp.match_id')
         .where('m.db_type', 'easy')
+        .where('m.game_mode', 'classic')
         .first()
         .sum({ guessSum: 'mp.winning_guess_sum' })
         .sum({ rounds: 'mp.winning_rounds' });
@@ -155,7 +156,7 @@ describe('stats and replay', () => {
       expect(normalStats.data.difficulties).toEqual(['normal']);
       const [expectedNormalSingle, expectedNormalMulti] = await Promise.all([
         db('games').where({ mode: 'normal' }).whereNot({ status: 'playing' }).count({ count: 'id' }).first(),
-        db('match_records').where({ db_type: 'normal' }).count({ count: 'id' }).first(),
+        db('match_records').where({ db_type: 'normal', game_mode: 'classic' }).count({ count: 'id' }).first(),
       ]);
       expect(normalStats.data).toMatchObject({
         personal: {

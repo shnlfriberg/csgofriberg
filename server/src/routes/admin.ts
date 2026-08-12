@@ -664,6 +664,9 @@ router.get(
         'm.id',
         'm.db_type as mode',
         'm.bo_type as boType',
+        'm.game_mode as gameMode',
+        'm.total_rounds as totalRounds',
+        'm.relay_solved_rounds as relaySolvedRounds',
         'm.created_at as finishedAt',
         'me.score as meScore',
         'me.is_winner as meWinner'
@@ -697,8 +700,13 @@ router.get(
           id: Number(row.id),
           mode: row.mode,
           boType: Number(row.boType),
+          gameMode: row.gameMode === 'relay' ? 'relay' : 'classic',
+          totalRounds: Number(row.totalRounds),
+          relaySolvedRounds: Number(row.relaySolvedRounds),
           finishedAt: row.finishedAt,
-          result: Boolean(row.meWinner) ? 'won' : Boolean(opponent?.isWinner) ? 'lost' : 'draw',
+          result: row.gameMode === 'relay'
+            ? 'cooperative'
+            : Boolean(row.meWinner) ? 'won' : Boolean(opponent?.isWinner) ? 'lost' : 'draw',
           me: { score: Number(row.meScore) },
           opponent: opponent
             ? { displayId: matchPlayerDisplayId(opponent), score: Number(opponent.score) }
@@ -766,6 +774,9 @@ router.get(
         'm.id',
         'm.db_type as mode',
         'm.bo_type as boType',
+        'm.game_mode as gameMode',
+        'm.total_rounds as totalRounds',
+        'm.relay_solved_rounds as relaySolvedRounds',
         'm.replay',
         'm.created_at as finishedAt',
         'me.id as mePlayerId',
@@ -805,6 +816,24 @@ router.get(
       const storedTimes = round.guessTimesByPlayer && typeof round.guessTimesByPlayer === 'object'
         ? round.guessTimesByPlayer as Record<string, unknown>
         : {};
+      const sharedGuesses = Array.isArray(round.sharedGuesses)
+        ? round.sharedGuesses.slice(0, 15).flatMap((item) => {
+          if (!item || typeof item !== 'object') return [];
+          const storedGuess = item as Record<string, unknown>;
+          const guess = getPlayer(Number(storedGuess.playerId));
+          if (!guess) return [];
+          const actorKey = typeof storedGuess.actorKey === 'string' ? storedGuess.actorKey : '';
+          return [{
+            actor: actorKey === match.meKey
+              ? 'me' as const
+              : actorKey === opponent.key ? 'opponent' as const : null,
+            feedback: compareGuess(guess, target),
+            guessTime: Number.isFinite(Number(storedGuess.guessTime))
+              ? Number(storedGuess.guessTime)
+              : null,
+          }];
+        })
+        : [];
       const winnerKey = typeof round.winnerKey === 'string' ? round.winnerKey : null;
       return [{
         round: Number(round.round),
@@ -813,14 +842,20 @@ router.get(
         answer: replayAnswer(target),
         me: replayGuessesWithTimes(target, guesses[match.meKey], storedTimes[match.meKey]),
         opponent: replayGuessesWithTimes(target, guesses[opponent.key], storedTimes[opponent.key]),
+        sharedGuesses,
       }];
     });
     res.json({
       id: Number(match.id),
       mode: match.mode,
       boType: Number(match.boType),
+      gameMode: match.gameMode === 'relay' ? 'relay' : 'classic',
+      totalRounds: Number(match.totalRounds),
+      relaySolvedRounds: Number(match.relaySolvedRounds),
       finishedAt: match.finishedAt,
-      result: Boolean(match.meWinner) ? 'won' : Boolean(opponent.isWinner) ? 'lost' : 'draw',
+      result: match.gameMode === 'relay'
+        ? 'cooperative'
+        : Boolean(match.meWinner) ? 'won' : Boolean(opponent.isWinner) ? 'lost' : 'draw',
       me: { score: Number(match.meScore) },
       opponent: {
         displayId: matchPlayerDisplayId(opponent),
@@ -899,6 +934,7 @@ router.get(
               .join('users as u', 'u.id', 'mp.user_id')
               .join('match_records as m', 'm.id', 'mp.match_id')
               .where('m.db_type', difficulty.key)
+              .where('m.game_mode', 'classic')
               .where((builder) => builder.where('u.leaderboard_hidden', false).orWhere('u.id', id))
               .groupBy('u.id')
               .select('u.id')
@@ -1200,7 +1236,17 @@ router.get(
     const identityKey = `g:${guest.guest_key}`;
     const rows = await db('match_players as me').join('match_records as m', 'm.id', 'me.match_id')
       .where('me.player_key', identityKey).orderBy('m.created_at', 'desc').orderBy('m.id', 'desc').offset(offset).limit(parsed.pageSize + 1)
-      .select('m.id', 'm.db_type as mode', 'm.bo_type as boType', 'm.created_at as finishedAt', 'me.score as meScore', 'me.is_winner as meWinner');
+      .select(
+        'm.id',
+        'm.db_type as mode',
+        'm.bo_type as boType',
+        'm.game_mode as gameMode',
+        'm.total_rounds as totalRounds',
+        'm.relay_solved_rounds as relaySolvedRounds',
+        'm.created_at as finishedAt',
+        'me.score as meScore',
+        'me.is_winner as meWinner'
+      );
     const visibleRows = rows.slice(0, parsed.pageSize);
     const matchIds = visibleRows.map((row) => Number(row.id));
     const opponents = matchIds.length ? await db('match_players as opponent').leftJoin('users as opponent_user', 'opponent_user.id', 'opponent.user_id')
@@ -1209,7 +1255,23 @@ router.get(
     const opponentByMatch = new Map(opponents.map((row) => [Number(row.matchId), row]));
     return res.json({ type: parsed.type, page: parsed.page, pageSize: parsed.pageSize, hasNext: rows.length > parsed.pageSize, items: visibleRows.map((row) => {
       const opponent = opponentByMatch.get(Number(row.id));
-      return { type: 'multi', id: Number(row.id), mode: row.mode, boType: Number(row.boType), finishedAt: row.finishedAt, result: Boolean(row.meWinner) ? 'won' : Boolean(opponent?.isWinner) ? 'lost' : 'draw', me: { score: Number(row.meScore) }, opponent: opponent ? { displayId: matchPlayerDisplayId(opponent), score: Number(opponent.score) } : null };
+      return {
+        type: 'multi',
+        id: Number(row.id),
+        mode: row.mode,
+        boType: Number(row.boType),
+        gameMode: row.gameMode === 'relay' ? 'relay' : 'classic',
+        totalRounds: Number(row.totalRounds),
+        relaySolvedRounds: Number(row.relaySolvedRounds),
+        finishedAt: row.finishedAt,
+        result: row.gameMode === 'relay'
+          ? 'cooperative'
+          : Boolean(row.meWinner) ? 'won' : Boolean(opponent?.isWinner) ? 'lost' : 'draw',
+        me: { score: Number(row.meScore) },
+        opponent: opponent
+          ? { displayId: matchPlayerDisplayId(opponent), score: Number(opponent.score) }
+          : null,
+      };
     }) });
   })
 );

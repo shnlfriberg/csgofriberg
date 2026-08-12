@@ -938,6 +938,99 @@ describe('multiplayer socket integration', () => {
     }
   });
 
+  it('runs relay rooms with shared guesses and strict turn rotation', async () => {
+    const stamp = Date.now();
+    const tokenA = jwt.sign({ key: `relay-a-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const tokenB = jwt.sign({ key: `relay-b-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
+    const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
+    try {
+      const created = await emit(a, 'room:create', {
+        dbType: 'easy', gameMode: 'relay', totalRounds: 1, maxGuesses: 3, guessIntervalMs: 0,
+      });
+      createdRoomIds.push(created.room.id);
+      expect(created.room).toMatchObject({ gameMode: 'relay', totalRounds: 1, relaySolvedRounds: 0 });
+      await emit(b, 'room:join', { roomId: created.room.id });
+      await emit(b, 'room:ready', { ready: true });
+      expect((await emit(a, 'game:start')).ok).toBe(true);
+      const active = await getRoom(created.room.id);
+      expect(active?.currentTurnKey).toMatch(/^g:relay-[ab]-/);
+      const first = active!.players.find((player) => player.key === active!.currentTurnKey)!;
+      const second = active!.players.find((player) => player.key !== active!.currentTurnKey)!;
+      const firstSocket = first.key.endsWith(`relay-a-${stamp}`) ? a : b;
+      const secondSocket = firstSocket === a ? b : a;
+      const wrong = getDifficultyPlayers('easy').find((player) => player.id !== active!.targetPlayerId)!;
+
+      expect((await emit(secondSocket, 'game:guess', {
+        playerId: wrong.id, roundId: active!.round, eventId: `relay-wrong-turn-${stamp}`,
+      })).code).toBe('NOT_YOUR_TURN');
+      expect(await emit(firstSocket, 'game:skip-round', { roundId: active!.round }))
+        .toEqual({ code: 'RELAY_SKIP_DISABLED' });
+      const firstApplied = onceEvent(firstSocket, 'game:guess:applied');
+      const secondApplied = onceEvent(secondSocket, 'game:guess:applied');
+      expect((await emit(firstSocket, 'game:guess', {
+        playerId: wrong.id, roundId: active!.round, eventId: `relay-first-${stamp}`,
+      })).code).toBeUndefined();
+      for (const applied of await Promise.all([firstApplied, secondApplied])) {
+        expect(applied).not.toHaveProperty('room');
+        expect(applied).toMatchObject({
+          key: first.key,
+          feedback: { playerId: wrong.id, nickname: wrong.nickname },
+          currentTurnKey: second.key,
+          guessedAt: expect.any(Number),
+        });
+        expect(applied.feedback.attributes).not.toHaveProperty('region');
+      }
+      expect((await getRoom(created.room.id))?.currentTurnKey).toBe(second.key);
+      expect((await emit(secondSocket, 'game:guess', {
+        playerId: wrong.id, roundId: active!.round, eventId: `relay-duplicate-${stamp}`,
+      })).code).toBe('ALREADY_GUESSED');
+      const matchOver = onceEvent(a, 'match:over');
+      expect((await emit(secondSocket, 'game:guess', {
+        playerId: active!.targetPlayerId, roundId: active!.round, eventId: `relay-solve-${stamp}`,
+      })).code).toBeUndefined();
+      const finished = (await matchOver).room;
+      expect(finished).toMatchObject({ gameMode: 'relay', relaySolvedRounds: 1 });
+      expect(finished.matchResult).toMatchObject({ winnerKey: null, reason: 'cooperative_score' });
+      expect(finished.relayGuesses.map((guess: any) => guess.actorKey)).toEqual([first.key, second.key]);
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
+  it('aborts an active relay room without persistence when a player leaves', async () => {
+    const stamp = Date.now();
+    const tokenA = jwt.sign({ key: `relay-leave-a-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const tokenB = jwt.sign({ key: `relay-leave-b-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
+    const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
+    try {
+      const created = await emit(a, 'room:create', {
+        dbType: 'easy', gameMode: 'relay', totalRounds: 3, maxGuesses: 8, guessIntervalMs: 0,
+      });
+      createdRoomIds.push(created.room.id);
+      await emit(b, 'room:join', { roomId: created.room.id });
+      await emit(b, 'room:ready', { ready: true });
+      expect((await emit(a, 'game:start')).ok).toBe(true);
+      const stored = await getRoom(created.room.id);
+      const aborted = onceEvent(a, 'relay:aborted');
+
+      expect(await emit(b, 'room:leave')).toEqual({ ok: true });
+      expect(await aborted).toMatchObject({
+        roomId: created.room.id,
+        reason: 'player_left',
+        playerKey: `g:relay-leave-b-${stamp}`,
+        serverNow: expect.any(Number),
+      });
+      expect(await getRoom(created.room.id)).toBeNull();
+      expect(await db('match_records').where({ room_id: stored!.recordId }).first()).toBeUndefined();
+    } finally {
+      a.disconnect();
+      b.disconnect();
+    }
+  });
+
   it('validates and applies custom room guess limits and intervals', async () => {
     const stamp = Date.now();
     const tokenA = jwt.sign({ key: `custom-a-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });

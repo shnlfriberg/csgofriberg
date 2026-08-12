@@ -245,6 +245,9 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('room_id', 64).notNullable();
       t.string('db_type', 16).notNullable().defaultTo('easy');
       t.integer('bo_type').notNullable().defaultTo(3);
+      t.string('game_mode', 16).notNullable().defaultTo('classic');
+      t.integer('total_rounds').notNullable().defaultTo(3);
+      t.integer('relay_solved_rounds').notNullable().defaultTo(0);
       t.integer('winner_id').nullable().references('id').inTable('users');
       t.string('winner_key', 80).nullable();
       t.string('finish_reason', 32).nullable();
@@ -296,6 +299,18 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.index(['user_id', 'is_winner'], 'match_players_user_winner_idx');
     });
   }
+  if (!(await instance.schema.hasColumn('match_records', 'game_mode'))) {
+    await instance.schema.alterTable('match_records', (t) => t.string('game_mode', 16).notNullable().defaultTo('classic'));
+  }
+  if (!(await instance.schema.hasColumn('match_records', 'total_rounds'))) {
+    await instance.schema.alterTable('match_records', (t) => t.integer('total_rounds').notNullable().defaultTo(3));
+  }
+  if (!(await instance.schema.hasColumn('match_records', 'relay_solved_rounds'))) {
+    await instance.schema.alterTable('match_records', (t) => t.integer('relay_solved_rounds').notNullable().defaultTo(0));
+  }
+  await instance('match_records')
+    .where('game_mode', 'classic')
+    .update({ total_rounds: instance.ref('bo_type') });
   if (!(await instance.schema.hasColumn('match_players', 'winning_guess_sum'))) {
     await instance.schema.alterTable('match_players', (t) => {
       t.integer('winning_guess_sum').notNullable().defaultTo(0);

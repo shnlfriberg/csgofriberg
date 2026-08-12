@@ -70,6 +70,8 @@ describe('MultiLobby matchmaking', () => {
     await waitFor(() => {
       expect(JSON.parse(localStorage.getItem('csgofriberg.multi-lobby-preferences') ?? '{}'))
         .toEqual({
+        gameMode: 'classic',
+        totalRounds: 3,
         createDifficulty: 'easy',
         boType: 5,
         allowSpectators: true,
@@ -91,6 +93,22 @@ describe('MultiLobby matchmaking', () => {
     await user.click(screen.getByText('更多设置'));
     expect(screen.getByRole('spinbutton', { name: '最大猜测次数' })).toHaveValue(12);
     expect(screen.getByRole('spinbutton', { name: '猜测间隔' })).toHaveValue(2.5);
+  });
+
+  it('persists relay mode and sends cooperative round settings', async () => {
+    const user = userEvent.setup();
+    renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
+
+    await user.click(await screen.findByRole('button', { name: '合作接力' }));
+    await user.click(screen.getByRole('button', { name: '5' }));
+    await user.click(screen.getByRole('button', { name: '创建房间' }));
+
+    expect(socket.emit).toHaveBeenCalledWith('room:create', expect.objectContaining({
+      gameMode: 'relay',
+      totalRounds: 5,
+    }), expect.any(Function));
+    expect(JSON.parse(localStorage.getItem('csgofriberg.multi-lobby-preferences') ?? '{}'))
+      .toMatchObject({ gameMode: 'relay', totalRounds: 5 });
   });
 
   it('requires a verified email before starting quick match', () => {

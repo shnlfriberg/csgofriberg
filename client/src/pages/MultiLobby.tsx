@@ -76,6 +76,8 @@ export default function MultiLobby() {
     loadMultiLobbyPreferences(difficultyKeys, defaultDifficulty)
   );
   const [dbType, setDbType] = useState<DbType>(initialPreferences.createDifficulty);
+  const [gameMode, setGameMode] = useState<'classic' | 'relay'>(initialPreferences.gameMode);
+  const [totalRounds, setTotalRounds] = useState(initialPreferences.totalRounds);
   const [boType, setBoType] = useState(initialPreferences.boType);
   const [allowSpectators, setAllowSpectators] = useState(initialPreferences.allowSpectators);
   const [verifiedEmailOnly, setVerifiedEmailOnly] = useState(initialPreferences.verifiedEmailOnly);
@@ -125,6 +127,8 @@ export default function MultiLobby() {
 
   useEffect(() => {
     saveMultiLobbyPreferences({
+      gameMode,
+      totalRounds,
       createDifficulty: dbType,
       boType,
       allowSpectators,
@@ -137,9 +141,11 @@ export default function MultiLobby() {
     allowSpectators,
     boType,
     dbType,
+    gameMode,
     guessIntervalSeconds,
     maxGuesses,
     mmDbType,
+    totalRounds,
     verifiedEmailOnly,
   ]);
 
@@ -287,6 +293,8 @@ export default function MultiLobby() {
     }
     getSocket().emit('room:create', {
       dbType,
+      gameMode,
+      totalRounds,
       boType,
       allowSpectators,
       verifiedOnly: verifiedEmailOnly,
@@ -392,9 +400,10 @@ export default function MultiLobby() {
             {t('multi.unfinished')}
           </h3>
           <p className="muted">
-            {t('multi.roomSummary', {
+            {t(currentRoom.gameMode === 'relay' ? 'multi.roomSummaryRelay' : 'multi.roomSummary', {
               room: currentRoom.id,
               bo: currentRoom.boType,
+              rounds: currentRoom.totalRounds ?? 3,
               status: currentRoom.status === 'waiting'
               ? t('multi.waiting')
               : currentRoom.status === 'finished'
@@ -433,7 +442,7 @@ export default function MultiLobby() {
             {copied ? t('multi.copied') : t('multi.copyCode')}
           </button>
           <p className="muted multi-lobby-created-meta">
-            {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')} · {createdRoom.verifiedOnly ? t('multi.verifiedRoomOnly') : t('multi.anyoneCanJoin')}
+            {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {createdRoom.gameMode === 'relay' ? t('multi.relayRounds', { rounds: createdRoom.totalRounds ?? 3 }) : t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')} · {createdRoom.verifiedOnly ? t('multi.verifiedRoomOnly') : t('multi.anyoneCanJoin')}
             {' · '}{createdRoom.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}
             {' · '}{t('multi.customRulesSummary', {
               guesses: createdRoom.maxGuesses,
@@ -460,11 +469,18 @@ export default function MultiLobby() {
               format={(v) => difficultyLabel(t, v)}
             />
             <OptionGroup
-              label={t('multi.formatLabel')}
+              label={t('multi.gameModeLabel')}
+              options={['classic', 'relay']}
+              value={gameMode}
+              onChange={setGameMode}
+              format={(v) => t(v === 'relay' ? 'multi.relayMode' : 'multi.classicMode')}
+            />
+            <OptionGroup
+              label={gameMode === 'relay' ? t('multi.totalRoundsLabel') : t('multi.formatLabel')}
               options={BO_OPTIONS}
-              value={boType}
-              onChange={setBoType}
-              format={(v) => `BO${v}`}
+              value={gameMode === 'relay' ? totalRounds : boType}
+              onChange={gameMode === 'relay' ? setTotalRounds : setBoType}
+              format={(v) => gameMode === 'relay' ? String(v) : `BO${v}`}
             />
             <div className="room-create-options">
               <label className="spectator-option">

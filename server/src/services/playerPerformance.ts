@@ -63,13 +63,16 @@ async function loadPlayerPerformance(identity: StoredIdentity) {
       .avg({ avgGuesses: db.raw("case when status = 'won' then guess_count else null end") })
       .min({ bestGuesses: db.raw("case when status = 'won' then guess_count else null end") }),
     db('match_players')
+      .join('match_records as match_summary', 'match_summary.id', 'match_players.match_id')
       .where({ player_key: identity.key })
+      .where('match_summary.game_mode', 'classic')
       .first()
-      .count({ games: 'id' })
+      .count({ games: 'match_players.id' })
       .sum({ wins: db.raw('case when is_winner then 1 else 0 end') }),
     db('match_players as me')
       .join('match_records as match', 'match.id', 'me.match_id')
       .where('me.player_key', identity.key)
+      .where('match.game_mode', 'classic')
       .select(
         'match.id',
         'match.db_type',

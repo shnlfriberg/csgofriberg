@@ -125,10 +125,11 @@ async function globalStats(difficulties: string[]) {
   return cached(globalStatsCacheKey(difficulties), 60, async () => {
     const [single, multi, multiGuesses, users, firstGuess] = await Promise.all([
       singleAggregate(db('games').whereIn('mode', difficulties)),
-      db('match_records').whereIn('db_type', difficulties).count({ total: 'id' }).first(),
+      db('match_records').whereIn('db_type', difficulties).where('game_mode', 'classic').count({ total: 'id' }).first(),
       db('match_players as mp')
         .join('match_records as m', 'm.id', 'mp.match_id')
         .whereIn('m.db_type', difficulties)
+        .where('m.game_mode', 'classic')
         .first()
         .sum({ winningGuessSum: 'mp.winning_guess_sum' })
         .sum({ winningRounds: 'mp.winning_rounds' }),
@@ -154,6 +155,7 @@ async function personalStats(owner: Owner, identityKey: string, difficulties: st
         .join('match_records as m', 'm.id', 'mp.match_id')
         .where('mp.player_key', identityKey)
         .whereIn('m.db_type', difficulties)
+        .where('m.game_mode', 'classic')
         .first()
         .count({ total: 'mp.id' })
         .sum({ wins: db.raw('case when mp.is_winner then 1 else 0 end') })
@@ -288,6 +290,9 @@ router.get(
         'm.id',
         'm.db_type as mode',
         'm.bo_type as boType',
+        'm.game_mode as gameMode',
+        'm.total_rounds as totalRounds',
+        'm.relay_solved_rounds as relaySolvedRounds',
         'm.created_at as finishedAt',
         'me.score as meScore',
         'me.is_winner as meWinner'
@@ -319,8 +324,13 @@ router.get(
         id: Number(row.id),
         mode: row.mode,
         boType: Number(row.boType),
+        gameMode: row.gameMode === 'relay' ? 'relay' : 'classic',
+        totalRounds: Number(row.totalRounds),
+        relaySolvedRounds: Number(row.relaySolvedRounds),
         finishedAt: row.finishedAt,
-        result: Boolean(row.meWinner)
+        result: row.gameMode === 'relay'
+          ? 'cooperative'
+          : Boolean(row.meWinner)
           ? 'won'
           : Boolean(opponentByMatch.get(Number(row.id))?.isWinner)
             ? 'lost'
@@ -456,6 +466,9 @@ router.get(
         'm.id',
         'm.db_type as mode',
         'm.bo_type as boType',
+        'm.game_mode as gameMode',
+        'm.total_rounds as totalRounds',
+        'm.relay_solved_rounds as relaySolvedRounds',
         'm.replay',
         'm.created_at as finishedAt',
         'me.score as meScore',
@@ -490,6 +503,20 @@ router.get(
       const guessesByPlayer = round.guessesByPlayer;
       if (!guessesByPlayer || typeof guessesByPlayer !== 'object') return [];
       const guesses = guessesByPlayer as Record<string, unknown>;
+      const sharedGuesses = Array.isArray(round.sharedGuesses)
+        ? round.sharedGuesses.slice(0, 15).flatMap((item) => {
+          if (!item || typeof item !== 'object') return [];
+          const storedGuess = item as Record<string, unknown>;
+          const guess = getPlayer(Number(storedGuess.playerId));
+          if (!guess) return [];
+          const actorKey = typeof storedGuess.actorKey === 'string' ? storedGuess.actorKey : '';
+          return [{
+            actor: actorKey === identityKey ? 'me' as const : actorKey === opponent.key ? 'opponent' as const : null,
+            feedback: compareGuess(guess, target),
+            guessTime: Number.isFinite(Number(storedGuess.guessTime)) ? Number(storedGuess.guessTime) : null,
+          }];
+        })
+        : [];
       const winnerKey = typeof round.winnerKey === 'string' ? round.winnerKey : null;
       return [{
         round: Number(round.round),
@@ -498,6 +525,7 @@ router.get(
         answer: answerView(target),
         me: { guesses: replayGuesses(target, safeGuessIds(guesses[identityKey])) },
         opponent: { guesses: replayGuesses(target, safeGuessIds(guesses[opponent.key])) },
+        sharedGuesses,
       }];
     });
 
@@ -505,8 +533,13 @@ router.get(
       id: Number(match.id),
       mode: match.mode,
       boType: Number(match.boType),
+      gameMode: match.gameMode === 'relay' ? 'relay' : 'classic',
+      totalRounds: Number(match.totalRounds),
+      relaySolvedRounds: Number(match.relaySolvedRounds),
       finishedAt: match.finishedAt,
-      result: Boolean(match.meWinner)
+      result: match.gameMode === 'relay'
+        ? 'cooperative'
+        : Boolean(match.meWinner)
         ? 'won'
         : Boolean(opponent.isWinner)
           ? 'lost'

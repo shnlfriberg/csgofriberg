@@ -16,7 +16,9 @@ export const roomPlayerStatsPayloadSchema = z.object({
 
 export const roomCreatePayloadSchema = z.object({
   dbType: difficultyKeySchema,
+  gameMode: z.enum(['classic', 'relay']).default('classic'),
   boType: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
+  totalRounds: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
   allowSpectators: z.boolean().default(false),
   verifiedOnly: z.boolean().default(false),
   anonymous: z.boolean().default(false),

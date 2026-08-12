@@ -50,8 +50,11 @@ interface MultiReplayItem {
   id: number;
   mode: string;
   boType: number;
+  gameMode?: 'classic' | 'relay';
+  totalRounds?: number;
+  relaySolvedRounds?: number;
   finishedAt: string;
-  result: 'won' | 'lost' | 'draw';
+  result: 'won' | 'lost' | 'draw' | 'cooperative';
   me: { score: number };
   opponent: { displayId: string; score: number } | null;
 }
@@ -266,8 +269,12 @@ export default function Stats() {
   ];
 
   const multiColumns: Column<MultiReplayItem>[] = [
-    { key: 'mode', title: t('stats.mode'), render: (game) => `${difficultyLabel(t, game.mode)} · BO${game.boType}` },
-    { key: 'result', title: t('stats.result'), render: (game) => game.result === 'won'
+    { key: 'mode', title: t('stats.mode'), render: (game) => game.gameMode === 'relay'
+      ? `${difficultyLabel(t, game.mode)} · ${t('multi.relayMode')}`
+      : `${difficultyLabel(t, game.mode)} · BO${game.boType}` },
+    { key: 'result', title: t('stats.result'), render: (game) => game.result === 'cooperative'
+      ? <Badge text={t('multi.relayProgress', { solved: game.relaySolvedRounds ?? 0, total: game.totalRounds ?? 0 })} color="green" />
+      : game.result === 'won'
       ? <Badge text={t('common.win')} color="green" />
       : game.result === 'draw'
         ? <Badge text={t('common.draw')} color="gray" />
@@ -384,9 +391,13 @@ export default function Stats() {
                 <div className="stats-replay-mobile-heading">
                   <strong>{item.type === 'single'
                     ? difficultyLabel(t, item.mode)
-                    : `${difficultyLabel(t, item.mode)} · BO${item.boType}`}</strong>
+                    : item.gameMode === 'relay'
+                      ? `${difficultyLabel(t, item.mode)} · ${t('multi.relayMode')}`
+                      : `${difficultyLabel(t, item.mode)} · BO${item.boType}`}</strong>
                   <Badge
-                    text={result === 'won' ? t('common.win') : result === 'draw' ? t('common.draw') : t('common.loss')}
+                    text={result === 'cooperative' && item.type === 'multi'
+                      ? t('multi.relayProgress', { solved: item.relaySolvedRounds ?? 0, total: item.totalRounds ?? 0 })
+                      : result === 'won' ? t('common.win') : result === 'draw' ? t('common.draw') : t('common.loss')}
                     color={result === 'won' ? 'green' : 'gray'}
                   />
                 </div>

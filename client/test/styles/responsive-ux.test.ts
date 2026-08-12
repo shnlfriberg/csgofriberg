@@ -69,6 +69,12 @@ describe('desktop/mobile layout contracts', () => {
       /\.game-page\.keyboard-active\s+\.header-bar,\s*\n?\s*\.game-page\.keyboard-active\s+\.status-bar\s*\{\s*display:\s*none/
     );
     expect(responsive).toMatch(
+      /\.multi-game-page\.keyboard-active\s+\.score-bar\s*\{\s*display:\s*none/
+    );
+    expect(responsive).toMatch(
+      /\.game-page\.keyboard-active\s+\.input-dock\s*\{[^}]*padding-top:\s*6px/s
+    );
+    expect(responsive).toMatch(
       /@media\s*\(max-width:\s*960px\)\s*and\s*\(pointer:\s*coarse\),\s*\(max-width:\s*700px\)\s*\{[\s\S]*\.boards\s*\{[^}]*grid-template-columns:\s*1fr/
     );
     expect(responsive).toMatch(

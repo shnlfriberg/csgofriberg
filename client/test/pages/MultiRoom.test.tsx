@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Route } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -245,6 +245,88 @@ describe('MultiRoom replay', () => {
 
     expect(await screen.findByPlaceholderText('输入选手昵称...')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: '举报对方' })).not.toBeInTheDocument();
+  });
+
+  it('renders relay guesses from both players in one compact table', async () => {
+    const relayRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      gameMode: 'relay',
+      totalRounds: 3,
+      currentTurnKey: 'g:me',
+      relaySolvedRounds: 1,
+      relayGuesses: [
+        { actorKey: 'g:me', guessedAt: Date.now() - 1_000, feedback: guess(10, 'My relay guess') },
+        { actorKey: 'g:opponent', guessedAt: Date.now(), feedback: guess(11, 'Opponent relay guess') },
+      ],
+      round: 2,
+      roundId: 2,
+      roundEndsAt: Date.now() + 60_000,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({ ...player, score: 0, guessCount: 1 })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relayRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    const heading = await screen.findByRole('heading', { name: /共享猜测/ });
+    const relayBoard = heading.closest('.relay-board');
+    expect(relayBoard).not.toBeNull();
+    const table = within(relayBoard as HTMLElement).getByRole('table');
+    expect(within(table).getAllByRole('columnheader')).toHaveLength(8);
+    expect(within(table).getAllByRole('row')).toHaveLength(3);
+    expect(within(table).getByText('Me')).toHaveClass('guess-row-actor-self');
+    expect(within(table).getByText('Opponent')).toHaveClass('guess-row-actor-other');
+    expect(within(table).getByText('My relay guess')).toBeInTheDocument();
+    expect(within(table).getByText('Opponent relay guess')).toBeInTheDocument();
+  });
+
+  it('shows a match-ended modal when a player leaves an active relay room', async () => {
+    const relayRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      gameMode: 'relay',
+      totalRounds: 3,
+      currentTurnKey: 'g:me',
+      relaySolvedRounds: 1,
+      relayGuesses: [],
+      round: 2,
+      roundId: 2,
+      roundEndsAt: Date.now() + 60_000,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({ ...player, score: 0, guessCount: 0 })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relayRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    expect(await screen.findByPlaceholderText('输入选手昵称...')).toBeEnabled();
+    const handler = socket.on.mock.calls.find(([event]) => event === 'relay:aborted')?.[1];
+    expect(handler).toEqual(expect.any(Function));
+
+    act(() => handler({
+      roomId: relayRoom.id,
+      reason: 'player_left',
+      playerKey: 'g:opponent',
+      serverNow: Date.now(),
+    }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveTextContent('接力对局已结束');
+    expect(dialog).toHaveTextContent('有玩家退出了房间，本次接力对局已中止且不会保存记录。');
+    expect(within(dialog).getByRole('button', { name: '返回大厅' })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('输入选手昵称...')).toBeDisabled();
   });
 
   it('lets the matchmaking host ready up instead of showing a host start button', async () => {

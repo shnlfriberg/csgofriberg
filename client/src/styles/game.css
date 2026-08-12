@@ -514,3 +514,36 @@
 .player-info-table td.label svg { vertical-align: -2px; margin-right: 8px; }
 .player-info-table td.value { font-weight: 600; text-align: right; }
 .player-info-table tr:last-child td { border-bottom: none; }
+.relay-board {
+  width: 100%;
+}
+
+.guess-row-actor {
+  display: block;
+  max-width: 100%;
+  margin-bottom: 0.2em;
+  overflow: hidden;
+  color: var(--text-light);
+  font-size: 0.72em;
+  font-weight: 700;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.guess-row-actor::before {
+  content: '';
+  display: inline-block;
+  width: 0.48em;
+  height: 0.48em;
+  margin-right: 0.35em;
+  border-radius: 50%;
+  background: var(--text-light);
+  vertical-align: 0.05em;
+}
+
+.guess-row-actor-self { color: var(--primary-strong); }
+.guess-row-actor-self::before { background: var(--primary); }
+.guess-row-actor-other { color: var(--warning); }
+.guess-row-actor-other::before { background: var(--warning); }
+.guess-list-end { width: 100%; height: 1px; overflow-anchor: auto; }

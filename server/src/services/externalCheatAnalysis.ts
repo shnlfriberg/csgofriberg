@@ -195,6 +195,7 @@ async function buildSnapshot(subject: AnalysisSubject, locale: AnalysisLocale, t
   const matchQuery = db('match_records as m')
     .join('match_players as mp', 'mp.match_id', 'm.id')
     .where('mp.player_key', subject.identityKey)
+    .where('m.game_mode', 'classic')
     .orderBy('m.created_at', 'desc')
     .orderBy('m.id', 'desc')
     .limit(MAX_MATCHES)

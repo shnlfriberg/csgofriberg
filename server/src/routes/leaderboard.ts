@@ -35,6 +35,7 @@ router.get(
           .join('match_records as m', 'm.id', 'mp.match_id')
           .where('u.leaderboard_hidden', false)
           .where('m.db_type', difficulty)
+          .where('m.game_mode', 'classic')
           .groupBy('u.id', 'u.username')
           .select('u.id', 'u.username')
           .count({ total: 'mp.id' })
