@@ -1005,6 +1005,7 @@ export default function MultiRoom() {
     ? rankedPlayers.filter((player) => player.key !== myKey)
     : rankedPlayers;
   const isLargeClassicRoom = room.gameMode !== 'relay' && room.players.length > 2;
+  const isCrowdedClassicRoom = room.gameMode !== 'relay' && (room.maxPlayers ?? 2) >= 3;
   const replay = room.matchReplay;
   const replayRound = replayRoundIndex == null ? null : replay?.rounds[replayRoundIndex] ?? null;
   const replayParticipantIdByPlayerKey = new Map(
@@ -1133,9 +1134,11 @@ export default function MultiRoom() {
         <div className="card multiplayer-scoreboard">
           {rankedPlayers.map((player, index) => (
             <span key={player.key} className={`${player.key === myKey ? 'is-self' : ''}${player.eliminated ? ' is-eliminated' : ''}`}>
-              <b>{index + 1}</b>
+              <b className="multiplayer-scoreboard-rank">#{index + 1}</b>
               <span title={player.name}>{player.name}</span>
-              <strong>{player.score}</strong>
+              <strong className="multiplayer-scoreboard-score">
+                {t('multi.scoreValue', { score: player.score })}
+              </strong>
             </span>
           ))}
         </div>
@@ -1337,7 +1340,7 @@ export default function MultiRoom() {
             <div className="guess-list-end" ref={activeGuessListEndRef} aria-hidden="true" />
           </div>
         ) : isLargeClassicRoom ? (
-          <div className={`multi-classic-layout${me ? '' : ' multi-classic-layout-spectator'}`}>
+          <div className={`multi-classic-layout${isCrowdedClassicRoom ? ' multi-classic-layout-crowded' : ''}${me ? '' : ' multi-classic-layout-spectator'}`}>
             {me && (
               <PlayerBoard
                 player={displayedLeftPlayer ?? me}
@@ -1417,7 +1420,7 @@ export default function MultiRoom() {
               ? t('multi.relayMatchComplete')
               : matchOver.winnerKey == null
               ? t('multi.matchEnded')
-              : isSpectator
+              : isLargeClassicRoom || isSpectator
                 ? t('multi.playerWonMatch', { player: room.players.find((p) => p.key === matchOver.winnerKey)?.name ?? '' })
                 : matchOver.winnerKey === myKey
                   ? t('multi.matchWon')

@@ -163,7 +163,7 @@ describe('MultiRoom replay', () => {
     const multiRoom: RoomState = {
       ...room,
       status: 'playing',
-      maxPlayers: 4,
+      maxPlayers: 3,
       roundEndsAt: Date.now() + 60_000,
       matchResult: null,
       matchReplay: undefined,
@@ -182,6 +182,9 @@ describe('MultiRoom replay', () => {
 
     renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
     expect(await screen.findByText('我的猜测')).toBeInTheDocument();
+    expect(screen.getByRole('main').querySelector('.multi-classic-layout-crowded')).not.toBeNull();
+    expect(screen.getByText('#1')).toBeInTheDocument();
+    expect(screen.getByText('1 分')).toBeInTheDocument();
     const otherPlayers = screen.getByRole('region', { name: '其他玩家' });
     expect(within(otherPlayers).getByRole('button', { name: /Opponent/ })).toHaveAttribute('aria-expanded', 'false');
     expect(within(otherPlayers).getByRole('button', { name: /Third Player/ })).toBeInTheDocument();
@@ -210,8 +213,8 @@ describe('MultiRoom replay', () => {
 
     renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
 
-    expect(await screen.findByText('0 / 2 人希望再来一局')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: '希望再来一局' }));
+    expect(await screen.findByText('0 / 2 人想要再来一局')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '再来一局' }));
     expect(socket.emit).toHaveBeenCalledWith(
       'match:rematch-want',
       { wanted: true },
@@ -229,7 +232,7 @@ describe('MultiRoom replay', () => {
       requiredKeys: ['g:me', 'g:opponent'],
     }));
 
-    expect(screen.getByText('1 / 2 人希望再来一局')).toBeInTheDocument();
+    expect(screen.getByText('1 / 2 人想要再来一局')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '取消再来一局' }));
     expect(socket.emit).toHaveBeenLastCalledWith(
       'match:rematch-want',
@@ -242,10 +245,12 @@ describe('MultiRoom replay', () => {
     const largeFinishedRoom: RoomState = {
       ...room,
       maxPlayers: 4,
+      matchResult: { ...room.matchResult!, winnerKey: 'g:opponent' },
       players: [
-        room.players[0],
-        room.players[1],
+        { ...room.players[0], score: 1 },
+        { ...room.players[1], score: 2 },
         { key: 'g:third', name: 'Third Player', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [] },
+        { key: 'g:fourth', name: 'Fourth Player', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [] },
       ],
     };
     const largePlayingRoom: RoomState = {
@@ -270,7 +275,7 @@ describe('MultiRoom replay', () => {
     act(() => handler({ room: largeFinishedRoom, serverNow: Date.now() }));
 
     const settlement = await screen.findByRole('dialog');
-    expect(within(settlement).getByRole('heading', { name: '你赢下了整场比赛' })).toBeInTheDocument();
+    expect(within(settlement).getByRole('heading', { name: 'Opponent 获胜' })).toBeInTheDocument();
     expect(within(settlement).queryByText(/Third Player/)).not.toBeInTheDocument();
     expect(within(settlement).queryByText(/Me 2.*Opponent 0/)).not.toBeInTheDocument();
   });

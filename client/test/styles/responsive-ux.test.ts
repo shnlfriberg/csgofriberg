@@ -148,6 +148,9 @@ describe('desktop/mobile layout contracts', () => {
     const multiplayer = readCss('../../src/styles/home-multiplayer.css');
     expect(multiplayer).toMatch(/\.score-bar\s*\{[^}]*width:\s*min\(57\.5rem,\s*100%\)/s);
     expect(multiplayer).toMatch(/\.boards\s*\{[^}]*gap:\s*0\.875rem/s);
+    expect(multiplayer).toMatch(
+      /\.multi-classic-layout-crowded\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*13fr\)\s+minmax\(0,\s*7fr\)/s
+    );
   });
 
   it('scales the multiplayer board continuously so browser zoom cannot snap its density', () => {

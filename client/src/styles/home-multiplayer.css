@@ -1040,6 +1040,7 @@
   gap: 0.75rem;
   align-items: start;
 }
+.multi-classic-layout-crowded { grid-template-columns: minmax(0, 13fr) minmax(0, 7fr); }
 .multi-classic-layout-spectator { grid-template-columns: minmax(0, 1fr); }
 .compact-players {
   display: grid;
@@ -1100,9 +1101,12 @@
   gap: 0.35rem 0.75rem;
   padding: 0.55rem 0.7rem;
 }
-.multiplayer-scoreboard > span { display: grid; grid-template-columns: 1.25rem minmax(0, 8rem) 1.5rem; gap: 0.3rem; align-items: center; font-size: 0.84rem; }
+.multiplayer-scoreboard > span { display: grid; grid-template-columns: 1.8rem minmax(0, 8rem) minmax(2.8rem, auto); gap: 0.35rem; align-items: center; font-size: 0.84rem; }
 .multiplayer-scoreboard > span > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multiplayer-scoreboard-rank { color: var(--muted); font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+.multiplayer-scoreboard-score { justify-self: end; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .multiplayer-scoreboard > span.is-self { color: var(--accent); }
+.multiplayer-scoreboard > span.is-self .multiplayer-scoreboard-score { color: inherit; }
 .multiplayer-scoreboard > span.is-eliminated { opacity: 0.55; text-decoration: line-through; }
 
 /* 多人棋盘:整块只有一个刻度旋钮 —— .game-table 的 font-size。
