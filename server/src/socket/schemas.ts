@@ -39,6 +39,7 @@ export const roomJoinPayloadSchema = z.object({
 });
 
 export const rematchResponsePayloadSchema = z.object({ accept: z.boolean() });
+export const rematchWantPayloadSchema = z.object({ wanted: z.boolean() });
 
 export const roomReadyPayloadSchema = z.object({ ready: z.boolean().optional() }).default({});
 

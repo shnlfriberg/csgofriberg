@@ -804,6 +804,14 @@
 }
 .match-over-extra { display: grid; gap: 6px; }
 .match-over-extra p { margin: 0; text-align: center; }
+.match-over-extra .rematch-want-progress {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  color: var(--success);
+  font-weight: 700;
+}
 .match-found-dialog {
   display: grid;
   justify-items: center;

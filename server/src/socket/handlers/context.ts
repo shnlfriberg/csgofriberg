@@ -19,11 +19,12 @@ export interface SocketLifecycle {
   emitRematchUpdate(
     io: Server,
     room: StoredRoom,
-    outcome: 'invited' | 'cancelled' | 'declined' | 'accepted',
+    outcome: 'wanted' | 'withdrawn' | 'updated' | 'started',
     actorKey: string,
     playerUpdate?: { key: string; connected: boolean }
   ): void;
-  resetForRematch(room: StoredRoom): void;
+  syncRematchPreferences(room: StoredRoom): string[];
+  resetForRematch(room: StoredRoom, autoStart?: boolean): void;
   finishMatch(
     io: Server,
     roomId: string,

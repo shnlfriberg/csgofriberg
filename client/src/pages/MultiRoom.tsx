@@ -13,7 +13,6 @@ import {
   EyeOff,
   Timer,
   SkipForward,
-  RotateCcw,
   X,
   CircleAlert,
   AlertTriangle,
@@ -22,6 +21,7 @@ import {
   ChevronRight,
   ArrowUp,
   ArrowDown,
+  CheckCircle2,
 } from 'lucide-react';
 import Page from '../components/Page';
 import GuessBoard from '../components/GuessBoard';
@@ -342,7 +342,6 @@ export default function MultiRoom() {
   const [reportDescription, setReportDescription] = useState('');
   const [reportBusy, setReportBusy] = useState(false);
   const reportDialogRef = useRef<HTMLDivElement>(null);
-  const [rematchNotice, setRematchNotice] = useState('');
   const [inputFocused, setInputFocused] = useState(false);
   const [guessCooldownUntil, setGuessCooldownUntil] = useState(0);
   const [roundDeadline, setRoundDeadline] = useState<number | null>(null);
@@ -437,7 +436,6 @@ export default function MultiRoom() {
       setMatchOverVisible(false);
       setReplayRoundIndex(null);
       setOfflineNote('');
-      setRematchNotice('');
       setRoundExpired(false);
       applyRoomSnapshot(p.room, false, p.serverNow, ROUND_TIME_MS);
     };
@@ -450,7 +448,6 @@ export default function MultiRoom() {
       setGuessCooldownUntil(0);
       setRoundExpired(true);
       setRoundOver(null);
-      setRematchNotice('');
       applyRoomSnapshot(p.room, false, p.serverNow);
     };
     const onRelayAborted = (p: {
@@ -494,9 +491,8 @@ export default function MultiRoom() {
     const onRematchUpdate = (p: {
       roomId: string;
       stateVersion: number;
-      outcome: 'invited' | 'cancelled' | 'declined' | 'accepted';
+      outcome: 'wanted' | 'withdrawn' | 'updated' | 'started';
       actorKey: string;
-      inviterKey?: string | null;
       acceptedKeys?: string[];
       requiredKeys?: string[];
       player?: { key: string; connected: boolean };
@@ -508,49 +504,25 @@ export default function MultiRoom() {
           syncRoom(socket);
           return current;
         }
-        const next: RoomState = p.outcome === 'accepted'
-          ? {
-              ...current,
-              status: 'waiting',
-              matchmaking: false,
-              readyCheckEndsAt: null,
-              round: 0,
-              roundId: 0,
-              roundEndsAt: null,
-              rematchInvite: null,
-              roundResult: null,
-              matchResult: null,
-              matchReplay: undefined,
-              players: current.players.map((player) => ({
-                ...player,
-                ready: player.key === current.hostKey,
-                score: 0,
-                skipped: false,
-                guessCount: 0,
-                guesses: [],
-              })),
-              stateVersion: p.stateVersion,
-            }
-          : {
-              ...current,
-              rematchInvite: p.outcome === 'invited'
-                ? {
-                    inviterKey: p.inviterKey ?? current.rematchInvite?.inviterKey ?? p.actorKey,
-                    acceptedKeys: p.acceptedKeys ?? [p.actorKey],
-                    requiredKeys: p.requiredKeys ?? [],
-                  }
-                : null,
-              players: p.player
-                ? current.players.map((player) => player.key === p.player!.key
-                  ? { ...player, connected: p.player!.connected }
-                  : player)
-                : current.players,
-              stateVersion: p.stateVersion,
-            };
+        const next: RoomState = {
+          ...current,
+          rematchInvite: p.outcome === 'started' || !p.acceptedKeys?.length
+            ? null
+            : {
+                acceptedKeys: p.acceptedKeys,
+                requiredKeys: p.requiredKeys ?? [],
+              },
+          players: p.player
+            ? current.players.map((player) => player.key === p.player!.key
+              ? { ...player, connected: p.player!.connected }
+              : player)
+            : current.players,
+          stateVersion: p.stateVersion,
+        };
         roomRef.current = next;
         return next;
       });
-      if (p.outcome === 'accepted') {
+      if (p.outcome === 'started') {
         setGuessCooldownUntil(0);
         setRoundExpired(true);
         setRoundOver(null);
@@ -559,24 +531,6 @@ export default function MultiRoom() {
         setReplayRoundIndex(null);
         setOfflineNote('');
         syncRoom(socket);
-      }
-      const actorIsMe = p.actorKey === myKeyRef.current;
-      if (p.outcome === 'invited') {
-        const accepted = p.acceptedKeys?.length ?? 1;
-        const required = p.requiredKeys?.length ?? 2;
-        setRematchNotice(accepted > 1
-          ? t('multi.rematchProgress', { accepted, required })
-          : actorIsMe ? t('multi.rematchInvitedSelf') : t('multi.rematchInvitedOther'));
-      } else if (p.outcome === 'cancelled') {
-        setRematchNotice(actorIsMe ? t('multi.rematchCancelledSelf') : t('multi.rematchCancelledOther'));
-      } else if (p.outcome === 'declined') {
-        setRematchNotice(actorIsMe ? t('multi.rematchDeclinedSelf') : t('multi.rematchDeclinedOther'));
-      } else {
-        setRematchNotice(
-          roomRef.current?.hostKey === myKeyRef.current
-            ? t('multi.rematchAcceptedHost')
-            : t('multi.rematchAcceptedGuest')
-        );
       }
     };
     const onOffline = (p: { key: string; graceMs: number }) => {
@@ -880,8 +834,11 @@ export default function MultiRoom() {
   const isSpectator = !!room && !me;
   const isHost = room?.hostKey === myKey;
   const playing = room?.status === 'playing';
-  const rematchInviterKey = room?.rematchInvite?.inviterKey ?? null;
-  const rematchAcceptedByMe = room?.rematchInvite?.acceptedKeys?.includes(myKey) ?? false;
+  const rematchAcceptedKeys = room?.rematchInvite?.acceptedKeys ?? [];
+  const rematchRequiredKeys = room?.rematchInvite?.requiredKeys
+    ?? room?.players.filter((player) => player.connected && !player.eliminated).map((player) => player.key)
+    ?? [];
+  const rematchWantedByMe = rematchAcceptedKeys.includes(myKey);
   const canRematch = Boolean(
     room?.rematchAllowed &&
     room.status === 'finished' &&
@@ -1152,7 +1109,6 @@ export default function MultiRoom() {
             </span>
           )}
           {offlineNote && <span className="error">{offlineNote}</span>}
-          {rematchNotice && <span className="muted">{rematchNotice}</span>}
         </>
       }
       dock={
@@ -1475,14 +1431,22 @@ export default function MultiRoom() {
                 {room.gameMode === 'relay' ? t('multi.relayFinalScore', {
                   solved: room.relaySolvedRounds ?? 0,
                   total: room.totalRounds ?? room.boType,
-                }) : t('multi.finalScore', {
-                  reason: matchOverReason(matchOver, myKey, isSpectator, t),
-                  score: isLargeClassicRoom
-                    ? rankedPlayers.map((player) => `${player.name} ${player.score}`).join(' · ')
-                    : `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`,
-                })}
+                }) : isLargeClassicRoom
+                  ? matchOverReason(matchOver, myKey, isSpectator, t)
+                  : t('multi.finalScore', {
+                      reason: matchOverReason(matchOver, myKey, isSpectator, t),
+                      score: `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`,
+                    })}
               </p>
-              {rematchNotice && <p className="muted">{rematchNotice}</p>}
+              {canRematch && (
+                <p className="rematch-want-progress">
+                  <CheckCircle2 size={17} aria-hidden="true" />
+                  <span>{t('multi.rematchWantedProgress', {
+                    accepted: rematchAcceptedKeys.length,
+                    required: rematchRequiredKeys.length,
+                  })}</span>
+                </p>
+              )}
             </div>
           }
           actions={
@@ -1491,45 +1455,15 @@ export default function MultiRoom() {
                 <Eye size={16} />
                 {t('multi.viewGame')}
               </button>
-              {canRematch && !rematchInviterKey && (
+              {canRematch && (
                 <button
-                  className="btn btn-success"
+                  className={rematchWantedByMe ? 'btn btn-ghost' : 'btn btn-success'}
                   disabled={rematchBusy}
-                  onClick={() => updateRematch('match:rematch-invite')}
+                  onClick={() => updateRematch('match:rematch-want', { wanted: !rematchWantedByMe })}
                 >
-                  <RotateCcw size={16} />
-                  {t('multi.inviteRematch')}
+                  {rematchWantedByMe ? <X size={16} /> : <Check size={16} />}
+                  {t(rematchWantedByMe ? 'multi.cancelRematchWant' : 'multi.wantRematch')}
                 </button>
-              )}
-              {canRematch && rematchInviterKey === myKey && (
-                <button
-                  className="btn btn-ghost"
-                  disabled={rematchBusy}
-                  onClick={() => updateRematch('match:rematch-cancel')}
-                >
-                  <X size={16} />
-                  {t('multi.cancelInvite')}
-                </button>
-              )}
-              {canRematch && rematchInviterKey && rematchInviterKey !== myKey && !rematchAcceptedByMe && (
-                <>
-                  <button
-                    className="btn btn-success"
-                    disabled={rematchBusy}
-                    onClick={() => updateRematch('match:rematch-respond', { accept: true })}
-                  >
-                    <Check size={16} />
-                    {t('multi.acceptRematch')}
-                  </button>
-                  <button
-                    className="btn btn-ghost"
-                    disabled={rematchBusy}
-                    onClick={() => updateRematch('match:rematch-respond', { accept: false })}
-                  >
-                    <X size={16} />
-                    {t('multi.decline')}
-                  </button>
-                </>
               )}
               <button className="btn btn-ghost" disabled={leaving} onClick={() => void leaveRoom()}>
                 <DoorOpen size={16} />

@@ -1,5 +1,6 @@
 import { config } from '../../config';
 import {
+  acknowledgeSchedule,
   cancelQueue,
   getRoomForIdentity,
   withRoomLock,
@@ -8,7 +9,7 @@ import { logTransientError } from '../../services/transientLog';
 import { releaseConnectionSlot } from '../connection';
 import { cancelLocalMatchmaking } from '../matchmakingQueue';
 import { connectedSpectatorCount, emitRoomPatch } from '../roomView';
-import { setLocalTimer } from '../timers';
+import { cancelLocalTimer, setLocalTimer } from '../timers';
 import { SocketEventContext, SocketLifecycle } from './context';
 
 type DisconnectContext = Omit<SocketEventContext, 'restorePromise'> & {
@@ -40,7 +41,7 @@ export function handleSocketDisconnect(context: DisconnectContext): void {
   cancelLocalMatchmaking(me.key, socket.id);
   const disconnectTask = getRoomForIdentity(me.key, true).then(async (room) => {
     if (!room) return;
-    const result = await withRoomLock(room.id, (locked) => {
+      const result = await withRoomLock(room.id, async (locked) => {
       const spectator = locked.spectators.find((candidate) => candidate.key === me.key);
       if (spectator?.socketId === socket.id) {
         spectator.connected = false;
@@ -50,13 +51,16 @@ export function handleSocketDisconnect(context: DisconnectContext): void {
       const player = locked.players.find((candidate) => candidate.key === me.key);
       if (!player || player.socketId !== socket.id) return null;
       if (locked.status === 'finished') {
-        const cancelledInvite = locked.rematchInviterKey !== null;
         player.connected = false;
         player.disconnectDeadline = null;
-        locked.rematchInviterKey = null;
-        locked.rematchAcceptedKeys = [];
-        locked.rematchRequiredKeys = [];
-        return { finished: true as const, cancelledInvite, room: locked };
+        const requiredKeys = lifecycle.syncRematchPreferences(locked);
+        const startNow = requiredKeys.length >= 2
+          && requiredKeys.every((key) => locked.rematchAcceptedKeys.includes(key));
+        if (startNow) {
+          await lifecycle.persistMatch(locked, locked.matchResult!.winnerKey);
+          lifecycle.resetForRematch(locked, true);
+        }
+        return { finished: true as const, startNow, room: locked };
       }
       player.connected = false;
       player.disconnectDeadline = locked.status === 'waiting' && locked.matchmaking
@@ -72,15 +76,17 @@ export function handleSocketDisconnect(context: DisconnectContext): void {
       return;
     }
     if ('finished' in result) {
-      if (result.cancelledInvite) {
-        lifecycle.emitRematchUpdate(io, result.room, 'cancelled', me.key, {
-          key: me.key,
-          connected: false,
-        });
-      } else {
-        emitRoomPatch(io, result.room, {
-          players: { updated: [{ key: me.key, connected: false }] },
-        });
+      lifecycle.emitRematchUpdate(
+        io,
+        result.room,
+        result.startNow ? 'started' : 'updated',
+        me.key,
+        { key: me.key, connected: false }
+      );
+      if (result.startNow) {
+        cancelLocalTimer(`cleanup:${result.room.id}`);
+        await acknowledgeSchedule(`cleanup|${result.room.id}|0`);
+        await lifecycle.startRound(io, result.room.id);
       }
       return;
     }

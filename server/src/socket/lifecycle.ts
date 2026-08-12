@@ -7,6 +7,7 @@ import {
   recordReplayRound,
   rematchError,
   resetForRematch,
+  syncRematchPreferences,
 } from './matchLifecycle';
 import { cleanupRoom } from './roomMaintenance';
 import { finishRound, skipRound, startRound } from './roundLifecycle';
@@ -17,6 +18,7 @@ export const socketLifecycle: SocketLifecycle = {
   persistMatch,
   rematchError,
   emitRematchUpdate,
+  syncRematchPreferences,
   resetForRematch,
   finishMatch,
   eliminatePlayer,

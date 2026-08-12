@@ -89,7 +89,7 @@ export async function persistMatch(
   await acknowledgeSchedule(`persist|${room.id}|0`);
 }
 
-export type RematchOutcome = 'invited' | 'cancelled' | 'declined' | 'accepted';
+export type RematchOutcome = 'wanted' | 'withdrawn' | 'updated' | 'started';
 
 export function rematchError(
   room: StoredRoom,
@@ -130,11 +130,22 @@ export function emitRematchUpdate(
   });
 }
 
-export function resetForRematch(room: StoredRoom): void {
+export function syncRematchPreferences(room: StoredRoom): string[] {
+  const requiredKeys = room.players
+    .filter((player) => player.connected && !player.eliminated)
+    .map((player) => player.key);
+  const required = new Set(requiredKeys);
+  room.rematchRequiredKeys = requiredKeys;
+  room.rematchAcceptedKeys = room.rematchAcceptedKeys.filter((key) => required.has(key));
+  room.rematchInviterKey = room.rematchAcceptedKeys[0] ?? null;
+  return requiredKeys;
+}
+
+export function resetForRematch(room: StoredRoom, autoStart = false): void {
   const now = Date.now();
   const retainedKeys = new Set(room.rematchRequiredKeys);
   room.recordId = randomUUID();
-  room.status = 'waiting';
+  room.status = autoStart ? 'starting' : 'waiting';
   room.matchmaking = false;
   room.readyCheckEndsAt = null;
   room.round = 0;
@@ -158,7 +169,7 @@ export function resetForRematch(room: StoredRoom): void {
     room.hostKey = room.players[0]?.key ?? room.hostKey;
   }
   for (const player of room.players) {
-    player.ready = player.key === room.hostKey;
+    player.ready = autoStart || player.key === room.hostKey;
     player.score = 0;
     player.guesses = [];
     player.guessTimes = [];

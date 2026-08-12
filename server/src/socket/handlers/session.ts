@@ -80,7 +80,8 @@ export function handleSocketConnection(
           player.socketId = socket.id;
           player.connected = true;
           player.disconnectDeadline = null;
-          return { role: 'player' as const, room };
+          if (room.status === 'finished') lifecycle.syncRematchPreferences(room);
+          return { role: 'player' as const, room, rematchUpdated: room.status === 'finished' };
         }
         if (spectator) {
           spectator.socketId = socket.id;
@@ -95,9 +96,16 @@ export function handleSocketConnection(
         return;
       }
       refreshed = restored.room;
-      emitRoomPatch(io, refreshed, restored.role === 'player'
-        ? { players: { updated: [{ key: me.key, connected: true }] } }
-        : { spectatorCount: connectedSpectatorCount(refreshed) });
+      if (restored.role === 'player' && restored.rematchUpdated) {
+        lifecycle.emitRematchUpdate(io, refreshed, 'updated', me.key, {
+          key: me.key,
+          connected: true,
+        });
+      } else {
+        emitRoomPatch(io, refreshed, restored.role === 'player'
+          ? { players: { updated: [{ key: me.key, connected: true }] } }
+          : { spectatorCount: connectedSpectatorCount(refreshed) });
+      }
     }
     joinRoomChannels(socket, refreshed, me.key);
     socket.data.roomId = refreshed.id;

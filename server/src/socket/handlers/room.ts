@@ -8,6 +8,7 @@ import {
 } from '../../services/matchmakingCooldown';
 import {
   StoredRoom,
+  acknowledgeSchedule,
   clearIdentityRoom,
   deleteRoom,
   getRoom,
@@ -38,6 +39,7 @@ import {
   roomReadyPayloadSchema,
 } from '../schemas';
 import { SocketEventContext, SocketLifecycle } from './context';
+import { cancelLocalTimer } from '../timers';
 
 type RoomEventContext = SocketEventContext & {
   refreshIdentityEmailState: () => Promise<void>;
@@ -369,33 +371,38 @@ export async function handleRoomLeave(
     return;
   }
   if (room.status === 'finished') {
-    const left = await withRoomLock(room.id, (locked) => {
+    const left = await withRoomLock(room.id, async (locked) => {
       const player = locked.players.find((candidate) => candidate.key === me.key);
       if (!player) return null;
       if (player.socketId !== socket.id && locked.rematchAllowed) {
         return { stale: true as const };
       }
-      const cancelledInvite = locked.rematchInviterKey !== null;
       player.connected = false;
-      locked.rematchInviterKey = null;
-      locked.rematchAcceptedKeys = [];
-      locked.rematchRequiredKeys = [];
-      return { room: locked, cancelledInvite };
+      const requiredKeys = lifecycle.syncRematchPreferences(locked);
+      const startNow = requiredKeys.length >= 2
+        && requiredKeys.every((key) => locked.rematchAcceptedKeys.includes(key));
+      if (startNow) {
+        await lifecycle.persistMatch(locked, locked.matchResult!.winnerKey);
+        lifecycle.resetForRematch(locked, true);
+      }
+      return { room: locked, startNow };
     }, (value) => Boolean(value && !('stale' in value)));
     if (left && 'stale' in left) {
       ack?.({ code: 'STALE_CONNECTION' });
       return;
     }
     if (left) {
-      if (left.cancelledInvite) {
-        lifecycle.emitRematchUpdate(io, left.room, 'cancelled', me.key, {
-          key: me.key,
-          connected: false,
-        });
-      } else {
-        emitRoomPatch(io, left.room, {
-          players: { updated: [{ key: me.key, connected: false }] },
-        });
+      lifecycle.emitRematchUpdate(
+        io,
+        left.room,
+        left.startNow ? 'started' : 'updated',
+        me.key,
+        { key: me.key, connected: false }
+      );
+      if (left.startNow) {
+        cancelLocalTimer(`cleanup:${left.room.id}`);
+        await acknowledgeSchedule(`cleanup|${left.room.id}|0`);
+        await lifecycle.startRound(io, left.room.id);
       }
     }
     await clearIdentityRoom(me.key, room.id);

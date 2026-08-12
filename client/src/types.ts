@@ -171,7 +171,6 @@ export interface RoomState {
   }>;
   rematchAllowed: boolean;
   rematchInvite: {
-    inviterKey: string;
     acceptedKeys?: string[];
     requiredKeys?: string[];
   } | null;

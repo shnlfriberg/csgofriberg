@@ -195,7 +195,7 @@ describe('MultiRoom replay', () => {
     expect(resolveGuessCooldownMs(undefined, 3_000)).toBe(3_000);
   });
 
-  it('offers a rematch invitation after matchmaking settlement', async () => {
+  it('tracks rematch wishes and lets the player withdraw after matchmaking settlement', async () => {
     const user = userEvent.setup();
     const matchmakingFinishedRoom = { ...room, matchmaking: true, rematchAllowed: true };
     socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
@@ -203,19 +203,76 @@ describe('MultiRoom replay', () => {
       if (event === 'room:sync' && typeof ack === 'function') {
         ack({ room: matchmakingFinishedRoom, selfKey: 'g:me', serverNow: Date.now() });
       }
-      if (event === 'match:rematch-invite' && typeof ack === 'function') {
+      if (event === 'match:rematch-want' && typeof ack === 'function') {
         ack({ ok: true, stateVersion: matchmakingFinishedRoom.stateVersion + 1 });
       }
     });
 
     renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
 
-    await user.click(await screen.findByRole('button', { name: '邀请再来一局' }));
+    expect(await screen.findByText('0 / 2 人希望再来一局')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '希望再来一局' }));
     expect(socket.emit).toHaveBeenCalledWith(
-      'match:rematch-invite',
-      {},
+      'match:rematch-want',
+      { wanted: true },
       expect.any(Function)
     );
+
+    const handler = socket.on.mock.calls.find(([event]) => event === 'match:rematch:update')?.[1];
+    expect(handler).toEqual(expect.any(Function));
+    act(() => handler({
+      roomId: matchmakingFinishedRoom.id,
+      stateVersion: matchmakingFinishedRoom.stateVersion + 1,
+      outcome: 'wanted',
+      actorKey: 'g:me',
+      acceptedKeys: ['g:me'],
+      requiredKeys: ['g:me', 'g:opponent'],
+    }));
+
+    expect(screen.getByText('1 / 2 人希望再来一局')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: '取消再来一局' }));
+    expect(socket.emit).toHaveBeenLastCalledWith(
+      'match:rematch-want',
+      { wanted: false },
+      expect.any(Function)
+    );
+  });
+
+  it('keeps large-room settlement compact without listing every player score', async () => {
+    const largeFinishedRoom: RoomState = {
+      ...room,
+      maxPlayers: 4,
+      players: [
+        room.players[0],
+        room.players[1],
+        { key: 'g:third', name: 'Third Player', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [] },
+      ],
+    };
+    const largePlayingRoom: RoomState = {
+      ...largeFinishedRoom,
+      status: 'playing',
+      matchResult: null,
+      matchReplay: undefined,
+      stateVersion: largeFinishedRoom.stateVersion - 1,
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: largePlayingRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    expect(await screen.findByText('我的猜测')).toBeInTheDocument();
+    const handler = socket.on.mock.calls.find(([event]) => event === 'match:over')?.[1];
+    expect(handler).toEqual(expect.any(Function));
+    act(() => handler({ room: largeFinishedRoom, serverNow: Date.now() }));
+
+    const settlement = await screen.findByRole('dialog');
+    expect(within(settlement).getByRole('heading', { name: '你赢下了整场比赛' })).toBeInTheDocument();
+    expect(within(settlement).queryByText(/Third Player/)).not.toBeInTheDocument();
+    expect(within(settlement).queryByText(/Me 2.*Opponent 0/)).not.toBeInTheDocument();
   });
 
   it('shows the report entry only after matchmaking settlement and submits it once', async () => {
