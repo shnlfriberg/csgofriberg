@@ -66,7 +66,7 @@ describe('daily challenge routes', () => {
     const secondGuestKey = `daily-route-second-${stamp}`;
     const cookie = guestCookie(guestKey);
     const secondCookie = guestCookie(secondGuestKey);
-    const extraIdentityPrefix = `g:daily-board-${stamp}-`;
+    const extraIdentityPrefix = `u:daily-board-${stamp}-`;
     const { date } = dailyChallengeWindow();
     const overview = await request('/api/daily-challenge/overview', cookie);
     expect(overview.response.status).toBe(200);
@@ -149,11 +149,21 @@ describe('daily challenge routes', () => {
       expect(restarted.response.status).toBe(409);
       expect(restarted.data).toEqual({ code: 'DAILY_CHALLENGE_COMPLETED' });
 
-      const extraRows = Array.from({ length: 11 }, (_, index) => ({
+      const leaderboardUsers = Array.from({ length: 11 }, (_, index) => ({
+        username: `daily-board-${stamp}-${index}`,
+        password_hash: 'not-used',
+      }));
+      const insertedUsers = await db('users')
+        .insert(leaderboardUsers)
+        .returning(['id', 'username']);
+      const userIdsByName = new Map(
+        insertedUsers.map((row: any) => [String(row.username), Number(row.id)])
+      );
+      const extraRows = leaderboardUsers.map((user, index) => ({
         challenge_id: challengeId,
         identity_key: `${extraIdentityPrefix}${index}`,
-        guest_key: `daily-board-${stamp}-${index}`,
-        display_name: `访客#D${String(index).padStart(4, '0')}`,
+        user_id: userIdsByName.get(user.username),
+        display_name: `用户#D${String(index).padStart(4, '0')}`,
         status: 'won',
         guess_count: 2 + (index % 7),
         solve_order: initialSolvedCount + 3 + index,
@@ -183,9 +193,11 @@ describe('daily challenge routes', () => {
       expect(leaderboard.response.status).toBe(200);
       expect(leaderboard.data).toMatchObject({ difficulty: 'beginner' });
       expect(leaderboard.data.leaderboard).toHaveLength(10);
-      expect(leaderboard.data.leaderboard.find((row: any) => row.isCurrent)).toMatchObject({
-        guessCount: 1,
-      });
+      expect(leaderboard.data.leaderboard.every((row: any) => !row.isCurrent)).toBe(true);
+      expect(leaderboard.data.leaderboard[0].guessCount).toBe(2);
+      expect(leaderboard.data.leaderboard.every((row: any) => (
+        String(row.displayId).startsWith('用户#D')
+      ))).toBe(true);
       expect(leaderboard.data.leaderboard.map((row: any) => row.guessCount)).toEqual(
         [...leaderboard.data.leaderboard.map((row: any) => row.guessCount)].sort((a, b) => a - b)
       );
@@ -194,6 +206,7 @@ describe('daily challenge routes', () => {
         .whereIn('identity_key', [`g:${guestKey}`, `g:${secondGuestKey}`])
         .orWhere('identity_key', 'like', `${extraIdentityPrefix}%`)
         .del();
+      await db('users').where('username', 'like', `daily-board-${stamp}-%`).del();
       await db('daily_challenges')
         .where({ id: challengeId })
         .update({ solved_count: initialSolvedCount });

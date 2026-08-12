@@ -145,7 +145,7 @@ export async function ensureDailyChallenges(
 }
 
 export function dailyLeaderboardCacheKey(date: string, difficulty: string): string {
-  return `daily-challenge:leaderboard:${date}:${difficulty}`;
+  return `daily-challenge:leaderboard:v2:${date}:${difficulty}`;
 }
 
 export function currentDailyLeaderboardCacheKeys(now = Date.now()): string[] {
@@ -163,10 +163,10 @@ export async function getDailyLeaderboard(
     DAILY_LEADERBOARD_TTL_SECONDS,
     async () => {
       const rows = await db('daily_challenge_attempts as a')
-        .leftJoin('users as u', 'u.id', 'a.user_id')
+        .join('users as u', 'u.id', 'a.user_id')
         .where('a.challenge_id', challenge.id)
         .where('a.status', 'won')
-        .where((builder) => builder.whereNull('a.user_id').orWhere('u.leaderboard_hidden', false))
+        .where('u.leaderboard_hidden', false)
         .orderBy('a.guess_count', 'asc')
         .orderBy('a.finished_at', 'asc')
         .orderBy('a.id', 'asc')
