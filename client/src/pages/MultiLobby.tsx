@@ -456,7 +456,7 @@ export default function MultiLobby() {
         </div>
       ) : (
         <div className="lobby-grid">
-          <div className="card" style={{ margin: 0 }}>
+          <div className="card multi-lobby-create-card" style={{ margin: 0 }}>
             <h3>
               <House size={16} />
               {t('multi.createRoom')}
@@ -567,7 +567,7 @@ export default function MultiLobby() {
             </div>
           </div>
 
-          <div className="card" style={{ margin: 0 }}>
+          <div className="card multi-lobby-match-card" style={{ margin: 0 }}>
             <h3>
               <Dices size={16} />
               {t('multi.randomMatch')}
@@ -604,7 +604,7 @@ export default function MultiLobby() {
             )}
           </div>
 
-          <div className="card" style={{ margin: 0 }}>
+          <div className="card multi-lobby-join-card" style={{ margin: 0 }}>
             <h3>
               <DoorOpen size={16} />
               {t('multi.joinExisting')}

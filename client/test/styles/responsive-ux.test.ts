@@ -95,6 +95,18 @@ describe('desktop/mobile layout contracts', () => {
     );
   });
 
+  it('orders mobile multiplayer lobby actions by workflow priority', () => {
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*960px\)\s*\{[\s\S]*\.multi-lobby-match-card\s*\{[^}]*order:\s*1[\s\S]*\.multi-lobby-join-card\s*\{[^}]*order:\s*2[\s\S]*\.multi-lobby-create-card\s*\{[^}]*order:\s*3/
+    );
+
+    const multiplayer = readCss('../../src/styles/home-multiplayer.css');
+    expect(multiplayer).toMatch(/\.multi-lobby-create-card\s*\{\s*grid-area:\s*create/);
+    expect(multiplayer).toMatch(/\.multi-lobby-match-card\s*\{\s*grid-area:\s*match/);
+    expect(multiplayer).toMatch(/\.multi-lobby-join-card\s*\{\s*grid-area:\s*join/);
+  });
+
   it('keeps the completed daily leaderboard in a capped desktop side column', () => {
     const daily = readCss('../../src/styles/daily.css');
     expect(daily).toMatch(

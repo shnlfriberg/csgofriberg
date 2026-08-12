@@ -6,9 +6,9 @@
 
 @media (max-width: 960px) {
   .lobby-grid { grid-template-columns: 1fr; grid-template-areas: none; max-width: 760px; }
-  .lobby-grid > :nth-child(1),
-  .lobby-grid > :nth-child(2),
-  .lobby-grid > :nth-child(3) { grid-area: auto; }
+  .multi-lobby-match-card { grid-area: auto; order: 1; }
+  .multi-lobby-join-card { grid-area: auto; order: 2; }
+  .multi-lobby-create-card { grid-area: auto; order: 3; }
 }
 
 /* 对战区左右分栏只在触屏窄幅时堆叠:桌面(细指针)即使高缩放/低分辨率

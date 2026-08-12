@@ -627,9 +627,9 @@
   max-width: 61.25rem;
   margin: 0 auto;
 }
-.lobby-grid > :nth-child(1) { grid-area: create; }
-.lobby-grid > :nth-child(2) { grid-area: match; }
-.lobby-grid > :nth-child(3) { grid-area: join; }
+.multi-lobby-create-card { grid-area: create; }
+.multi-lobby-match-card { grid-area: match; }
+.multi-lobby-join-card { grid-area: join; }
 .presence-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
