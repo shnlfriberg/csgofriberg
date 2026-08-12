@@ -223,7 +223,14 @@ async function main() {
   app.use(errorHandler);
 
   const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: config.corsOrigins, credentials: true } });
+  const io = new Server(server, {
+    cors: { origin: config.corsOrigins, credentials: true },
+    perMessageDeflate: {
+      threshold: 4 * 1024,
+      serverNoContextTakeover: true,
+      clientNoContextTakeover: true,
+    },
+  });
   app.set('io', io);
   let shuttingDown = false;
   let shutdownPromise: Promise<void> | null = null;
