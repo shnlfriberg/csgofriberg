@@ -31,5 +31,7 @@ export function makeRoomPlayer(
     skipped: false,
     connected: true,
     disconnectDeadline: null,
+    eliminated: false,
+    eliminationReason: null,
   };
 }

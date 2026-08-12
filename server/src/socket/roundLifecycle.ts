@@ -17,13 +17,14 @@ export async function startRound(io: Server, roomId: string): Promise<boolean> {
     if (room.status !== 'waiting' && room.status !== 'round_over' && room.status !== 'starting') {
       return null;
     }
-    if (room.players.length < 2 || !room.players.every((player) => player.connected)) {
+    const activePlayers = room.players.filter((player) => !player.eliminated);
+    if (activePlayers.length < 2 || !activePlayers.every((player) => player.connected)) {
       return { waitingForReconnect: true as const };
     }
     if (room.status === 'starting' && room.nextRoundAt && room.nextRoundAt > Date.now()) {
       return { waitingForStart: room.nextRoundAt };
     }
-    const identities = room.players.map((player) => player.key);
+    const identities = activePlayers.map((player) => player.key);
     const previousTargets = [
       ...room.replayRounds.map((round) => round.targetPlayerId),
       ...(room.targetPlayerId ? [room.targetPlayerId] : []),
@@ -45,7 +46,7 @@ export async function startRound(io: Server, roomId: string): Promise<boolean> {
     room.matchResult = null;
     room.relayGuesses = [];
     room.currentTurnKey = room.gameMode === 'relay'
-      ? room.players[Math.floor(Math.random() * room.players.length)]?.key ?? null
+      ? activePlayers[Math.floor(Math.random() * activePlayers.length)]?.key ?? null
       : null;
     for (const player of room.players) {
       player.guesses = [];
@@ -142,14 +143,14 @@ export async function skipRound(
 ): Promise<{ room: StoredRoom; roundFinished: boolean; alreadySkipped: boolean } | 'stale' | null> {
   const result = await withRoomLock(roomId, (room) => {
     if (room.status !== 'playing' || room.round !== expectedRound) return null;
-    const player = room.players.find((candidate) => candidate.key === playerKey);
+    const player = room.players.find((candidate) => candidate.key === playerKey && !candidate.eliminated);
     if (!player || player.socketId !== socketId) return { stale: true as const };
     if (player.skipped) {
       return { room, roundFinished: false, alreadySkipped: true };
     }
 
     player.skipped = true;
-    const roundFinished = room.players.every(
+    const roundFinished = room.players.filter((candidate) => !candidate.eliminated).every(
       (candidate) => candidate.skipped || candidate.guesses.length >= room.maxGuesses
     );
     if (roundFinished) {

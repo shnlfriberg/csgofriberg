@@ -70,6 +70,8 @@ export interface RoomPlayer {
   skipped: boolean;
   guessCount: number;
   guesses: MultiplayerGuessFeedback[];
+  eliminated?: boolean;
+  eliminationReason?: 'player_left' | 'disconnect_timeout' | null;
 }
 
 export interface PlayerPerformanceStats {
@@ -112,6 +114,12 @@ export interface MatchReplayRound {
   answer: PlayerInfo;
   me: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
   opponent: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
+  winnerParticipantId?: string | null;
+  players?: Array<{
+    participantId: string;
+    guesses: GuessFeedback[];
+    guessTimes?: Array<number | null>;
+  }>;
   sharedGuesses?: Array<{
     actor: 'me' | 'opponent' | null;
     feedback: GuessFeedback;
@@ -129,7 +137,17 @@ export interface MatchReplay {
   finishedAt: string;
   result: 'won' | 'lost' | 'draw' | 'cooperative';
   me: { score: number };
-  opponent: { displayId: string; score: number };
+  opponent: { displayId: string; score: number } | null;
+  participants?: Array<{
+    id: string;
+    displayId: string;
+    score: number;
+    isMe?: boolean;
+    isWinner: boolean;
+    eliminated?: boolean;
+    eliminationReason?: 'player_left' | 'disconnect_timeout' | null;
+  }>;
+  winnerParticipantId?: string | null;
   rounds: MatchReplayRound[];
 }
 
@@ -143,6 +161,7 @@ export interface RoomState {
   boType: number;
   gameMode?: 'classic' | 'relay';
   totalRounds?: number;
+  maxPlayers?: number;
   currentTurnKey?: string | null;
   relaySolvedRounds?: number;
   relayGuesses?: Array<{
@@ -151,7 +170,11 @@ export interface RoomState {
     feedback: GuessFeedback;
   }>;
   rematchAllowed: boolean;
-  rematchInvite: { inviterKey: string } | null;
+  rematchInvite: {
+    inviterKey: string;
+    acceptedKeys?: string[];
+    requiredKeys?: string[];
+  } | null;
   allowSpectators: boolean;
   verifiedOnly: boolean;
   anonymous: boolean;
@@ -207,6 +230,7 @@ export interface RoomPatch {
     removed?: string[];
   };
   spectatorCount?: number;
+  rematchInvite?: RoomState['rematchInvite'];
 }
 
 export interface PresenceStats {

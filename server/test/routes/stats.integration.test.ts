@@ -341,7 +341,15 @@ describe('stats and replay', () => {
       .returning('id')
       .then((rows) => rows.map((item: any) => typeof item === 'object' ? item.id : item));
     await db('match_players').insert([
-      { match_id: matchId, player_key: meKey, player_name: '', score: 0, is_winner: false },
+      {
+        match_id: matchId,
+        player_key: meKey,
+        player_name: '',
+        score: 0,
+        is_winner: false,
+        is_eliminated: true,
+        elimination_reason: 'disconnect_timeout',
+      },
       {
         match_id: matchId,
         user_id: opponentUserId,
@@ -349,6 +357,7 @@ describe('stats and replay', () => {
         player_name: '',
         score: 0,
         is_winner: false,
+        is_eliminated: false,
       },
     ]);
 
@@ -365,6 +374,10 @@ describe('stats and replay', () => {
       expect(replay.response.status).toBe(200);
       expect(replay.data.result).toBe('draw');
       expect(replay.data.opponent.displayId).toBe(userNameFromUsername(opponentUsername));
+      expect(replay.data.participants.find((participant: any) => participant.isMe)).toMatchObject({
+        eliminated: true,
+        eliminationReason: 'disconnect_timeout',
+      });
     } finally {
       await db('match_records').where({ id: matchId }).del();
       await db('users').where({ id: opponentUserId }).del();

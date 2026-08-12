@@ -54,6 +54,8 @@ export function handleSocketDisconnect(context: DisconnectContext): void {
         player.connected = false;
         player.disconnectDeadline = null;
         locked.rematchInviterKey = null;
+        locked.rematchAcceptedKeys = [];
+        locked.rematchRequiredKeys = [];
         return { finished: true as const, cancelledInvite, room: locked };
       }
       player.connected = false;

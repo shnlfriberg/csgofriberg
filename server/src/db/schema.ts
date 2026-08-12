@@ -293,6 +293,8 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.string('player_name', 32).notNullable().defaultTo('');
       t.integer('score').notNullable().defaultTo(0);
       t.boolean('is_winner').notNullable().defaultTo(false);
+      t.boolean('is_eliminated').notNullable().defaultTo(false);
+      t.string('elimination_reason', 32).nullable();
       t.integer('winning_guess_sum').notNullable().defaultTo(0);
       t.integer('winning_rounds').notNullable().defaultTo(0);
       t.unique(['match_id', 'player_key']);
@@ -314,6 +316,16 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   if (!(await instance.schema.hasColumn('match_players', 'winning_guess_sum'))) {
     await instance.schema.alterTable('match_players', (t) => {
       t.integer('winning_guess_sum').notNullable().defaultTo(0);
+    });
+  }
+  if (!(await instance.schema.hasColumn('match_players', 'is_eliminated'))) {
+    await instance.schema.alterTable('match_players', (t) => {
+      t.boolean('is_eliminated').notNullable().defaultTo(false);
+    });
+  }
+  if (!(await instance.schema.hasColumn('match_players', 'elimination_reason'))) {
+    await instance.schema.alterTable('match_players', (t) => {
+      t.string('elimination_reason', 32).nullable();
     });
   }
   if (!(await instance.schema.hasColumn('match_players', 'winning_rounds'))) {

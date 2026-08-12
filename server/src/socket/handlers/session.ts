@@ -102,8 +102,8 @@ export function handleSocketConnection(
     joinRoomChannels(socket, refreshed, me.key);
     socket.data.roomId = refreshed.id;
     if (
-      refreshed.players.length === 2 &&
-      refreshed.players.every((player) => player.connected) &&
+      refreshed.players.filter((player) => !player.eliminated).length >= 2 &&
+      refreshed.players.filter((player) => !player.eliminated).every((player) => player.connected) &&
       (
         refreshed.status === 'starting' ||
         (refreshed.status === 'round_over' && (refreshed.nextRoundAt ?? 0) <= Date.now())

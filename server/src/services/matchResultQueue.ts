@@ -25,6 +25,8 @@ export interface MatchResultPayload {
     userId: number | null;
     name?: string;
     score: number;
+    eliminated?: boolean;
+    eliminationReason?: 'player_left' | 'disconnect_timeout' | null;
   }[];
   reports?: {
     reporterKey: string;
@@ -98,6 +100,8 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
         player_name: player.name ?? '',
         score: player.score,
         is_winner: gameMode === 'classic' && player.key === payload.winnerKey,
+        is_eliminated: player.eliminated === true,
+        elimination_reason: player.eliminationReason ?? null,
         winning_guess_sum: metrics?.winningGuessSum ?? 0,
         winning_rounds: metrics?.winningRounds ?? 0,
       };
@@ -133,6 +137,10 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
           await trx('match_players')
             .where({ match_id: existing.id, player_key: player.key })
             .update({
+              score: values.score,
+              is_winner: values.is_winner,
+              is_eliminated: values.is_eliminated,
+              elimination_reason: values.elimination_reason,
               winning_guess_sum: values.winning_guess_sum,
               winning_rounds: values.winning_rounds,
             });

@@ -60,6 +60,8 @@ describe('database schema initialization', () => {
     expect(await instance.schema.hasColumn('match_records', 'total_rounds')).toBe(true);
     expect(await instance.schema.hasColumn('match_records', 'relay_solved_rounds')).toBe(true);
     expect(await instance.schema.hasColumn('match_players', 'winning_guess_sum')).toBe(true);
+    expect(await instance.schema.hasColumn('match_players', 'is_eliminated')).toBe(true);
+    expect(await instance.schema.hasColumn('match_players', 'elimination_reason')).toBe(true);
     expect(await instance.schema.hasColumn('announcements', 'is_popup')).toBe(true);
     expect(await instance.schema.hasColumn('daily_challenges', 'target_player_id')).toBe(true);
     expect(await instance.schema.hasColumn('daily_challenges', 'solved_count')).toBe(true);

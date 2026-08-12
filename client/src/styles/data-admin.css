@@ -160,6 +160,27 @@
   color: var(--text-light);
   font-size: var(--fs-xs);
 }
+.replay-multi-player-layout { display: grid; gap: 0.6rem; min-width: 0; }
+.replay-participant-list {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  padding-bottom: 0.2rem;
+}
+.replay-participant-list button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: inherit;
+  background: var(--card);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.replay-participant-list button.active { border-color: var(--accent); color: var(--accent); }
 .replay-decision-times-label {
   display: inline-flex;
   flex: 0 0 auto;

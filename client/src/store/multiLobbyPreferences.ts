@@ -12,6 +12,7 @@ export interface MultiLobbyPreferences {
   totalRounds: number;
   createDifficulty: string;
   boType: number;
+  maxPlayers: number;
   allowSpectators: boolean;
   verifiedEmailOnly: boolean;
   maxGuesses: number;
@@ -28,6 +29,7 @@ export function loadMultiLobbyPreferences(
     totalRounds: 3,
     createDifficulty: fallbackDifficulty,
     boType: 3,
+    maxPlayers: 2,
     allowSpectators: false,
     verifiedEmailOnly: false,
     maxGuesses: DEFAULT_MULTI_MAX_GUESSES,
@@ -51,6 +53,11 @@ export function loadMultiLobbyPreferences(
       boType: typeof stored.boType === 'number' && BO_OPTIONS.has(stored.boType)
         ? stored.boType
         : defaults.boType,
+      maxPlayers: Number.isInteger(stored.maxPlayers)
+        && Number(stored.maxPlayers) >= 2
+        && Number(stored.maxPlayers) <= 8
+        ? Number(stored.maxPlayers)
+        : defaults.maxPlayers,
       allowSpectators: typeof stored.allowSpectators === 'boolean'
         ? stored.allowSpectators
         : defaults.allowSpectators,

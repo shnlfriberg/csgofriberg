@@ -4,8 +4,10 @@ import {
   DEFAULT_ROOM_MAX_GUESSES,
   MAX_ROOM_GUESS_INTERVAL_MS,
   MAX_ROOM_MAX_GUESSES,
+  MAX_CLASSIC_ROOM_PLAYERS,
   MIN_ROOM_GUESS_INTERVAL_MS,
   MIN_ROOM_MAX_GUESSES,
+  MIN_CLASSIC_ROOM_PLAYERS,
 } from '../services/roomStore';
 
 const difficultyKeySchema = z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/);
@@ -19,6 +21,7 @@ export const roomCreatePayloadSchema = z.object({
   gameMode: z.enum(['classic', 'relay']).default('classic'),
   boType: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
   totalRounds: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
+  maxPlayers: z.number().int().min(MIN_CLASSIC_ROOM_PLAYERS).max(MAX_CLASSIC_ROOM_PLAYERS).default(2),
   allowSpectators: z.boolean().default(false),
   verifiedOnly: z.boolean().default(false),
   anonymous: z.boolean().default(false),

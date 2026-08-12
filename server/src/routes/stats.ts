@@ -310,10 +310,18 @@ router.get(
           'opponent.player_name as name',
           'opponent.score',
           'opponent.is_winner as isWinner',
+          'opponent.is_eliminated as isEliminated',
+          'opponent.elimination_reason as eliminationReason',
           'opponent_user.username'
         )
       : [];
-    const opponentByMatch = new Map(opponents.map((row) => [Number(row.matchId), row]));
+    const opponentsByMatch = new Map<number, typeof opponents>();
+    for (const opponent of opponents) {
+      const matchId = Number(opponent.matchId);
+      const list = opponentsByMatch.get(matchId) ?? [];
+      list.push(opponent);
+      opponentsByMatch.set(matchId, list);
+    }
     res.json({
       type,
       page,
@@ -332,14 +340,22 @@ router.get(
           ? 'cooperative'
           : Boolean(row.meWinner)
           ? 'won'
-          : Boolean(opponentByMatch.get(Number(row.id))?.isWinner)
+          : (opponentsByMatch.get(Number(row.id)) ?? []).some((opponent) => Boolean(opponent.isWinner))
             ? 'lost'
             : 'draw',
         me: { score: Number(row.meScore) },
-        opponent: opponentByMatch.has(Number(row.id))
+        participants: (opponentsByMatch.get(Number(row.id)) ?? []).map((opponent, index) => ({
+          id: `p${index + 1}`,
+          displayId: identityDisplayId(opponent),
+          score: Number(opponent.score),
+          isWinner: Boolean(opponent.isWinner),
+          eliminated: Boolean(opponent.isEliminated),
+          eliminationReason: opponent.eliminationReason ?? null,
+        })),
+        opponent: (opponentsByMatch.get(Number(row.id)) ?? []).length
           ? {
-              displayId: identityDisplayId(opponentByMatch.get(Number(row.id))!),
-              score: Number(opponentByMatch.get(Number(row.id))!.score),
+              displayId: identityDisplayId(opponentsByMatch.get(Number(row.id))![0]),
+              score: Number(opponentsByMatch.get(Number(row.id))![0].score),
             }
           : null,
       })),
@@ -472,21 +488,46 @@ router.get(
         'm.replay',
         'm.created_at as finishedAt',
         'me.score as meScore',
-        'me.is_winner as meWinner'
+        'me.is_winner as meWinner',
+        'me.is_eliminated as meEliminated',
+        'me.elimination_reason as meEliminationReason'
       );
     if (!match) throw new HttpError(404, 'GAME_NOT_FOUND');
-    const opponent = await db('match_players as opponent')
+    const participantRows = await db('match_players as opponent')
       .leftJoin('users as opponent_user', 'opponent_user.id', 'opponent.user_id')
       .where('opponent.match_id', id)
       .whereNot('opponent.player_key', identityKey)
-      .first(
+      .select(
         'opponent.player_key as key',
         'opponent.player_name as name',
         'opponent.score',
         'opponent.is_winner as isWinner',
+        'opponent.is_eliminated as isEliminated',
+        'opponent.elimination_reason as eliminationReason',
         'opponent_user.username'
       );
-    if (!opponent) throw new HttpError(404, 'GAME_NOT_FOUND');
+    const opponent = participantRows[0];
+    if (!opponent && match.gameMode === 'relay') throw new HttpError(404, 'GAME_NOT_FOUND');
+    const participants = [{
+      key: identityKey,
+      id: 'me',
+      displayId: 'me',
+      score: Number(match.meScore),
+      isMe: true,
+      isWinner: Boolean(match.meWinner),
+      eliminated: Boolean(match.meEliminated),
+      eliminationReason: match.meEliminationReason ?? null,
+    }, ...participantRows.map((participant, index) => ({
+      key: String(participant.key),
+      id: `p${index + 1}`,
+      displayId: identityDisplayId(participant),
+      score: Number(participant.score),
+      isMe: false,
+      isWinner: Boolean(participant.isWinner),
+      eliminated: Boolean(participant.isEliminated),
+      eliminationReason: participant.eliminationReason ?? null,
+    }))];
+    const participantIdByKey = new Map(participants.map((participant) => [participant.key, participant.id]));
 
     let storedRounds: unknown[] = [];
     try {
@@ -511,7 +552,7 @@ router.get(
           if (!guess) return [];
           const actorKey = typeof storedGuess.actorKey === 'string' ? storedGuess.actorKey : '';
           return [{
-            actor: actorKey === identityKey ? 'me' as const : actorKey === opponent.key ? 'opponent' as const : null,
+            actor: actorKey === identityKey ? 'me' as const : opponent && actorKey === opponent.key ? 'opponent' as const : null,
             feedback: compareGuess(guess, target),
             guessTime: Number.isFinite(Number(storedGuess.guessTime)) ? Number(storedGuess.guessTime) : null,
           }];
@@ -521,10 +562,15 @@ router.get(
       return [{
         round: Number(round.round),
         reason: typeof round.reason === 'string' ? round.reason : '',
-        winner: winnerKey === identityKey ? 'me' : winnerKey === opponent.key ? 'opponent' : null,
+        winner: winnerKey === identityKey ? 'me' : opponent && winnerKey === opponent.key ? 'opponent' : null,
+        winnerParticipantId: winnerKey ? participantIdByKey.get(winnerKey) ?? null : null,
         answer: answerView(target),
         me: { guesses: replayGuesses(target, safeGuessIds(guesses[identityKey])) },
-        opponent: { guesses: replayGuesses(target, safeGuessIds(guesses[opponent.key])) },
+        opponent: { guesses: replayGuesses(target, safeGuessIds(guesses[opponent?.key ?? ''])) },
+        players: participants.map((participant) => ({
+          participantId: participant.id,
+          guesses: replayGuesses(target, safeGuessIds(guesses[participant.key])),
+        })),
         sharedGuesses,
       }];
     });
@@ -541,14 +587,16 @@ router.get(
         ? 'cooperative'
         : Boolean(match.meWinner)
         ? 'won'
-        : Boolean(opponent.isWinner)
+        : participantRows.some((participant) => Boolean(participant.isWinner))
           ? 'lost'
           : 'draw',
       me: { score: Number(match.meScore) },
-      opponent: {
+      opponent: opponent ? {
         displayId: identityDisplayId(opponent),
         score: Number(opponent.score),
-      },
+      } : null,
+      participants: participants.map(({ key: _key, ...participant }) => participant),
+      winnerParticipantId: participants.find((participant) => participant.isWinner)?.id ?? null,
       rounds,
     });
   })

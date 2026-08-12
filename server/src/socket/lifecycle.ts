@@ -1,6 +1,7 @@
 import { SocketLifecycle } from './handlers/context';
 import {
   emitRematchUpdate,
+  eliminatePlayer,
   finishMatch,
   persistMatch,
   recordReplayRound,
@@ -18,6 +19,7 @@ export const socketLifecycle: SocketLifecycle = {
   emitRematchUpdate,
   resetForRematch,
   finishMatch,
+  eliminatePlayer,
   startRound,
   finishRound,
   skipRound,

@@ -78,6 +78,9 @@ describe('desktop/mobile layout contracts', () => {
       /@media\s*\(max-width:\s*960px\)\s*and\s*\(pointer:\s*coarse\),\s*\(max-width:\s*700px\)\s*\{[\s\S]*\.boards\s*\{[^}]*grid-template-columns:\s*1fr/
     );
     expect(responsive).toMatch(
+      /@media\s*\(max-width:\s*960px\)\s*and\s*\(pointer:\s*coarse\),\s*\(max-width:\s*700px\)\s*\{[\s\S]*\.multi-classic-layout\s+\.compact-players\s*\{[^}]*order:\s*1;[\s\S]*\.multi-classic-layout\s+\.player-board-self\s*\{[^}]*order:\s*2;/
+    );
+    expect(responsive).toMatch(
       /\.leaderboard-card\s+table\s+th:nth-child\(1\)\s*\{\s*width:\s*7%/
     );
     expect(responsive).toMatch(

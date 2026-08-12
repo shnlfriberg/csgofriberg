@@ -57,6 +57,7 @@ interface MultiReplayItem {
   result: 'won' | 'lost' | 'draw' | 'cooperative';
   me: { score: number };
   opponent: { displayId: string; score: number } | null;
+  participants?: Array<{ displayId: string; score: number; isWinner: boolean }>;
 }
 
 interface ReplayPage<T> {
@@ -279,8 +280,12 @@ export default function Stats() {
       : game.result === 'draw'
         ? <Badge text={t('common.draw')} color="gray" />
         : <Badge text={t('common.loss')} color="gray" /> },
-    { key: 'opponent', title: t('stats.matchup'), render: (game) => `${t('common.me')} / ${game.opponent?.displayId ?? t('stats.unknownOpponent')}` },
-    { key: 'score', title: t('stats.score'), render: (game) => `${game.me.score}:${game.opponent?.score ?? 0}` },
+    { key: 'opponent', title: t('stats.matchup'), render: (game) => game.participants?.length
+      ? `${t('common.me')} / ${game.participants.map((participant) => participant.displayId).join(' / ')}`
+      : `${t('common.me')} / ${game.opponent?.displayId ?? t('stats.unknownOpponent')}` },
+    { key: 'score', title: t('stats.score'), render: (game) => game.participants?.length
+      ? [game.me.score, ...game.participants.map((participant) => participant.score)].join(':')
+      : `${game.me.score}:${game.opponent?.score ?? 0}` },
     { key: 'finishedAt', title: t('stats.time'), render: (game) => new Date(game.finishedAt).toLocaleString(currentLocale()) },
     { key: 'replay', title: t('stats.replay'), render: replayButton },
   ];
@@ -409,8 +414,12 @@ export default function Stats() {
                     </>
                   ) : (
                     <>
-                      <span>{t('stats.matchup')} <strong>{t('common.me')} / {item.opponent?.displayId ?? t('stats.unknownOpponent')}</strong></span>
-                      <span>{t('stats.score')} <strong>{item.me.score}:{item.opponent?.score ?? 0}</strong></span>
+                      <span>{t('stats.matchup')} <strong>{item.participants?.length
+                        ? `${t('common.me')} / ${item.participants.map((participant) => participant.displayId).join(' / ')}`
+                        : `${t('common.me')} / ${item.opponent?.displayId ?? t('stats.unknownOpponent')}`}</strong></span>
+                      <span>{t('stats.score')} <strong>{item.participants?.length
+                        ? [item.me.score, ...item.participants.map((participant) => participant.score)].join(':')
+                        : `${item.me.score}:${item.opponent?.score ?? 0}`}</strong></span>
                     </>
                   )}
                 </div>

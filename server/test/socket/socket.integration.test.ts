@@ -13,7 +13,7 @@ import { browserFingerprint, POW_COOKIE } from '../../src/services/pow';
 import jwt from 'jsonwebtoken';
 import { config } from '../../src/config';
 import { guestNameFromKey, signToken } from '../../src/middleware/auth';
-import { cancelQueue, getRoom, queueOrTakeOpponent, withRoomLock } from '../../src/services/roomStore';
+import { cancelQueue, getRoom, getRoomForIdentity, queueOrTakeOpponent, withRoomLock } from '../../src/services/roomStore';
 import {
   clearMatchmakingCooldown,
   readyExitPenaltyMultiplier,
@@ -901,7 +901,7 @@ describe('multiplayer socket integration', () => {
       expect(invited).not.toHaveProperty('room');
       expect(invited).not.toHaveProperty('players');
       expect(invited).not.toHaveProperty('rematchInvite');
-      expect(JSON.stringify(invited).length).toBeLessThan(200);
+      expect(JSON.stringify(invited).length).toBeLessThan(320);
       expect((await emit(a, 'match:rematch-respond', { accept: true })).code)
         .toBe('REMATCH_RESPONSE_NOT_ALLOWED');
 
@@ -916,7 +916,7 @@ describe('multiplayer socket integration', () => {
       });
       expect(accepted).not.toHaveProperty('room');
       expect(accepted).not.toHaveProperty('reset');
-      expect(JSON.stringify(accepted).length).toBeLessThan(200);
+      expect(JSON.stringify(accepted).length).toBeLessThan(320);
       const rematchRoom = await getRoom(created.room.id);
       expect(rematchRoom?.recordId).not.toBe(originalRecordId);
       expect(rematchRoom?.players.map((player) => ({ key: player.key, ready: player.ready, score: player.score })))
@@ -935,6 +935,52 @@ describe('multiplayer socket integration', () => {
     } finally {
       a.disconnect();
       b.disconnect();
+    }
+  });
+
+  it('runs a three-player classic room and eliminates leavers while the others continue', async () => {
+    const stamp = Date.now();
+    const keys = [`multi-a-${stamp}`, `multi-b-${stamp}`, `multi-c-${stamp}`];
+    const sockets = await Promise.all(keys.map(async (key) => connect(withPowCookie(
+      `csgofriberg_guest=${jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' })}`
+    ))));
+    const [a, b, c] = sockets;
+    try {
+      const created = await emit(a, 'room:create', {
+        dbType: 'easy', boType: 3, maxPlayers: 3, guessIntervalMs: 0,
+      });
+      createdRoomIds.push(created.room.id);
+      expect(created.room.maxPlayers).toBe(3);
+      await emit(b, 'room:join', { roomId: created.room.id });
+      await emit(c, 'room:join', { roomId: created.room.id });
+      await emit(b, 'room:ready', { ready: true });
+      await emit(c, 'room:ready', { ready: true });
+      expect((await emit(a, 'game:start')).ok).toBe(true);
+
+      const active = await getRoom(created.room.id);
+      const wrongGuess = getDifficultyPlayers('easy').find((player) => player.id !== active!.targetPlayerId)!;
+      const hiddenEvent = onceEvent(b, 'game:guess:applied');
+      await emit(a, 'game:guess', {
+        playerId: wrongGuess.id,
+        roundId: active!.round,
+        eventId: `multi-hidden-${stamp}`,
+      });
+      expect((await hiddenEvent).feedback).toMatchObject({ hidden: true });
+
+      expect((await emit(a, 'room:leave')).ok).toBe(true);
+      expect(await getRoomForIdentity(`g:${keys[0]}`)).toBeNull();
+      expect((await getRoom(created.room.id))?.players.find((player) => player.key === `g:${keys[0]}`))
+        .toMatchObject({ eliminated: true, eliminationReason: 'player_left' });
+      expect((await emit(a, 'room:join', { roomId: created.room.id })).code).toBe('PLAYER_ELIMINATED');
+
+      const matchOver = onceEvent(b, 'match:over');
+      expect((await emit(c, 'room:leave')).ok).toBe(true);
+      expect((await matchOver).room.matchResult).toMatchObject({
+        winnerKey: `g:${keys[1]}`,
+        reason: 'last_player_standing',
+      });
+    } finally {
+      sockets.forEach((socket) => socket.disconnect());
     }
   });
 

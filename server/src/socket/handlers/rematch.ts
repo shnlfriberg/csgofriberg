@@ -84,6 +84,10 @@ export async function handleRematchInvite(
       return { code: 'REMATCH_INVITE_PENDING' };
     }
     locked.rematchInviterKey = me.key;
+    locked.rematchRequiredKeys = locked.players
+      .filter((player) => player.connected && !player.eliminated)
+      .map((player) => player.key);
+    locked.rematchAcceptedKeys = [me.key];
     return { room: locked, outcome: 'invited' as const };
   }, (value) => 'room' in value);
   if (!result || 'code' in result) {
@@ -115,6 +119,8 @@ export async function handleRematchCancel(
     if (code) return { code };
     if (locked.rematchInviterKey !== me.key) return { code: 'REMATCH_INVITE_NOT_FOUND' };
     locked.rematchInviterKey = null;
+    locked.rematchAcceptedKeys = [];
+    locked.rematchRequiredKeys = [];
     return { room: locked, outcome: 'cancelled' as const };
   }, (value) => 'room' in value);
   if (!result || 'code' in result) {
@@ -148,7 +154,16 @@ export async function handleRematchRespond(
     if (locked.rematchInviterKey === me.key) return { code: 'REMATCH_RESPONSE_NOT_ALLOWED' };
     if (!payload.accept) {
       locked.rematchInviterKey = null;
+      locked.rematchAcceptedKeys = [];
+      locked.rematchRequiredKeys = [];
       return { room: locked, outcome: 'declined' as const };
+    }
+    if (!locked.rematchRequiredKeys.includes(me.key)) {
+      return { code: 'REMATCH_RESPONSE_NOT_ALLOWED' };
+    }
+    if (!locked.rematchAcceptedKeys.includes(me.key)) locked.rematchAcceptedKeys.push(me.key);
+    if (!locked.rematchRequiredKeys.every((key) => locked.rematchAcceptedKeys.includes(key))) {
+      return { room: locked, outcome: 'invited' as const };
     }
     await lifecycle.persistMatch(locked, locked.matchResult!.winnerKey);
     lifecycle.resetForRematch(locked);

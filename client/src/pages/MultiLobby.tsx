@@ -79,6 +79,7 @@ export default function MultiLobby() {
   const [gameMode, setGameMode] = useState<'classic' | 'relay'>(initialPreferences.gameMode);
   const [totalRounds, setTotalRounds] = useState(initialPreferences.totalRounds);
   const [boType, setBoType] = useState(initialPreferences.boType);
+  const [maxPlayers, setMaxPlayers] = useState(initialPreferences.maxPlayers);
   const [allowSpectators, setAllowSpectators] = useState(initialPreferences.allowSpectators);
   const [verifiedEmailOnly, setVerifiedEmailOnly] = useState(initialPreferences.verifiedEmailOnly);
   const [maxGuesses, setMaxGuesses] = useState(initialPreferences.maxGuesses);
@@ -131,6 +132,7 @@ export default function MultiLobby() {
       totalRounds,
       createDifficulty: dbType,
       boType,
+      maxPlayers,
       allowSpectators,
       verifiedEmailOnly,
       maxGuesses,
@@ -144,6 +146,7 @@ export default function MultiLobby() {
     gameMode,
     guessIntervalSeconds,
     maxGuesses,
+    maxPlayers,
     mmDbType,
     totalRounds,
     verifiedEmailOnly,
@@ -296,6 +299,7 @@ export default function MultiLobby() {
       gameMode,
       totalRounds,
       boType,
+      maxPlayers: gameMode === 'classic' ? maxPlayers : 2,
       allowSpectators,
       verifiedOnly: verifiedEmailOnly,
       anonymous,
@@ -442,7 +446,7 @@ export default function MultiLobby() {
             {copied ? t('multi.copied') : t('multi.copyCode')}
           </button>
           <p className="muted multi-lobby-created-meta">
-            {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {createdRoom.gameMode === 'relay' ? t('multi.relayRounds', { rounds: createdRoom.totalRounds ?? 3 }) : t('multi.format', { bo: createdRoom.boType })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')} · {createdRoom.verifiedOnly ? t('multi.verifiedRoomOnly') : t('multi.anyoneCanJoin')}
+            {t('multi.database', { type: difficultyLabel(t, createdRoom.dbType) })} · {createdRoom.gameMode === 'relay' ? t('multi.relayRounds', { rounds: createdRoom.totalRounds ?? 3 }) : t('multi.format', { bo: createdRoom.boType })} · {t('multi.roomCapacity', { current: createdRoom.players.length, max: createdRoom.maxPlayers ?? 2 })} · {createdRoom.allowSpectators ? t('multi.allowSpectating') : t('multi.denySpectating')} · {createdRoom.verifiedOnly ? t('multi.verifiedRoomOnly') : t('multi.anyoneCanJoin')}
             {' · '}{createdRoom.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}
             {' · '}{t('multi.customRulesSummary', {
               guesses: createdRoom.maxGuesses,
@@ -482,6 +486,23 @@ export default function MultiLobby() {
               onChange={gameMode === 'relay' ? setTotalRounds : setBoType}
               format={(v) => gameMode === 'relay' ? String(v) : `BO${v}`}
             />
+            {gameMode === 'classic' && (
+              <label className="option-row room-player-limit-setting">
+                <span className="opt-label">{t('multi.maxPlayersLabel')}</span>
+                <select
+                  className="input room-player-limit-select"
+                  aria-label={t('multi.maxPlayersLabel')}
+                  value={maxPlayers}
+                  onChange={(event) => setMaxPlayers(Number(event.currentTarget.value))}
+                >
+                  {[2, 3, 4, 5, 6, 7, 8].map((count) => (
+                    <option key={count} value={count}>
+                      {t('multi.playerCountValue', { count })}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="room-create-options">
               <label className="spectator-option">
                 <input

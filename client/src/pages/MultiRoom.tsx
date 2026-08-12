@@ -20,6 +20,8 @@ import {
   Trophy,
   ChevronLeft,
   ChevronRight,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import Page from '../components/Page';
 import GuessBoard from '../components/GuessBoard';
@@ -118,6 +120,7 @@ function applyRoomPatchState(current: RoomState, patch: RoomPatch): RoomState {
     hostKey: patch.hostKey ?? current.hostKey,
     players,
     spectatorCount: patch.spectatorCount ?? current.spectatorCount,
+    rematchInvite: patch.rematchInvite === undefined ? current.rematchInvite : patch.rematchInvite,
   };
 }
 
@@ -128,6 +131,7 @@ function matchOverReason(
   t: TFunction
 ): string {
   if (result.reason === 'score') return t('multi.matchReasons.score');
+  if (result.reason === 'last_player_standing') return t('multi.matchReasons.lastPlayerStanding');
   if (result.reason === 'opponent_left') {
     if (isSpectator) return t('multi.matchReasons.sideLeft');
     return result.winnerKey === viewerKey ? t('multi.matchReasons.opponentLeft') : t('multi.matchReasons.selfLeft');
@@ -238,6 +242,86 @@ function PlayerBoard({
   );
 }
 
+function CompactFeedback({ feedback }: { feedback: MultiplayerGuessFeedback | undefined }) {
+  const attributes = feedback ? [
+    { level: feedback.correct ? 'correct' : 'wrong' },
+    feedback.attributes.team,
+    feedback.attributes.nationality,
+    feedback.attributes.age,
+    feedback.attributes.role,
+    feedback.attributes.majorChampionships,
+    feedback.attributes.majorAppearances,
+    feedback.attributes.isActive,
+  ] : [];
+  return (
+    <span className="compact-feedback" aria-hidden="true">
+      {attributes.length
+        ? attributes.map((attribute, index) => (
+            <i key={index} className={attribute.level}>
+              {'hint' in attribute && attribute.hint === 'higher' && <ArrowUp />}
+              {'hint' in attribute && attribute.hint === 'lower' && <ArrowDown />}
+            </i>
+          ))
+        : Array.from({ length: 8 }, (_, index) => <i key={index} className="empty" />)}
+    </span>
+  );
+}
+
+function CompactPlayers({
+  players,
+  room,
+  expandedKey,
+  onToggle,
+}: {
+  players: RoomPlayer[];
+  room: RoomState;
+  expandedKey: string | null;
+  onToggle: (key: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <section className="compact-players" aria-label={t('multi.otherPlayers')}>
+      {players.map((player, index) => {
+        const expanded = expandedKey === player.key;
+        const latest = player.guesses.at(-1);
+        return (
+          <div className={`compact-player${player.eliminated ? ' compact-player-eliminated' : ''}`} key={player.key}>
+            <button
+              type="button"
+              className="compact-player-row"
+              aria-expanded={expanded}
+              onClick={() => onToggle(player.key)}
+            >
+              <span className="compact-player-rank">{index + 1}</span>
+              <span className="compact-player-name" title={player.name}>{player.name}</span>
+              <strong className="compact-player-score">{player.score}</strong>
+              <span className="compact-player-count">{player.guessCount}/{room.maxGuesses}</span>
+              <CompactFeedback feedback={latest} />
+              <span className="compact-player-state">
+                {player.eliminated
+                  ? t('multi.eliminated')
+                  : !player.connected
+                    ? t('multi.offline')
+                    : player.skipped
+                      ? t('multi.roundSkipped')
+                      : ''}
+              </span>
+              <ChevronRight className={expanded ? 'expanded' : ''} size={16} />
+            </button>
+            {expanded && (
+              <div className="compact-player-detail">
+                {player.guesses.length
+                  ? <GuessBoard guesses={player.guesses} />
+                  : <p className="muted">{t('multi.noGuesses')}</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
+  );
+}
+
 export default function MultiRoom() {
   const { t } = useTranslation();
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -246,6 +330,7 @@ export default function MultiRoom() {
   const [matchOverVisible, setMatchOverVisible] = useState(false);
   const [relayAbort, setRelayAbort] = useState<RelayAbort | null>(null);
   const [replayRoundIndex, setReplayRoundIndex] = useState<number | null>(null);
+  const [expandedPlayerKey, setExpandedPlayerKey] = useState<string | null>(null);
   const [offlineNote, setOfflineNote] = useState('');
   const [showRoomCode, setShowRoomCode] = useState(false);
   const [myKey, setMyKey] = useState('');
@@ -411,6 +496,9 @@ export default function MultiRoom() {
       stateVersion: number;
       outcome: 'invited' | 'cancelled' | 'declined' | 'accepted';
       actorKey: string;
+      inviterKey?: string | null;
+      acceptedKeys?: string[];
+      requiredKeys?: string[];
       player?: { key: string; connected: boolean };
     }) => {
       setRoom((current) => {
@@ -446,7 +534,11 @@ export default function MultiRoom() {
           : {
               ...current,
               rematchInvite: p.outcome === 'invited'
-                ? { inviterKey: p.actorKey }
+                ? {
+                    inviterKey: p.inviterKey ?? current.rematchInvite?.inviterKey ?? p.actorKey,
+                    acceptedKeys: p.acceptedKeys ?? [p.actorKey],
+                    requiredKeys: p.requiredKeys ?? [],
+                  }
                 : null,
               players: p.player
                 ? current.players.map((player) => player.key === p.player!.key
@@ -466,10 +558,15 @@ export default function MultiRoom() {
         setMatchOverVisible(false);
         setReplayRoundIndex(null);
         setOfflineNote('');
+        syncRoom(socket);
       }
       const actorIsMe = p.actorKey === myKeyRef.current;
       if (p.outcome === 'invited') {
-        setRematchNotice(actorIsMe ? t('multi.rematchInvitedSelf') : t('multi.rematchInvitedOther'));
+        const accepted = p.acceptedKeys?.length ?? 1;
+        const required = p.requiredKeys?.length ?? 2;
+        setRematchNotice(accepted > 1
+          ? t('multi.rematchProgress', { accepted, required })
+          : actorIsMe ? t('multi.rematchInvitedSelf') : t('multi.rematchInvitedOther'));
       } else if (p.outcome === 'cancelled') {
         setRematchNotice(actorIsMe ? t('multi.rematchCancelledSelf') : t('multi.rematchCancelledOther'));
       } else if (p.outcome === 'declined') {
@@ -784,12 +881,12 @@ export default function MultiRoom() {
   const isHost = room?.hostKey === myKey;
   const playing = room?.status === 'playing';
   const rematchInviterKey = room?.rematchInvite?.inviterKey ?? null;
+  const rematchAcceptedByMe = room?.rematchInvite?.acceptedKeys?.includes(myKey) ?? false;
   const canRematch = Boolean(
     room?.rematchAllowed &&
     room.status === 'finished' &&
     me &&
-    room.players.length === 2 &&
-    room.players.every((player) => player.connected)
+    room.players.filter((player) => player.connected && !player.eliminated).length >= 2
   );
   const viewFinishedMatch = () => {
     if (!room?.matchReplay) {
@@ -943,8 +1040,28 @@ export default function MultiRoom() {
 
   const leftPlayer = me ?? room.players[0];
   const rightPlayer = me ? opponent : room.players[1];
+  const rankedPlayers = room.players
+    .map((player, joinIndex) => ({ player, joinIndex }))
+    .sort((a, b) => b.player.score - a.player.score || a.joinIndex - b.joinIndex)
+    .map(({ player }) => player);
+  const compactPlayers = me
+    ? rankedPlayers.filter((player) => player.key !== myKey)
+    : rankedPlayers;
+  const isLargeClassicRoom = room.gameMode !== 'relay' && room.players.length > 2;
   const replay = room.matchReplay;
   const replayRound = replayRoundIndex == null ? null : replay?.rounds[replayRoundIndex] ?? null;
+  const replayParticipantIdByPlayerKey = new Map(
+    room.players.map((player, index) => [player.key, replay?.participants?.[index]?.id])
+  );
+  const displayedCompactPlayers = replayRound?.players
+    ? compactPlayers.map((player) => {
+        const participantId = replayParticipantIdByPlayerKey.get(player.key);
+        const replayPlayer = replayRound.players?.find((candidate) => candidate.participantId === participantId);
+        return replayPlayer
+          ? { ...player, guessCount: replayPlayer.guesses.length, guesses: replayPlayer.guesses }
+          : player;
+      })
+    : compactPlayers;
   const displayedLeftPlayer = leftPlayer && replayRound
     ? { ...leftPlayer, guessCount: replayRound.me.guesses.length, guesses: replayRound.me.guesses }
     : leftPlayer;
@@ -1039,7 +1156,7 @@ export default function MultiRoom() {
         </>
       }
       dock={
-        playing && me ? (
+        playing && me && !me.eliminated ? (
           <GuessInputBar
             onPick={(p) => submitGuess(p.id)}
             onFocusChange={setInputFocused}
@@ -1056,7 +1173,17 @@ export default function MultiRoom() {
       }
     >
       {/* 比分栏 */}
-      <div className="card score-bar">
+      {isLargeClassicRoom ? (
+        <div className="card multiplayer-scoreboard">
+          {rankedPlayers.map((player, index) => (
+            <span key={player.key} className={`${player.key === myKey ? 'is-self' : ''}${player.eliminated ? ' is-eliminated' : ''}`}>
+              <b>{index + 1}</b>
+              <span title={player.name}>{player.name}</span>
+              <strong>{player.score}</strong>
+            </span>
+          ))}
+        </div>
+      ) : <div className="card score-bar">
         <span className="player-name score-bar-player-left">
           {leftPlayer?.key === room.hostKey && <Crown size={16} color="var(--warning)" />}
           <span className="player-id-text">{leftPlayer?.name ?? '-'}</span>
@@ -1072,7 +1199,7 @@ export default function MultiRoom() {
           <span className="player-id-text">{rightPlayer?.name ?? t('multi.waitingForJoin')}</span>
           {statsButton(rightPlayer)}
         </span>
-      </div>
+      </div>}
 
       {replay && replayRound && replayRoundIndex != null && (
         <div className="multi-inline-replay" aria-label={t('replay.pagination')}>
@@ -1123,6 +1250,10 @@ export default function MultiRoom() {
                 <li>{room.gameMode === 'relay'
                   ? t('multi.relayRounds', { rounds: room.totalRounds })
                   : t('multi.format', { bo: room.boType })}</li>
+                <li>{t('multi.roomCapacity', {
+                  current: room.players.length,
+                  max: room.maxPlayers ?? 2,
+                })}</li>
                 <li>{t('multi.customRulesSummary', {
                   guesses: room.maxGuesses,
                   seconds: room.guessIntervalMs / 1000,
@@ -1249,6 +1380,24 @@ export default function MultiRoom() {
             ) : <p className="muted">{t('multi.noGuesses')}</p>}
             <div className="guess-list-end" ref={activeGuessListEndRef} aria-hidden="true" />
           </div>
+        ) : isLargeClassicRoom ? (
+          <div className={`multi-classic-layout${me ? '' : ' multi-classic-layout-spectator'}`}>
+            {me && (
+              <PlayerBoard
+                player={displayedLeftPlayer ?? me}
+                room={room}
+                title={t('multi.myGuesses')}
+                isSelf
+                endRef={activeGuessListEndRef}
+              />
+            )}
+            <CompactPlayers
+              players={displayedCompactPlayers}
+              room={room}
+              expandedKey={expandedPlayerKey}
+              onToggle={(key) => setExpandedPlayerKey((current) => current === key ? null : key)}
+            />
+          </div>
         ) : <div className="boards">
           {displayedLeftPlayer && (
             <PlayerBoard
@@ -1328,7 +1477,9 @@ export default function MultiRoom() {
                   total: room.totalRounds ?? room.boType,
                 }) : t('multi.finalScore', {
                   reason: matchOverReason(matchOver, myKey, isSpectator, t),
-                  score: `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`,
+                  score: isLargeClassicRoom
+                    ? rankedPlayers.map((player) => `${player.name} ${player.score}`).join(' · ')
+                    : `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`,
                 })}
               </p>
               {rematchNotice && <p className="muted">{rematchNotice}</p>}
@@ -1360,7 +1511,7 @@ export default function MultiRoom() {
                   {t('multi.cancelInvite')}
                 </button>
               )}
-              {canRematch && rematchInviterKey && rematchInviterKey !== myKey && (
+              {canRematch && rematchInviterKey && rematchInviterKey !== myKey && !rematchAcceptedByMe && (
                 <>
                   <button
                     className="btn btn-success"

@@ -35,6 +35,8 @@ export interface StoredPlayer extends StoredIdentity {
   skipped: boolean;
   connected: boolean;
   disconnectDeadline: number | null;
+  eliminated: boolean;
+  eliminationReason: 'player_left' | 'disconnect_timeout' | null;
 }
 
 export interface StoredSpectator extends StoredIdentity {
@@ -99,6 +101,7 @@ export interface StoredRoom {
   boType: BoType;
   gameMode: GameMode;
   totalRounds: BoType;
+  maxPlayers: number;
   currentTurnKey: string | null;
   relaySolvedRounds: number;
   relayGuesses: StoredRelayGuess[];
@@ -106,6 +109,8 @@ export interface StoredRoom {
   guessIntervalMs: number;
   rematchAllowed: boolean;
   rematchInviterKey: string | null;
+  rematchAcceptedKeys: string[];
+  rematchRequiredKeys: string[];
   allowSpectators: boolean;
   verifiedOnly: boolean;
   anonymous: boolean;
@@ -131,6 +136,8 @@ export const MAX_ROOM_MAX_GUESSES = 15;
 export const DEFAULT_ROOM_GUESS_INTERVAL_MS = 1_500;
 export const MIN_ROOM_GUESS_INTERVAL_MS = 0;
 export const MAX_ROOM_GUESS_INTERVAL_MS = 10_000;
+export const MIN_CLASSIC_ROOM_PLAYERS = 2;
+export const MAX_CLASSIC_ROOM_PLAYERS = 8;
 
 const ROOM_TTL_SECONDS = 6 * 60 * 60;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
@@ -223,6 +230,12 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   if (room.gameMode !== 'relay') room.gameMode = 'classic';
   if (![1, 3, 5, 7].includes(Number(room.totalRounds))) room.totalRounds = room.gameMode === 'relay' ? 3 : room.boType;
   if (room.gameMode === 'classic') room.totalRounds = room.boType;
+  if (
+    !Number.isInteger(room.maxPlayers)
+    || room.maxPlayers < MIN_CLASSIC_ROOM_PLAYERS
+    || room.maxPlayers > MAX_CLASSIC_ROOM_PLAYERS
+  ) room.maxPlayers = 2;
+  if (room.gameMode === 'relay' || room.matchmaking) room.maxPlayers = 2;
   room.currentTurnKey ??= null;
   if (!Number.isInteger(room.relaySolvedRounds) || room.relaySolvedRounds < 0) room.relaySolvedRounds = 0;
   if (!Array.isArray(room.relayGuesses)) room.relayGuesses = [];
@@ -240,6 +253,8 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   room.readyCheckEndsAt ??= null;
   if (typeof room.rematchAllowed !== 'boolean') room.rematchAllowed = false;
   room.rematchInviterKey ??= null;
+  if (!Array.isArray(room.rematchAcceptedKeys)) room.rematchAcceptedKeys = [];
+  if (!Array.isArray(room.rematchRequiredKeys)) room.rematchRequiredKeys = [];
   room.eventResults ??= {};
   if (Object.values(room.eventResults).some((value) => typeof value !== 'number')) {
     room.eventResults = {};
@@ -271,6 +286,8 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
     player.guessTimes = normalizeGuessTimes(player.guessTimes, player.guesses.length);
     player.lastGuessAt ??= null;
     player.skipped ??= false;
+    player.eliminated ??= false;
+    player.eliminationReason ??= null;
   }
   for (const spectator of room.spectators) {
     spectator.connected ??= true;
@@ -502,6 +519,7 @@ if meta[4] and meta[4] ~= '' and tonumber(meta[4]) <= tonumber(ARGV[9]) then
   return cjson.encode({kind='error', code='NO_ACTIVE_ROUND', reason='deadline_passed'})
 end
 if player.socketId ~= ARGV[2] then return cjson.encode({kind='error', code='STALE_CONNECTION'}) end
+if player.eliminated == true then return cjson.encode({kind='error', code='PLAYER_ELIMINATED'}) end
 if player.skipped == true then return cjson.encode({kind='error', code='ROUND_SKIPPED'}) end
 if #guesses >= tonumber(ARGV[7]) then return cjson.encode({kind='error', code='GUESS_LIMIT_REACHED'}) end
 for _, previous in ipairs(guesses) do
@@ -542,13 +560,14 @@ if feedback.correct == true then player.score = tonumber(player.score or 0) + 1 
 redis.call('HSET', KEYS[7], identity, cjson.encode(player))
 local allDone = true
 local anySkipped = false
+local playerKeys = {}
 local playerStates = redis.call('HGETALL', KEYS[7])
-for index = 2, #playerStates, 2 do
-  local stateOk, candidate = pcall(cjson.decode, playerStates[index])
-  if stateOk and candidate.skipped == true then anySkipped = true end
-  if not stateOk or (candidate.skipped ~= true and tonumber(candidate.guessCount or 0) < tonumber(ARGV[7])) then
+for index = 1, #playerStates, 2 do
+  local stateOk, candidate = pcall(cjson.decode, playerStates[index + 1])
+  if stateOk and candidate.eliminated ~= true then table.insert(playerKeys, playerStates[index]) end
+  if stateOk and candidate.eliminated ~= true and candidate.skipped == true then anySkipped = true end
+  if not stateOk or (candidate.eliminated ~= true and candidate.skipped ~= true and tonumber(candidate.guessCount or 0) < tonumber(ARGV[7])) then
     allDone = false
-    break
   end
 end
 local shouldFinish = feedback.correct == true or allDone
@@ -596,7 +615,6 @@ else
   redis.call('ZADD', KEYS[3], tonumber(ARGV[9]) + tonumber(ARGV[11]) * 1000, ARGV[12])
   if shouldFinish then redis.call('ZADD', KEYS[4], tonumber(nextRoundAt), 'next|' .. ARGV[12] .. '|' .. tostring(meta[3])) end
 end
-local playerKeys = redis.call('HKEYS', KEYS[7])
 return cjson.encode({
   kind='applied', feedback=feedback, round=tonumber(meta[3]),
   correct=feedback.correct == true, shouldFinish=shouldFinish, matchOver=matchOver,
@@ -816,6 +834,7 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
         return { kind: 'error', code: 'NO_ACTIVE_ROUND', reason: 'deadline_passed' };
       }
       if (player.socketId !== input.socketId) return { kind: 'error', code: 'STALE_CONNECTION' };
+      if (player.eliminated) return { kind: 'error', code: 'PLAYER_ELIMINATED' };
       if (input.gameMode === 'relay') {
         if (room.gameMode !== 'relay' || room.currentTurnKey !== input.identity) return { kind: 'error', code: 'NOT_YOUR_TURN' };
         if (room.relayGuesses.length >= input.maxGuesses) return { kind: 'error', code: 'GUESS_LIMIT_REACHED' };
@@ -867,7 +886,8 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
       player.guessTimes.push(guessTime);
       player.lastGuessAt = now;
       room.eventResults[eventKey] = player.guesses.length - 1;
-      const allDone = room.players.every(
+      const activePlayers = room.players.filter((candidate) => !candidate.eliminated);
+      const allDone = activePlayers.every(
         (candidate) => candidate.skipped || candidate.guesses.length >= input.maxGuesses
       );
       const shouldFinish = input.feedback.correct || allDone;
@@ -893,7 +913,7 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
           winnerKey: input.feedback.correct ? input.identity : null,
           reason: input.feedback.correct
             ? 'guessed'
-            : room.players.some((candidate) => candidate.skipped) ? 'skipped' : 'exhausted',
+            : activePlayers.some((candidate) => candidate.skipped) ? 'skipped' : 'exhausted',
           matchOver,
           nextRoundAt: room.nextRoundAt,
         };
@@ -906,7 +926,7 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
         shouldFinish,
         matchOver,
         revision: room.revision,
-        playerKeys: room.players.map((candidate) => candidate.key),
+        playerKeys: room.players.filter((candidate) => !candidate.eliminated).map((candidate) => candidate.key),
         room,
       };
     }, (value) => value.kind === 'applied');
@@ -946,7 +966,7 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
     String(input.minGuessIntervalMs),
     String(input.roundDurationMs),
   ];
-  const scriptName = input.gameMode === 'relay' ? 'apply-relay-guess-hash-v1' : 'apply-room-guess-hash-v4';
+  const scriptName = input.gameMode === 'relay' ? 'apply-relay-guess-hash-v1' : 'apply-room-guess-hash-v5';
   const script = input.gameMode === 'relay' ? APPLY_RELAY_GUESS_HASH_SCRIPT : APPLY_ROOM_GUESS_HASH_SCRIPT;
   let result = await evalStateScript(scriptName, script, keys, args);
   if (typeof result !== 'string') throw new Error('INVALID_GUESS_RESULT');
@@ -981,7 +1001,11 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     const currentMembers = new Set(
       current ? [...current.players, ...current.spectators].map((member) => member.key) : []
     );
-    for (const member of [...room.players, ...room.spectators]) {
+    const members = [
+      ...room.players.filter((player) => !player.eliminated),
+      ...room.spectators,
+    ];
+    for (const member of members) {
       const mappedRoomId = localIdentityRooms.get(member.key);
       const mappedRoom = mappedRoomId ? localRooms.get(mappedRoomId) : null;
       if (
@@ -1008,7 +1032,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     } else {
       roomTargetCache.delete(room.id);
     }
-    for (const member of [...room.players, ...room.spectators]) {
+    for (const member of members) {
       const mappedRoomId = localIdentityRooms.get(member.key);
       const mappedRoom = mappedRoomId ? localRooms.get(mappedRoomId) : null;
       if (
@@ -1022,7 +1046,10 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
     return;
   }
-  const members = [...room.players, ...room.spectators];
+  const members = [
+    ...room.players.filter((player) => !player.eliminated),
+    ...room.spectators,
+  ];
   const schedules: { score: number; value: string }[] = [];
   if (room.status === 'waiting' && room.matchmaking && room.readyCheckEndsAt) {
     schedules.push({
@@ -1086,11 +1113,15 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
      if math.max(currentRevision, hotRevision) >= tonumber(incoming.revision or 0) then return 0 end
      local currentMembers = {}
      if currentOk then
-       for _, member in ipairs(current.players or {}) do currentMembers[member.key] = true end
+       for _, member in ipairs(current.players or {}) do
+         if member.eliminated ~= true then currentMembers[member.key] = true end
+       end
        for _, member in ipairs(current.spectators or {}) do currentMembers[member.key] = true end
      end
      local incomingMembers = {}
-     for _, member in ipairs(incoming.players or {}) do table.insert(incomingMembers, member) end
+     for _, member in ipairs(incoming.players or {}) do
+       if member.eliminated ~= true then table.insert(incomingMembers, member) end
+     end
      for _, member in ipairs(incoming.spectators or {}) do table.insert(incomingMembers, member) end
      for index, member in ipairs(incomingMembers) do
        local mappedRoomId = redis.call('GET', KEYS[3 + index])
@@ -1131,6 +1162,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
      'boType', tostring(incoming.boType or 1),
        'gameMode', incoming.gameMode or 'classic',
        'totalRounds', tostring(incoming.totalRounds or incoming.boType or 3),
+       'maxPlayers', tostring(incoming.maxPlayers or 2),
        'currentTurnKey', nullableString(incoming.currentTurnKey),
        'relaySolvedRounds', tostring(incoming.relaySolvedRounds or 0),
        'relayGuesses', nullableJson(incoming.relayGuesses),
@@ -1146,7 +1178,8 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
           socketId=player.socketId, ready=player.ready, score=player.score,
           connected=player.connected, disconnectDeadline=player.disconnectDeadline,
           guessCount=#playerGuesses, guessTimes=player.guessTimes or {},
-          lastGuessAt=player.lastGuessAt, skipped=player.skipped == true
+          lastGuessAt=player.lastGuessAt, skipped=player.skipped == true,
+          eliminated=player.eliminated == true, eliminationReason=player.eliminationReason
        }
        redis.call('HSET', playersKey, player.key, cjson.encode(metadata))
        redis.call('HSET', guessesKey, player.key,

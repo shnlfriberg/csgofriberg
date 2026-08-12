@@ -89,10 +89,20 @@ function replayGuesses(target: Player, playerIds: number[], maxGuesses: number) 
 }
 
 function buildMatchReplay(room: StoredRoom, viewerKey: string) {
-  if (room.status !== 'finished' || !room.matchResult || room.players.length !== 2) return null;
+  if (room.status !== 'finished' || !room.matchResult) return null;
   const me = room.players.find((player) => player.key === viewerKey);
   const opponent = room.players.find((player) => player.key !== viewerKey);
-  if (!me || !opponent) return null;
+  if (!me) return null;
+  const participantIdByKey = new Map(room.players.map((player, index) => [player.key, `p${index + 1}`]));
+  const participants = room.players.map((player) => ({
+    id: participantIdByKey.get(player.key)!,
+    displayId: identityDisplayName(player),
+    score: player.score,
+    isMe: player.key === viewerKey,
+    isWinner: player.key === room.matchResult?.winnerKey,
+    eliminated: player.eliminated,
+    eliminationReason: player.eliminationReason,
+  }));
 
   return {
     id: room.recordId,
@@ -100,20 +110,25 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
     boType: room.boType,
     gameMode: room.gameMode,
     totalRounds: room.totalRounds,
+    maxPlayers: room.maxPlayers,
     relaySolvedRounds: room.relaySolvedRounds,
     finishedAt: new Date(room.updatedAt).toISOString(),
     result: room.gameMode === 'relay'
       ? 'cooperative' as const
       : room.matchResult.winnerKey === me.key
         ? 'won' as const
-        : room.matchResult.winnerKey === opponent.key
+        : room.matchResult.winnerKey
           ? 'lost' as const
           : 'draw' as const,
     me: { score: me.score },
-    opponent: {
+    ...(opponent ? { opponent: {
       displayId: identityDisplayName(opponent),
       score: opponent.score,
-    },
+    } } : {}),
+    participants,
+    winnerParticipantId: room.matchResult.winnerKey
+      ? participantIdByKey.get(room.matchResult.winnerKey) ?? null
+      : null,
     rounds: room.replayRounds.flatMap((round) => {
       const target = getPlayer(round.targetPlayerId);
       if (!target) return [];
@@ -122,21 +137,29 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
         reason: round.reason,
         winner: round.winnerKey === me.key
           ? 'me' as const
-          : round.winnerKey === opponent.key
+          : opponent && round.winnerKey === opponent.key
             ? 'opponent' as const
             : null,
+        winnerParticipantId: round.winnerKey
+          ? participantIdByKey.get(round.winnerKey) ?? null
+          : null,
         answer: replayAnswer(target),
         me: { guesses: replayGuesses(target, round.guessesByPlayer[me.key] ?? [], room.maxGuesses) },
-        opponent: {
+        ...(opponent ? { opponent: {
           guesses: replayGuesses(target, round.guessesByPlayer[opponent.key] ?? [], room.maxGuesses),
-        },
+        } } : {}),
+        players: room.players.map((player) => ({
+          participantId: participantIdByKey.get(player.key)!,
+          guesses: replayGuesses(target, round.guessesByPlayer[player.key] ?? [], room.maxGuesses),
+          guessTimes: round.guessTimesByPlayer[player.key] ?? [],
+        })),
         sharedGuesses: round.sharedGuesses?.flatMap((guess) => {
           const player = getPlayer(guess.playerId);
           if (!player) return [];
           return [{
             actor: guess.actorKey === me.key
               ? 'me' as const
-              : guess.actorKey === opponent.key ? 'opponent' as const : null,
+              : opponent && guess.actorKey === opponent.key ? 'opponent' as const : null,
             feedback: visibleGuess(compareGuess(player, target)),
             guessTime: guess.guessTime,
           }];
@@ -176,6 +199,7 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     boType: room.boType,
     gameMode: room.gameMode,
     totalRounds: room.totalRounds,
+    maxPlayers: room.maxPlayers,
     currentTurnKey: room.currentTurnKey,
     relaySolvedRounds: room.relaySolvedRounds,
     relayGuesses: room.relayGuesses.map((guess) => ({
@@ -185,7 +209,11 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     })),
     rematchAllowed: room.rematchAllowed,
     rematchInvite: room.rematchInviterKey
-      ? { inviterKey: room.rematchInviterKey }
+      ? {
+          inviterKey: room.rematchInviterKey,
+          acceptedKeys: room.rematchAcceptedKeys,
+          requiredKeys: room.rematchRequiredKeys,
+        }
       : null,
     allowSpectators: room.allowSpectators,
     verifiedOnly: room.verifiedOnly,
@@ -229,6 +257,8 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
         score: player.score,
         skipped: player.skipped,
         guessCount: guesses.length,
+        eliminated: player.eliminated,
+        eliminationReason: player.eliminationReason,
         guesses: viewerIsSpectator || roundIsComplete || player.key === viewerKey
           ? guesses.map(visibleGuess)
           : guesses.map(hiddenGuess),
@@ -247,6 +277,7 @@ export type RoomPatchChanges = {
     removed?: string[];
   };
   spectatorCount?: number;
+  rematchInvite?: PublicRoom['rematchInvite'];
 };
 
 const publicRoomCache = new WeakMap<StoredRoom, {
@@ -275,7 +306,7 @@ export function emitRoomViews<T>(
   event: string,
   payload: (viewerKey: string) => T
 ): void {
-  for (const player of room.players) {
+  for (const player of room.players.filter((candidate) => !candidate.eliminated)) {
     io.to(identityChannel(player.key)).emit(event, payload(player.key));
   }
   if (room.spectators.length) {
@@ -285,7 +316,7 @@ export function emitRoomViews<T>(
 }
 
 export function emitRoomPatch(io: Server, room: StoredRoom, changes: RoomPatchChanges): void {
-  const channels = [...room.players, ...room.spectators]
+  const channels = [...room.players.filter((player) => !player.eliminated), ...room.spectators]
     .map((member) => identityChannel(member.key));
   if (!channels.length) return;
   io.to(channels).emit('room:patch', {

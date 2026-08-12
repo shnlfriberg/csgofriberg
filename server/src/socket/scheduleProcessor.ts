@@ -11,7 +11,7 @@ import {
   withRoomLock,
 } from '../services/roomStore';
 import { FINISHED_ROOM_TTL_MS } from './constants';
-import { appendReplayRound, persistMatch } from './matchLifecycle';
+import { appendReplayRound, eliminatePlayer, persistMatch } from './matchLifecycle';
 import { cleanupRoom } from './roomMaintenance';
 import { finishRound, startRound } from './roundLifecycle';
 import {
@@ -53,6 +53,10 @@ async function processDisconnectedPlayer(
 
     if (room.gameMode === 'relay') {
       return { kind: 'relay_abort' as const, room };
+    }
+
+    if (room.gameMode === 'classic' && room.maxPlayers > 2) {
+      return { kind: 'classic_eliminate' as const, room };
     }
 
     const opponent = room.players.find((player) => player.key !== disconnectedKey);
@@ -114,6 +118,11 @@ async function processDisconnectedPlayer(
       playerKey: disconnectedKey,
       serverNow: Date.now(),
     });
+    return null;
+  }
+  if (result.kind === 'classic_eliminate') {
+    await eliminatePlayer(io, roomId, disconnectedKey, 'disconnect_timeout');
+    await clearIdentityRoom(disconnectedKey, roomId);
     return null;
   }
 

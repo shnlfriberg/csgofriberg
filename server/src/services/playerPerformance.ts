@@ -112,7 +112,9 @@ async function loadPlayerPerformance(identity: StoredIdentity) {
     const opponent = participants.find((participant) => participant.player_key !== identity.key);
     const hasWinner = participants.some((participant) => Boolean(participant.is_winner));
     const myScore = Number(row.my_score ?? 0);
-    const opponentScore = Number(opponent?.score ?? 0);
+    const opponentScore = Math.max(0, ...participants
+      .filter((participant) => participant.player_key !== identity.key)
+      .map((participant) => Number(participant.score ?? 0)));
     return {
       id: Number(row.id),
       result: row.winner_key === identity.key || Boolean(row.my_is_winner)
@@ -123,7 +125,12 @@ async function loadPlayerPerformance(identity: StoredIdentity) {
       score: { me: myScore, opponent: opponentScore },
       boType: Number(row.bo_type),
       dbType: String(row.db_type),
-      opponentDisplayId: String(opponent?.player_name || opponent?.player_key || '-'),
+      opponentDisplayId: participants.length > 2
+        ? participants
+            .filter((participant) => participant.player_key !== identity.key)
+            .map((participant) => String(participant.player_name || participant.player_key || '-'))
+            .join(' / ')
+        : String(opponent?.player_name || opponent?.player_key || '-'),
       finishedAt: isoDate(row.created_at),
       rounds: rounds.map((round, index) => ({
         round: Number(round.round) || index + 1,

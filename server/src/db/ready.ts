@@ -51,6 +51,8 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'match_id',
     'player_key',
     'is_winner',
+    'is_eliminated',
+    'elimination_reason',
     'winning_guess_sum',
     'winning_rounds',
   ],

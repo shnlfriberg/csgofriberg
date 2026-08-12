@@ -31,6 +31,13 @@ export interface SocketLifecycle {
     reason: string,
     actor?: { key: string; socketId: string }
   ): Promise<'finished' | 'stale' | 'ignored'>;
+  eliminatePlayer(
+    io: Server,
+    roomId: string,
+    playerKey: string,
+    reason: 'player_left' | 'disconnect_timeout',
+    socketId?: string
+  ): Promise<'eliminated' | 'finished' | 'stale' | 'ignored'>;
   startRound(io: Server, roomId: string): Promise<boolean>;
   finishRound(
     io: Server,

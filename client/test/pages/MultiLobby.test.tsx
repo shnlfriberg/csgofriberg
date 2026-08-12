@@ -57,6 +57,7 @@ describe('MultiLobby matchmaking', () => {
     const easyButtons = await screen.findAllByRole('button', { name: '简单版' });
     await user.click(easyButtons[0]);
     await user.click(screen.getByRole('button', { name: 'BO5' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: '房间人数上限' }), '4');
     await user.click(screen.getByRole('checkbox', { name: '允许观战' }));
     await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
     expect(screen.getByRole('group')).not.toHaveAttribute('open');
@@ -74,6 +75,7 @@ describe('MultiLobby matchmaking', () => {
         totalRounds: 3,
         createDifficulty: 'easy',
         boType: 5,
+        maxPlayers: 4,
         allowSpectators: true,
         verifiedEmailOnly: true,
         maxGuesses: 12,
@@ -88,6 +90,7 @@ describe('MultiLobby matchmaking', () => {
     expect(restoredEasyButtons[0]).toHaveClass('active');
     expect(restoredEasyButtons[1]).toHaveClass('active');
     expect(screen.getByRole('button', { name: 'BO5' })).toHaveClass('active');
+    expect(screen.getByRole('combobox', { name: '房间人数上限' })).toHaveValue('4');
     expect(screen.getByRole('checkbox', { name: '允许观战' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' })).toBeChecked();
     await user.click(screen.getByText('更多设置'));

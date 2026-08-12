@@ -91,8 +91,19 @@ export default function ReplayDialog({
   const titleId = useId();
   const [roundIndex, setRoundIndex] = useState(0);
   const [showOpponentStats, setShowOpponentStats] = useState(false);
+  const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
   const roundCount = replay.type === 'multi' ? replay.rounds.length : 0;
   const activeRound = replay.type === 'multi' ? replay.rounds[roundIndex] : null;
+  const multiParticipants = replay.type === 'multi' ? replay.participants ?? [] : [];
+  const multiPlayerRounds = replay.type === 'multi' && activeRound?.players
+    ? activeRound.players.map((roundPlayer) => ({
+        ...roundPlayer,
+        participant: multiParticipants.find((participant) => participant.id === roundPlayer.participantId),
+      }))
+    : [];
+  const selectedRoundPlayer = multiPlayerRounds.find(
+    (roundPlayer) => roundPlayer.participantId === selectedParticipantId
+  ) ?? multiPlayerRounds.find((roundPlayer) => roundPlayer.participant?.isMe) ?? multiPlayerRounds[0];
   const opponentStatsOpen = Boolean(showOpponentStats && opponentStats && replay.type === 'multi');
   const opponentStatsOpenRef = useRef(opponentStatsOpen);
   opponentStatsOpenRef.current = opponentStatsOpen;
@@ -100,7 +111,17 @@ export default function ReplayDialog({
   useEffect(() => {
     setRoundIndex(0);
     setShowOpponentStats(false);
+    setSelectedParticipantId(null);
   }, [replay.id, replay.type]);
+
+  useEffect(() => {
+    if (!multiPlayerRounds.length) return;
+    if (multiPlayerRounds.some((roundPlayer) => roundPlayer.participantId === selectedParticipantId)) return;
+    setSelectedParticipantId(
+      multiPlayerRounds.find((roundPlayer) => roundPlayer.participant?.isMe)?.participantId
+        ?? multiPlayerRounds[0].participantId
+    );
+  }, [multiPlayerRounds, selectedParticipantId]);
 
   useEffect(() => {
     const oldOverflow = document.body.style.overflow;
@@ -148,13 +169,15 @@ export default function ReplayDialog({
                   : t('replay.multiSummary', {
                     mode: difficultyLabel(t, replay.mode),
                     bo: replay.gameMode === 'relay' ? replay.totalRounds : replay.boType,
-                    opponent: replay.opponent.displayId,
+                    opponent: replay.opponent?.displayId ?? t('stats.unknownOpponent'),
                     result: replay.result === 'cooperative'
                       ? t('multi.relayProgress', { solved: replay.relaySolvedRounds ?? 0, total: replay.totalRounds ?? 0 })
                       : replay.result === 'won' ? t('common.win') : replay.result === 'lost' ? t('common.loss') : t('common.draw'),
                     score: replay.gameMode === 'relay'
                       ? `${replay.relaySolvedRounds ?? 0}/${replay.totalRounds ?? 0}`
-                      : `${replay.me.score}:${replay.opponent.score}`,
+                      : replay.participants?.length
+                        ? replay.participants.map((participant) => `${participant.isMe ? t('common.me') : participant.displayId} ${participant.score}`).join(' · ')
+                        : `${replay.me.score}:${replay.opponent?.score ?? 0}`,
                   })}
               </p>
             </div>
@@ -196,7 +219,7 @@ export default function ReplayDialog({
                             rowAnnotations={activeRound.sharedGuesses.map((guess) => {
                               const label = guess.actor === 'me'
                                 ? t('replay.mySide')
-                                : guess.actor === 'opponent' ? replay.opponent.displayId : '-';
+                                : guess.actor === 'opponent' ? replay.opponent?.displayId ?? '-' : '-';
                               return {
                                 content: label,
                                 title: label,
@@ -209,6 +232,32 @@ export default function ReplayDialog({
                           )}
                         </> : <p className="muted">{t('replay.noRoundGuesses')}</p>}
                       </div>
+                    ) : multiPlayerRounds.length > 2 && selectedRoundPlayer ? (
+                      <div className="replay-multi-player-layout">
+                        <div className="replay-participant-list" role="tablist" aria-label={t('multi.otherPlayers')}>
+                          {multiPlayerRounds.map(({ participantId, participant }) => (
+                            <button
+                              type="button"
+                              role="tab"
+                              aria-selected={selectedRoundPlayer.participantId === participantId}
+                              className={selectedRoundPlayer.participantId === participantId ? 'active' : ''}
+                              key={participantId}
+                              onClick={() => setSelectedParticipantId(participantId)}
+                            >
+                              <span>{participant?.isMe ? t('common.me') : participant?.displayId ?? '-'}</span>
+                              <strong>{participant?.score ?? 0}</strong>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="replay-side">
+                          <h4><User size={15} />{selectedRoundPlayer.participant?.isMe
+                            ? t('replay.mySide')
+                            : selectedRoundPlayer.participant?.displayId ?? '-'}</h4>
+                          {selectedRoundPlayer.guesses.length
+                            ? <><GuessBoard guesses={selectedRoundPlayer.guesses} />{showDecisionTimes && <DecisionTimes values={selectedRoundPlayer.guessTimes} />}</>
+                            : <p className="muted">{t('replay.noRoundGuesses')}</p>}
+                        </div>
+                      </div>
                     ) : <div className="replay-sides">
                       <div className="replay-side">
                         <h4><User size={15} />{t('replay.mySide')}</h4>
@@ -219,12 +268,12 @@ export default function ReplayDialog({
                       <div className="replay-side">
                         <h4>
                           <Swords size={15} />
-                          <span>{replay.opponent.displayId}</span>
+                          <span>{replay.opponent?.displayId ?? t('stats.unknownOpponent')}</span>
                           {onViewOpponentStats && (
                             <button
                               type="button"
                               className="player-stats-trigger"
-                              aria-label={t('multi.viewPlayerStats', { player: replay.opponent.displayId })}
+                              aria-label={t('multi.viewPlayerStats', { player: replay.opponent?.displayId ?? '' })}
                               title={t('multi.viewStats')}
                               disabled={opponentStatsLoading}
                               onClick={() => {
@@ -262,7 +311,7 @@ export default function ReplayDialog({
       </ModalPortal>
       {opponentStatsOpen && opponentStats && replay.type === 'multi' && (
         <PlayerStatsDialog
-          view={{ displayId: replay.opponent.displayId, stats: opponentStats }}
+          view={{ displayId: replay.opponent?.displayId ?? t('stats.unknownOpponent'), stats: opponentStats }}
           onClose={() => setShowOpponentStats(false)}
         />
       )}

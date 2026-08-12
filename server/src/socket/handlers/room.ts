@@ -156,6 +156,7 @@ export async function handleRoomCreate(
     boType,
     gameMode,
     totalRounds,
+    maxPlayers: gameMode === 'classic' ? payload.maxPlayers : 2,
     currentTurnKey: null,
     relaySolvedRounds: 0,
     relayGuesses: [],
@@ -163,6 +164,8 @@ export async function handleRoomCreate(
     guessIntervalMs: payload.guessIntervalMs,
     rematchAllowed: true,
     rematchInviterKey: null,
+    rematchAcceptedKeys: [],
+    rematchRequiredKeys: [],
     allowSpectators: payload.allowSpectators,
     verifiedOnly: payload.verifiedOnly,
     anonymous: payload.anonymous,
@@ -229,6 +232,7 @@ export async function handleRoomJoin(
     if (room.status === 'finished') return { code: 'ROOM_NOT_FOUND' };
     const player = room.players.find((candidate) => candidate.key === me.key);
     if (player) {
+      if (player.eliminated) return { code: 'PLAYER_ELIMINATED' };
       if (player.connected && player.socketId !== socket.id) {
         return { code: 'STALE_CONNECTION' };
       }
@@ -242,7 +246,7 @@ export async function handleRoomJoin(
       return { code: 'ROOM_VERIFIED_EMAIL_ONLY' };
     }
     const asSpectator = Boolean(
-      existingSpectator || payload.spectate || room.status !== 'waiting' || room.players.length >= 2
+      existingSpectator || payload.spectate || room.status !== 'waiting' || room.players.length >= room.maxPlayers
     );
     if (asSpectator) {
       if (!existingSpectator && !room.allowSpectators) return { code: 'SPECTATING_DISABLED' };
@@ -374,6 +378,8 @@ export async function handleRoomLeave(
       const cancelledInvite = locked.rematchInviterKey !== null;
       player.connected = false;
       locked.rematchInviterKey = null;
+      locked.rematchAcceptedKeys = [];
+      locked.rematchRequiredKeys = [];
       return { room: locked, cancelledInvite };
     }, (value) => Boolean(value && !('stale' in value)));
     if (left && 'stale' in left) {
@@ -484,15 +490,16 @@ export async function handleRoomLeave(
       ack?.({ ok: true });
       return;
     }
-    const opponent = room.players.find((candidate) => candidate.key !== me.key);
-    const finished = await lifecycle.finishMatch(
-      io,
-      room.id,
-      opponent?.key ?? null,
-      'opponent_left',
-      { key: me.key, socketId: socket.id }
-    );
-    if (finished === 'stale') {
+    const outcome = room.maxPlayers > 2
+      ? await lifecycle.eliminatePlayer(io, room.id, me.key, 'player_left', socket.id)
+      : await lifecycle.finishMatch(
+          io,
+          room.id,
+          room.players.find((candidate) => candidate.key !== me.key)?.key ?? null,
+          'opponent_left',
+          { key: me.key, socketId: socket.id }
+        );
+    if (outcome === 'stale') {
       ack?.({ code: 'STALE_CONNECTION' });
       return;
     }
