@@ -136,6 +136,30 @@ describe('desktop/mobile layout contracts', () => {
     expect(multiplayer).toMatch(/\.multi-lobby-join-card\s*\{\s*grid-area:\s*join/);
   });
 
+  it('keeps the room settings modal content in a full-width single column', () => {
+    const multiplayer = readCss('../../src/styles/home-multiplayer.css');
+    expect(multiplayer).toMatch(
+      /\.room-settings-dialog\s*\{[^}]*display:\s*block;[^}]*width:\s*min\(700px,\s*100%\)/s
+    );
+    expect(multiplayer).toMatch(
+      /\.room-settings-options\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/s
+    );
+    expect(multiplayer).toMatch(
+      /\.room-preset-control\s+\.input,\s*\.room-preset-control\s+\.btn\s*\{[^}]*height:\s*46px;[^}]*min-height:\s*46px/s
+    );
+    expect(multiplayer).toMatch(
+      /\.room-preset-section\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*1\.25fr\)/s
+    );
+
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(
+      /\.room-settings-dialog\s*\{[^}]*max-height:\s*calc\(100dvh - 20px\)/s
+    );
+    expect(responsive).toMatch(
+      /\.room-settings-options\s*\{[^}]*grid-template-columns:\s*1fr/s
+    );
+  });
+
   it('centers a single answer overlay action on mobile', () => {
     const responsive = readCss('../../src/styles/responsive.css');
     expect(responsive).toMatch(

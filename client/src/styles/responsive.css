@@ -298,7 +298,14 @@
   .spectator-option { margin-left: 0; }
   .room-create-options { margin-left: 0; }
   .room-more-settings { margin-left: 0; }
+  .room-more-settings-button { margin-left: 0; width: 100%; justify-content: center; }
   .room-more-settings-fields { grid-template-columns: 1fr; }
+  .room-settings-dialog { width: 100%; max-height: calc(100dvh - 20px); padding: 18px 16px; }
+  .room-settings-options { grid-template-columns: 1fr; margin-block: 12px 16px; }
+  .room-preset-section { grid-template-columns: 1fr; gap: 12px; margin-block: 12px 16px; }
+  .room-preset-save-control .btn { min-width: 104px; padding-inline: 12px; }
+  .room-settings-dialog .confirm-actions { display: block; }
+  .room-settings-dialog .confirm-actions .btn { width: 100%; }
   .join-room-form { grid-template-columns: 1fr 1fr; }
   .join-room-form .input { grid-column: 1 / -1; }
   .join-room-form .btn { width: 100%; }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   Globe,
@@ -12,7 +12,8 @@ import {
   XCircle,
   Eye,
   Settings2,
-  ChevronDown,
+  Save,
+  Trash2,
 } from 'lucide-react';
 import Page from '../components/Page';
 import { getSocket } from '../api/socket';
@@ -26,6 +27,9 @@ import { difficultyLabel } from '../utils/difficulty';
 import {
   loadMultiLobbyPreferences,
   saveMultiLobbyPreferences,
+  loadMultiLobbyPresets,
+  saveMultiLobbyPresets,
+  MultiLobbyPreset,
   MAX_MULTI_GUESS_INTERVAL_SECONDS,
   MAX_MULTI_MAX_GUESSES,
   MAX_MULTI_ROUND_DURATION_SECONDS,
@@ -34,6 +38,7 @@ import {
   MIN_MULTI_ROUND_DURATION_SECONDS,
 } from '../store/multiLobbyPreferences';
 import { useAuth } from '../store/auth';
+import ModalPortal from '../components/ModalPortal';
 
 type DbType = string;
 const BO_OPTIONS = [1, 3, 5, 7];
@@ -84,6 +89,15 @@ export default function MultiLobby() {
   const [initialPreferences] = useState(() =>
     loadMultiLobbyPreferences(difficultyKeys, defaultDifficulty)
   );
+  const [presets, setPresets] = useState<MultiLobbyPreset[]>(() =>
+    loadMultiLobbyPresets(difficultyKeys, defaultDifficulty)
+  );
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const [selectedPresetName, setSelectedPresetName] = useState('');
+  const settingsCloseRef = useRef<HTMLButtonElement>(null);
+  const presetSelectId = useId();
+  const presetNameId = useId();
   const [dbType, setDbType] = useState<DbType>(initialPreferences.createDifficulty);
   const [gameMode, setGameMode] = useState<'classic' | 'relay'>(initialPreferences.gameMode);
   const [totalRounds, setTotalRounds] = useState(initialPreferences.totalRounds);
@@ -143,6 +157,75 @@ export default function MultiLobby() {
     && parsedRoundDuration >= MIN_MULTI_ROUND_DURATION_SECONDS
     && parsedRoundDuration <= MAX_MULTI_ROUND_DURATION_SECONDS;
   const advancedSettingsValid = maxGuessesValid && guessIntervalValid && roundDurationValid;
+
+  const currentPreset: Omit<MultiLobbyPreset, 'name'> = {
+    gameMode,
+    totalRounds,
+    createDifficulty: dbType,
+    boType,
+    maxPlayers,
+    allowSpectators,
+    verifiedEmailOnly,
+    maxGuesses,
+    guessIntervalSeconds,
+    roundDurationSeconds,
+  };
+  const selectedPreset = presets.find((preset) => preset.name === selectedPresetName);
+  const selectedPresetValue = selectedPreset?.name ?? '';
+
+  const applyPreset = (preset: MultiLobbyPreset) => {
+    setSelectedPresetName(preset.name);
+    setPresetName(preset.name);
+    setGameMode(preset.gameMode);
+    setTotalRounds(preset.totalRounds);
+    setDbType(preset.createDifficulty);
+    setBoType(preset.boType);
+    setMaxPlayers(preset.maxPlayers);
+    setAllowSpectators(preset.allowSpectators);
+    setVerifiedEmailOnly(preset.verifiedEmailOnly);
+    setMaxGuesses(preset.maxGuesses);
+    setGuessIntervalSeconds(preset.guessIntervalSeconds);
+    setRoundDurationSeconds(preset.roundDurationSeconds);
+    setMaxGuessesDraft(String(preset.maxGuesses));
+    setGuessIntervalDraft(String(preset.guessIntervalSeconds));
+    setRoundDurationDraft(String(preset.roundDurationSeconds));
+  };
+
+  const savePreset = () => {
+    const name = presetName.trim();
+    if (!name || !advancedSettingsValid) return;
+    const next = [...presets.filter((preset) => preset.name !== name), { name, ...currentPreset }];
+    setPresets(next);
+    saveMultiLobbyPresets(next);
+    setPresetName(name);
+    setSelectedPresetName(name);
+    toast.success(t('multi.presetSaved'));
+  };
+
+  const deletePreset = (name: string) => {
+    const next = presets.filter((preset) => preset.name !== name);
+    setPresets(next);
+    saveMultiLobbyPresets(next);
+    setSelectedPresetName('');
+    if (presetName === name) setPresetName('');
+  };
+
+  useEffect(() => {
+    if (!settingsOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    const oldOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    settingsCloseRef.current?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSettingsOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.body.style.overflow = oldOverflow;
+      document.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus();
+    };
+  }, [settingsOpen]);
 
   useEffect(() => {
     const cooldownUntil = Number(
@@ -542,31 +625,89 @@ export default function MultiLobby() {
                 </select>
               </label>
             )}
-            <div className="room-create-options">
-              <label className="spectator-option">
-                <input
-                  type="checkbox"
-                  checked={allowSpectators}
-                  onChange={(event) => setAllowSpectators(event.target.checked)}
-                />
-                <span>{t('multi.allowSpectating')}</span>
-              </label>
-              <label className="spectator-option">
-                <input
-                  type="checkbox"
-                  checked={verifiedEmailOnly}
-                  onChange={(event) => setVerifiedEmailOnly(event.target.checked)}
-                />
-                <span>{t('multi.verifiedRoomOnly')}</span>
-              </label>
-            </div>
-            <details className="room-more-settings">
-              <summary>
-                <Settings2 size={16} aria-hidden="true" />
-                <span>{t('multi.moreSettings')}</span>
-                <ChevronDown className="room-more-settings-chevron" size={16} aria-hidden="true" />
-              </summary>
-              <div className="room-more-settings-fields">
+            <button className="btn btn-ghost room-more-settings-button" type="button" onClick={() => setSettingsOpen(true)}>
+              <Settings2 size={16} aria-hidden="true" />
+              {t('multi.moreSettings')}
+            </button>
+            {settingsOpen && (
+              <ModalPortal>
+                <div className="confirm-backdrop room-settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
+                  <div className="confirm-dialog room-settings-dialog" role="dialog" aria-modal="true" aria-labelledby="room-settings-title">
+                    <div className="confirm-content">
+                      <div className="confirm-heading">
+                        <h2 id="room-settings-title">{t('multi.roomSettings')}</h2>
+                        <button ref={settingsCloseRef} className="confirm-close" type="button" aria-label={t('common.close')} onClick={() => setSettingsOpen(false)}>
+                          <XCircle size={18} />
+                        </button>
+                      </div>
+                      <div className="room-preset-section">
+                        <div className="room-preset-field">
+                          <label htmlFor={presetSelectId}>{t('multi.presetSelect')}</label>
+                          <span className="room-preset-control">
+                            <select
+                              id={presetSelectId}
+                              className="input"
+                              value={selectedPresetValue}
+                              disabled={presets.length === 0}
+                              onChange={(event) => {
+                                const selected = presets.find(
+                                  (preset) => preset.name === event.currentTarget.value
+                                );
+                                if (selected) applyPreset(selected);
+                              }}
+                            >
+                              <option value="">{t('multi.presetChoose')}</option>
+                              {presets.map((preset) => (
+                                <option key={preset.name} value={preset.name}>{preset.name}</option>
+                              ))}
+                            </select>
+                            <button
+                              className="btn btn-ghost room-preset-icon-button"
+                              type="button"
+                              aria-label={selectedPreset
+                                ? `${t('multi.deletePreset')}: ${selectedPreset.name}`
+                                : t('multi.deletePreset')}
+                              title={t('multi.deletePreset')}
+                              disabled={!selectedPresetValue}
+                              onClick={() => {
+                                if (selectedPresetValue) deletePreset(selectedPresetValue);
+                              }}
+                            >
+                              <Trash2 size={17} aria-hidden="true" />
+                            </button>
+                          </span>
+                        </div>
+                        <div className="room-preset-field">
+                          <label htmlFor={presetNameId}>{t('multi.presetName')}</label>
+                          <span className="room-preset-control room-preset-save-control">
+                            <input
+                              id={presetNameId}
+                              className="input"
+                              placeholder={t('multi.presetName')}
+                              value={presetName}
+                              maxLength={40}
+                              onChange={(event) => setPresetName(event.currentTarget.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter') savePreset();
+                              }}
+                            />
+                            <button
+                              className="btn btn-ghost"
+                              type="button"
+                              onClick={savePreset}
+                              disabled={!presetName.trim() || !advancedSettingsValid}
+                            >
+                              <Save size={16} aria-hidden="true" />
+                              {t('multi.savePreset')}
+                            </button>
+                          </span>
+                        </div>
+                      </div>
+                      <div className="room-create-options room-settings-options">
+                        <label className="spectator-option"><input type="checkbox" checked={allowSpectators} onChange={(event) => setAllowSpectators(event.target.checked)} /><span>{t('multi.allowSpectating')}</span></label>
+                        <label className="spectator-option"><input type="checkbox" checked={verifiedEmailOnly} onChange={(event) => setVerifiedEmailOnly(event.target.checked)} /><span>{t('multi.verifiedRoomOnly')}</span></label>
+                      </div>
+                      <div className="room-more-settings-fields">
                 <label className="room-number-setting">
                   <span>{t('multi.maxGuessesLabel')}</span>
                   <span className="room-number-input">
@@ -680,8 +821,13 @@ export default function MultiLobby() {
                     </span>
                   )}
                 </label>
-              </div>
-            </details>
+                      </div>
+                      <div className="confirm-actions"><button className="btn btn-accent" type="button" onClick={() => setSettingsOpen(false)}>{t('common.close')}</button></div>
+                    </div>
+                  </div>
+                </div>
+              </ModalPortal>
+            )}
             <div style={{ textAlign: 'center', marginTop: 14 }}>
               <button
                 className="btn btn-lg"

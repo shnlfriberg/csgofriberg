@@ -58,10 +58,9 @@ describe('MultiLobby matchmaking', () => {
     await user.click(easyButtons[0]);
     await user.click(screen.getByRole('button', { name: 'BO5' }));
     await user.selectOptions(screen.getByRole('combobox', { name: '房间人数上限' }), '4');
+    await user.click(screen.getByText('更多设置'));
     await user.click(screen.getByRole('checkbox', { name: '允许观战' }));
     await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
-    expect(screen.getByRole('group')).not.toHaveAttribute('open');
-    await user.click(screen.getByText('更多设置'));
     const maxGuesses = screen.getByRole('spinbutton', { name: '最大猜测次数' });
     const guessInterval = screen.getByRole('spinbutton', { name: '猜测间隔' });
     const roundDuration = screen.getByRole('spinbutton', { name: '最大猜测时间' });
@@ -94,9 +93,9 @@ describe('MultiLobby matchmaking', () => {
     expect(restoredEasyButtons[1]).toHaveClass('active');
     expect(screen.getByRole('button', { name: 'BO5' })).toHaveClass('active');
     expect(screen.getByRole('combobox', { name: '房间人数上限' })).toHaveValue('4');
+    await user.click(screen.getByText('更多设置'));
     expect(screen.getByRole('checkbox', { name: '允许观战' })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' })).toBeChecked();
-    await user.click(screen.getByText('更多设置'));
     expect(screen.getByRole('spinbutton', { name: '最大猜测次数' })).toHaveValue(12);
     expect(screen.getByRole('spinbutton', { name: '猜测间隔' })).toHaveValue(2.5);
     expect(screen.getByRole('spinbutton', { name: '最大猜测时间' })).toHaveValue(300);
@@ -118,6 +117,45 @@ describe('MultiLobby matchmaking', () => {
       .toMatchObject({ gameMode: 'relay', totalRounds: 5 });
   });
 
+  it('saves, selects, updates, and deletes named browser presets', async () => {
+    const user = userEvent.setup();
+    renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
+
+    await user.click(screen.getByText('更多设置'));
+    const presetSelect = screen.getByRole('combobox', { name: '选择预设' });
+    const presetName = screen.getByRole('textbox', { name: '预设名称' });
+    const savePreset = screen.getByRole('button', { name: '保存预设' });
+
+    expect(presetSelect).toBeDisabled();
+    await user.type(presetName, '比赛规则');
+    await user.click(savePreset);
+
+    expect(presetSelect).toBeEnabled();
+    expect(presetSelect).toHaveValue('比赛规则');
+    expect(presetName).toHaveValue('比赛规则');
+    expect(JSON.parse(localStorage.getItem('csgofriberg.multi-lobby-presets') ?? '[]'))
+      .toEqual([expect.objectContaining({ name: '比赛规则', maxGuesses: 8 })]);
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: '最大猜测次数' }), {
+      target: { value: '12' },
+    });
+    expect(presetSelect).toHaveValue('比赛规则');
+    await user.click(savePreset);
+    expect(JSON.parse(localStorage.getItem('csgofriberg.multi-lobby-presets') ?? '[]'))
+      .toEqual([expect.objectContaining({ name: '比赛规则', maxGuesses: 12 })]);
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: '最大猜测次数' }), {
+      target: { value: '5' },
+    });
+    await user.selectOptions(presetSelect, '比赛规则');
+    expect(screen.getByRole('spinbutton', { name: '最大猜测次数' })).toHaveValue(12);
+
+    await user.click(screen.getByRole('button', { name: '删除预设: 比赛规则' }));
+    expect(presetSelect).toBeDisabled();
+    expect(presetName).toHaveValue('');
+    expect(localStorage.getItem('csgofriberg.multi-lobby-presets')).toBe('[]');
+  });
+
   it('requires a verified email before starting quick match', () => {
     useAuth.setState({
       user: { id: 8, username: 'unverified-user', role: 'user', email: 'unverified@example.com', emailVerified: false },
@@ -133,8 +171,8 @@ describe('MultiLobby matchmaking', () => {
     const user = userEvent.setup();
     renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
 
-    await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
     await user.click(screen.getByText('更多设置'));
+    await user.click(screen.getByRole('checkbox', { name: '仅允许已验证邮箱用户加入' }));
     const maxGuesses = screen.getByRole('spinbutton', { name: '最大猜测次数' });
     const guessInterval = screen.getByRole('spinbutton', { name: '猜测间隔' });
     const roundDuration = screen.getByRole('spinbutton', { name: '最大猜测时间' });

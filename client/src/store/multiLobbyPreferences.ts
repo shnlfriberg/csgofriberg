@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'csgofriberg.multi-lobby-preferences';
+const PRESETS_STORAGE_KEY = 'csgofriberg.multi-lobby-presets';
 const BO_OPTIONS = new Set([1, 3, 5, 7]);
 export const DEFAULT_MULTI_MAX_GUESSES = 8;
 export const MIN_MULTI_MAX_GUESSES = 2;
@@ -22,6 +23,63 @@ export interface MultiLobbyPreferences {
   guessIntervalSeconds: number;
   roundDurationSeconds: number;
   matchmakingDifficulty: string;
+}
+
+export interface MultiLobbyPreset {
+  name: string;
+  gameMode: 'classic' | 'relay';
+  totalRounds: number;
+  createDifficulty: string;
+  boType: number;
+  maxPlayers: number;
+  allowSpectators: boolean;
+  verifiedEmailOnly: boolean;
+  maxGuesses: number;
+  guessIntervalSeconds: number;
+  roundDurationSeconds: number;
+}
+
+function isValidPreset(value: unknown, availableDifficulties: readonly string[]): value is MultiLobbyPreset {
+  if (!value || typeof value !== 'object') return false;
+  const preset = value as Partial<MultiLobbyPreset>;
+  return typeof preset.name === 'string' && preset.name.trim().length > 0
+    && preset.name.length <= 40
+    && (preset.gameMode === 'classic' || preset.gameMode === 'relay')
+    && typeof preset.totalRounds === 'number' && BO_OPTIONS.has(preset.totalRounds)
+    && typeof preset.createDifficulty === 'string' && availableDifficulties.includes(preset.createDifficulty)
+    && typeof preset.boType === 'number' && BO_OPTIONS.has(preset.boType)
+    && Number.isInteger(preset.maxPlayers) && Number(preset.maxPlayers) >= 2 && Number(preset.maxPlayers) <= 8
+    && typeof preset.allowSpectators === 'boolean'
+    && typeof preset.verifiedEmailOnly === 'boolean'
+    && Number.isInteger(preset.maxGuesses) && Number(preset.maxGuesses) >= MIN_MULTI_MAX_GUESSES && Number(preset.maxGuesses) <= MAX_MULTI_MAX_GUESSES
+    && typeof preset.guessIntervalSeconds === 'number' && Number.isFinite(preset.guessIntervalSeconds)
+    && preset.guessIntervalSeconds >= MIN_MULTI_GUESS_INTERVAL_SECONDS && preset.guessIntervalSeconds <= MAX_MULTI_GUESS_INTERVAL_SECONDS
+    && Number.isInteger(preset.roundDurationSeconds)
+    && Number(preset.roundDurationSeconds) >= MIN_MULTI_ROUND_DURATION_SECONDS && Number(preset.roundDurationSeconds) <= MAX_MULTI_ROUND_DURATION_SECONDS;
+}
+
+export function loadMultiLobbyPresets(
+  availableDifficulties: readonly string[],
+  _fallbackDifficulty: string,
+): MultiLobbyPreset[] {
+  try {
+    const raw = localStorage.getItem(PRESETS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((item) => isValidPreset(item, availableDifficulties))
+      .map((item) => ({ ...item, name: item.name.trim() }));
+  } catch {
+    return [];
+  }
+}
+
+export function saveMultiLobbyPresets(presets: readonly MultiLobbyPreset[]): void {
+  try {
+    localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+  } catch {
+    // Presets are optional; the lobby remains usable when storage is unavailable.
+  }
 }
 
 export function loadMultiLobbyPreferences(
