@@ -32,6 +32,24 @@ describe('desktop/mobile layout contracts', () => {
     );
   });
 
+  it('keeps decorative theme surfaces static while preserving finite entrance motion', () => {
+    const blastFoundation = readCss('../../src/styles/themes/blast-foundation.css');
+    const blastPages = readCss('../../src/styles/themes/blast-pages.css');
+    const light = readCss('../../src/styles/themes/light.css');
+    const blastBackdrop = /body::before\s*\{[^}]*\}/s.exec(blastFoundation)?.[0] ?? '';
+    const lightBackdrop = /body::before\s*\{[^}]*\}/s.exec(light)?.[0] ?? '';
+
+    expect(blastBackdrop).toMatch(/inset:\s*0;[\s\S]*radial-gradient/);
+    expect(blastBackdrop).not.toMatch(/animation:|will-change:|filter:\s*blur/);
+    expect(blastFoundation).not.toMatch(/ambient-drift|neon-pulse/);
+    expect(blastPages).not.toMatch(/hero-orbit|hero-beam/);
+    expect(lightBackdrop).toMatch(/inset:\s*0;[\s\S]*radial-gradient/);
+    expect(lightBackdrop).not.toMatch(/animation:|will-change:|filter:\s*blur/);
+    expect(light).not.toMatch(/day-ambient-drift|day-beam-pulse|day-hero-orbit|day-hero-beam/);
+    expect(blastFoundation).toMatch(/\.page-scroll\s*>\s*\*\s*\{[^}]*animation:\s*surface-enter\s+0\.52s/s);
+    expect(light).toMatch(/\.page-scroll\s*>\s*\*\s*\{[^}]*animation:\s*day-surface-enter\s+0\.52s/s);
+  });
+
   it('caps single difficulty cards on wide screens and stacks actions on mobile', () => {
     const home = readCss('../../src/styles/home-multiplayer.css');
     expect(home).toMatch(

@@ -40,16 +40,13 @@ body {
 
 body::before {
   position: fixed;
-  inset: -25vmax;
+  inset: 0;
   z-index: 0;
   content: '';
   pointer-events: none;
   background:
-    radial-gradient(circle at 28% 34%, rgba(217, 255, 63, 0.055), transparent 18%),
-    radial-gradient(circle at 72% 62%, rgba(162, 129, 255, 0.09), transparent 22%);
-  filter: blur(18px);
-  animation: ambient-drift 18s ease-in-out infinite alternate;
-  will-change: transform;
+    radial-gradient(circle at 28% 34%, rgba(217, 255, 63, 0.045), transparent 26%),
+    radial-gradient(circle at 72% 62%, rgba(162, 129, 255, 0.075), transparent 30%);
 }
 
 #root {
@@ -58,19 +55,9 @@ body::before {
   isolation: isolate;
 }
 
-@keyframes ambient-drift {
-  0% { transform: translate3d(-2%, -1%, 0) rotate(-2deg) scale(1); }
-  100% { transform: translate3d(3%, 2%, 0) rotate(3deg) scale(1.08); }
-}
-
 @keyframes surface-enter {
   from { opacity: 0; transform: translate3d(0, 16px, 0); }
   to { opacity: 1; transform: translate3d(0, 0, 0); }
-}
-
-@keyframes neon-pulse {
-  0%, 100% { opacity: 0.65; filter: brightness(0.9); }
-  50% { opacity: 1; filter: brightness(1.18); }
 }
 
 @keyframes urgent-pulse {
@@ -123,7 +110,6 @@ body::before {
   content: '';
   background: var(--primary);
   box-shadow: 0 0 20px rgba(217, 255, 63, 0.55);
-  animation: neon-pulse 2.8s ease-in-out infinite;
 }
 
 .header-bar .title {
@@ -249,7 +235,6 @@ body::before {
   content: '';
   background: var(--primary);
   box-shadow: 0 0 18px rgba(217, 255, 63, 0.34);
-  animation: neon-pulse 3.4s ease-in-out infinite;
 }
 
 .card h3 {

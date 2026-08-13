@@ -29,7 +29,6 @@
   border: 1px solid rgba(217, 255, 63, 0.18);
   border-radius: 0;
   transform: rotate(45deg);
-  animation: hero-orbit 16s linear infinite;
 }
 
 .home-hero::after {
@@ -41,17 +40,8 @@
   border-radius: 0;
   background: var(--primary);
   box-shadow: 0 0 26px rgba(217, 255, 63, 0.42);
-  transform: skewX(-28deg);
-  animation: hero-beam 4.8s ease-in-out infinite;
-}
-
-@keyframes hero-orbit {
-  to { transform: rotate(405deg); }
-}
-
-@keyframes hero-beam {
-  0%, 100% { opacity: 0.48; translate: 12% 0; }
-  50% { opacity: 1; translate: -26% 0; }
+  opacity: 0.72;
+  transform: translateX(-8%) skewX(-28deg);
 }
 
 .hero-kicker {
