@@ -67,7 +67,9 @@ function createWorker(): WorkerState {
     else current.resolve(message.result as string | boolean);
     dispatch();
   });
-  worker.on('error', (err) => removeWorker(state, err));
+  worker.on('error', (err) => {
+    removeWorker(state, err instanceof Error ? err : new Error(String(err)));
+  });
   worker.on('exit', (code) => {
     if (!closing && code !== 0) removeWorker(state, new Error(`PASSWORD_WORKER_EXIT_${code}`));
     else removeWorker(state);
