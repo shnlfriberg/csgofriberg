@@ -290,19 +290,19 @@ function CompactFeedback({ feedback }: { feedback: MultiplayerGuessFeedback | un
 function CompactPlayers({
   players,
   room,
-  expandedKey,
+  expandedKeys,
   onToggle,
 }: {
   players: RoomPlayer[];
   room: RoomState;
-  expandedKey: string | null;
+  expandedKeys: ReadonlySet<string>;
   onToggle: (key: string) => void;
 }) {
   const { t } = useTranslation();
   return (
     <section className="compact-players" aria-label={t('multi.otherPlayers')}>
       {players.map((player, index) => {
-        const expanded = expandedKey === player.key;
+        const expanded = expandedKeys.has(player.key);
         const latest = player.guesses.at(-1);
         return (
           <div className={`compact-player${player.eliminated ? ' compact-player-eliminated' : ''}`} key={player.key}>
@@ -350,7 +350,7 @@ export default function MultiRoom() {
   const [matchOverVisible, setMatchOverVisible] = useState(false);
   const [relayAbort, setRelayAbort] = useState<RelayAbort | null>(null);
   const [replayRoundIndex, setReplayRoundIndex] = useState<number | null>(null);
-  const [expandedPlayerKey, setExpandedPlayerKey] = useState<string | null>(null);
+  const [expandedPlayerKeys, setExpandedPlayerKeys] = useState<Set<string>>(() => new Set());
   const [offlineNote, setOfflineNote] = useState('');
   const [showRoomCode, setShowRoomCode] = useState(false);
   const [myKey, setMyKey] = useState('');
@@ -1479,8 +1479,13 @@ export default function MultiRoom() {
             <CompactPlayers
               players={displayedCompactPlayers}
               room={room}
-              expandedKey={expandedPlayerKey}
-              onToggle={(key) => setExpandedPlayerKey((current) => current === key ? null : key)}
+              expandedKeys={expandedPlayerKeys}
+              onToggle={(key) => setExpandedPlayerKeys((current) => {
+                const next = new Set(current);
+                if (next.has(key)) next.delete(key);
+                else next.add(key);
+                return next;
+              })}
             />
           </div>
         ) : <div className="boards">

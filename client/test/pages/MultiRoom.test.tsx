@@ -268,7 +268,7 @@ describe('MultiRoom replay', () => {
       players: [
         { ...room.players[0], score: 1, guesses: [guess(10, 'My guess')], guessCount: 1 },
         { ...room.players[1], guesses: [guess(11, 'Opponent guess')], guessCount: 1 },
-        { key: 'g:third', name: 'Third Player', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [] },
+        { key: 'g:third', name: 'Third Player', ready: true, connected: true, score: 0, skipped: false, guessCount: 1, guesses: [guess(12, 'Third player guess')] },
       ],
     };
     socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
@@ -288,6 +288,40 @@ describe('MultiRoom replay', () => {
     expect(within(otherPlayers).getByRole('button', { name: /Third Player/ })).toBeInTheDocument();
     await user.click(within(otherPlayers).getByRole('button', { name: /Opponent/ }));
     expect(within(otherPlayers).getByText('Opponent guess')).toBeInTheDocument();
+    await user.click(within(otherPlayers).getByRole('button', { name: /Third Player/ }));
+    expect(within(otherPlayers).getByText('Opponent guess')).toBeInTheDocument();
+    expect(within(otherPlayers).getByText('Third player guess')).toBeInTheDocument();
+  });
+
+  it('lets spectators keep multiple player boards expanded in a large classic room', async () => {
+    const user = userEvent.setup();
+    const spectatorRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      maxPlayers: 3,
+      roundEndsAt: Date.now() + 60_000,
+      matchResult: null,
+      matchReplay: undefined,
+      players: [
+        { ...room.players[0], guesses: [guess(20, 'Me spectator guess')], guessCount: 1 },
+        { ...room.players[1], guesses: [guess(21, 'Opponent spectator guess')], guessCount: 1 },
+        { key: 'g:third', name: 'Third Player', ready: true, connected: true, score: 0, skipped: false, guessCount: 1, guesses: [guess(22, 'Third spectator guess')] },
+      ],
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: spectatorRoom, selfKey: 'g:spectator', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    const players = await screen.findByRole('region', { name: '其他玩家' });
+    await user.click(within(players).getByRole('button', { name: /Me/ }));
+    await user.click(within(players).getByRole('button', { name: /Opponent/ }));
+    expect(within(players).getByText('Me spectator guess')).toBeInTheDocument();
+    expect(within(players).getByText('Opponent spectator guess')).toBeInTheDocument();
   });
 
   it('uses the room guess interval without enforcing a fixed client minimum', () => {
