@@ -19,6 +19,8 @@ export const roomPlayerStatsPayloadSchema = z.object({
   playerKey: z.string().min(1).max(256),
 });
 
+export const roomStateProbePayloadSchema = z.object({}).strict();
+
 export const roomCreatePayloadSchema = z.object({
   dbType: difficultyKeySchema,
   gameMode: z.enum(['classic', 'relay']).default('classic'),

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GuessFeedback, PlayerInfo, RoomState } from '../../src/types';
 import { renderAtRoute } from '../render';
 import MultiLobby from '../../src/pages/MultiLobby';
-import MultiRoom, { resolveGuessCooldownMs } from '../../src/pages/MultiRoom';
+import MultiRoom, { relayStateProbeNeedsSync, resolveGuessCooldownMs } from '../../src/pages/MultiRoom';
 
 const socket = vi.hoisted(() => ({
   on: vi.fn(),
@@ -695,5 +695,167 @@ describe('MultiRoom replay', () => {
           .toHaveLength(attempt);
       });
     }
+  });
+
+  it('detects a relay turn mismatch from a lightweight state probe', () => {
+    const relayRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      gameMode: 'relay',
+      roundId: 1,
+      round: 1,
+      currentTurnKey: 'g:me',
+    };
+    expect(relayStateProbeNeedsSync(relayRoom, {
+      roomId: relayRoom.id,
+      roundId: relayRoom.roundId,
+      stateVersion: relayRoom.stateVersion,
+      status: 'playing',
+      gameMode: 'relay',
+      currentTurnKey: 'g:opponent',
+    })).toBe(true);
+    expect(relayStateProbeNeedsSync(relayRoom, {
+      roomId: relayRoom.id,
+      roundId: relayRoom.roundId,
+      stateVersion: relayRoom.stateVersion,
+      status: 'playing',
+      gameMode: 'relay',
+      currentTurnKey: 'g:me',
+    })).toBe(false);
+  });
+
+  it('syncs when a relay guess acknowledgement says the turn changed at the same revision', async () => {
+    const relayRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      gameMode: 'relay',
+      round: 1,
+      roundId: 1,
+      currentTurnKey: 'g:me',
+      relayGuesses: [],
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({ ...player, score: 0, guessCount: 0, guesses: [] })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relayRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    await screen.findByPlaceholderText('输入选手昵称...');
+    const syncCallsBefore = socket.emit.mock.calls.filter(([event]) => event === 'room:sync').length;
+    const handler = socket.on.mock.calls.find(([event]) => event === 'game:guess:applied')?.[1];
+    expect(handler).toEqual(expect.any(Function));
+    act(() => handler({
+      roomId: relayRoom.id,
+      roundId: relayRoom.roundId,
+      key: 'g:opponent',
+      stateVersion: relayRoom.stateVersion,
+      feedback: { hidden: true },
+      currentTurnKey: 'g:opponent',
+    }));
+    await waitFor(() => {
+      expect(socket.emit.mock.calls.filter(([event]) => event === 'room:sync').length)
+        .toBeGreaterThan(syncCallsBefore);
+    });
+  });
+
+  it('probes an active relay room, syncs only after a missed handoff, and cleans up its timer', async () => {
+    vi.useFakeTimers();
+    try {
+      const relayRoom: RoomState = {
+        ...room,
+        status: 'playing',
+        gameMode: 'relay',
+        round: 1,
+        roundId: 1,
+        currentTurnKey: 'g:me',
+        relayGuesses: [],
+        roundEndsAt: Date.now() + 60_000,
+        matchResult: null,
+        matchReplay: undefined,
+        players: room.players.map((player) => ({ ...player, score: 0, guessCount: 0, guesses: [] })),
+      };
+      let probes = 0;
+      socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+        const ack = args.at(-1);
+        if (event === 'room:sync' && typeof ack === 'function') {
+          ack({ room: relayRoom, selfKey: 'g:me', serverNow: Date.now() });
+        }
+        if (event === 'room:state-probe' && typeof ack === 'function') {
+          probes += 1;
+          ack({
+            roomId: relayRoom.id,
+            roundId: relayRoom.roundId,
+            stateVersion: probes === 1 ? relayRoom.stateVersion : relayRoom.stateVersion + 1,
+            status: relayRoom.status,
+            gameMode: 'relay',
+            currentTurnKey: probes === 1 ? 'g:me' : 'g:opponent',
+          });
+        }
+      });
+
+      const view = renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+      expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled();
+      const initialSyncCalls = socket.emit.mock.calls.filter(([event]) => event === 'room:sync').length;
+
+      await act(async () => vi.advanceTimersByTime(3_000));
+      expect(socket.emit.mock.calls.filter(([event]) => event === 'room:state-probe')).toHaveLength(1);
+      expect(socket.emit.mock.calls.filter(([event]) => event === 'room:sync')).toHaveLength(initialSyncCalls);
+
+      await act(async () => vi.advanceTimersByTime(3_000));
+      expect(socket.emit.mock.calls.filter(([event]) => event === 'room:state-probe')).toHaveLength(2);
+      expect(socket.emit.mock.calls.filter(([event]) => event === 'room:sync').length)
+        .toBeGreaterThan(initialSyncCalls);
+
+      const probeCallsBeforeUnmount = socket.emit.mock.calls
+        .filter(([event]) => event === 'room:state-probe').length;
+      view.unmount();
+      await act(async () => vi.advanceTimersByTime(10_000));
+      expect(socket.emit.mock.calls.filter(([event]) => event === 'room:state-probe'))
+        .toHaveLength(probeCallsBeforeUnmount);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it('synchronizes immediately when the server rejects a stale relay turn', async () => {
+    const user = userEvent.setup();
+    const relayRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      gameMode: 'relay',
+      round: 1,
+      roundId: 1,
+      currentTurnKey: 'g:me',
+      relayGuesses: [],
+      guessIntervalMs: 0,
+      roundEndsAt: Date.now() + 60_000,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({ ...player, score: 0, guessCount: 0, guesses: [] })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relayRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+      if (event === 'game:guess' && typeof ack === 'function') ack({ code: 'NOT_YOUR_TURN' });
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    const input = await screen.findByPlaceholderText('输入选手昵称...');
+    const initialSyncCalls = socket.emit.mock.calls.filter(([event]) => event === 'room:sync').length;
+    await user.type(input, 's1');
+    await screen.findByRole('option', { name: 's1mple' });
+    await user.click(screen.getByRole('button', { name: '提交猜测' }));
+
+    await waitFor(() => {
+      expect(socket.emit.mock.calls.filter(([event]) => event === 'room:sync').length)
+        .toBeGreaterThan(initialSyncCalls);
+    });
   });
 });

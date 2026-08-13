@@ -12,6 +12,15 @@ export type MatchmakingPool = 'restricted' | 'verified';
 export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'round_over' | 'finished';
 const MATCHMAKING_ENTRY_TTL_MS = 300_000;
 
+export interface RoomStateProbe {
+  roomId: string;
+  roundId: number;
+  stateVersion: number;
+  status: RoomStatus;
+  gameMode: GameMode;
+  currentTurnKey: string | null;
+}
+
 export interface StoredIdentity {
   key: string;
   userId: number | null;
@@ -434,6 +443,74 @@ export async function getRoomIdForIdentity(identity: string): Promise<string | n
   return client
     ? await client.get(identityKey(identity))
     : localIdentityRooms.get(identity) ?? null;
+}
+
+export async function getRoomStateProbeForIdentity(
+  identity: string
+): Promise<RoomStateProbe | null> {
+  const probeFromRoom = (room: StoredRoom | null, roomId: string): RoomStateProbe | null => {
+    if (!room || room.id !== roomId) return null;
+    if (![...room.players, ...room.spectators].some((member) => member.key === identity)) return null;
+    return {
+      roomId: room.id,
+      roundId: room.round,
+      stateVersion: room.revision,
+      status: room.status === 'starting' ? 'waiting' : room.status,
+      gameMode: room.gameMode === 'relay' ? 'relay' : 'classic',
+      currentTurnKey: room.currentTurnKey ?? null,
+    };
+  };
+  const client = stateRedis();
+  if (!client) {
+    const roomId = localIdentityRooms.get(identity);
+    const room = roomId ? localRooms.get(roomId) : undefined;
+    return probeFromRoom(room ? normalizeRoom(structuredClone(room)) : null, roomId ?? '');
+  }
+
+  const roomId = await client.get(identityKey(identity));
+  if (!roomId) return null;
+  const result = await client.multi()
+    .get(identityKey(identity))
+    .hmGet(roomMetaKey(roomId), [
+      'status',
+      'round',
+      'revision',
+      'gameMode',
+      'currentTurnKey',
+    ])
+    .hExists(roomPlayersKey(roomId), identity)
+    .hExists(roomSpectatorsKey(roomId), identity)
+    .exec();
+  const mappedRoomId = result?.[0] as unknown as string | null;
+  const meta = (result?.[1] ?? []) as unknown as Array<string | null>;
+  const isPlayer = Number(result?.[2]) === 1;
+  const isSpectator = Number(result?.[3]) === 1;
+  if (mappedRoomId !== roomId) return null;
+
+  const [statusRaw, roundRaw, revisionRaw, gameModeRaw, currentTurnKeyRaw] = meta;
+  const hotMember = isPlayer || isSpectator;
+  const roundId = Number(roundRaw);
+  const stateVersion = Number(revisionRaw);
+  if (
+    hotMember
+    && ['waiting', 'starting', 'playing', 'round_over', 'finished'].includes(statusRaw ?? '')
+    && Number.isInteger(roundId)
+    && roundId >= 0
+    && Number.isInteger(stateVersion)
+    && stateVersion >= 0
+  ) {
+    const status = statusRaw as RoomStatus;
+    return {
+      roomId,
+      roundId,
+      stateVersion,
+      status: status === 'starting' ? 'waiting' : status,
+      gameMode: gameModeRaw === 'relay' ? 'relay' : 'classic',
+      currentTurnKey: currentTurnKeyRaw || null,
+    };
+  }
+  // Legacy rooms may have the snapshot key but no hot metadata yet.
+  return probeFromRoom(await getRoom(roomId), roomId);
 }
 
 export interface ApplyRoomGuessInput {

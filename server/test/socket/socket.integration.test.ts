@@ -1041,14 +1041,17 @@ describe('multiplayer socket integration', () => {
     const stamp = Date.now();
     const tokenA = jwt.sign({ key: `relay-a-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
     const tokenB = jwt.sign({ key: `relay-b-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
+    const tokenC = jwt.sign({ key: `relay-c-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
     const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
     const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
+    const c = await connect(withPowCookie(`csgofriberg_guest=${tokenC}`));
     try {
       const created = await emit(a, 'room:create', {
         dbType: 'easy', gameMode: 'relay', totalRounds: 1, maxGuesses: 3, guessIntervalMs: 0,
       });
       createdRoomIds.push(created.room.id);
       expect(created.room).toMatchObject({ gameMode: 'relay', totalRounds: 1, relaySolvedRounds: 0 });
+      expect(await emit(c, 'room:state-probe')).toEqual({ code: 'NOT_IN_ROOM' });
       await emit(b, 'room:join', { roomId: created.room.id });
       await emit(b, 'room:ready', { ready: true });
       expect((await emit(a, 'game:start')).ok).toBe(true);
@@ -1059,6 +1062,20 @@ describe('multiplayer socket integration', () => {
       const firstSocket = first.key.endsWith(`relay-a-${stamp}`) ? a : b;
       const secondSocket = firstSocket === a ? b : a;
       const wrong = getDifficultyPlayers('easy').find((player) => player.id !== active!.targetPlayerId)!;
+
+      expect(await emit(firstSocket, 'room:state-probe')).toMatchObject({
+        roomId: created.room.id,
+        roundId: active!.round,
+        stateVersion: active!.revision,
+        status: 'playing',
+        gameMode: 'relay',
+        currentTurnKey: first.key,
+      });
+      let lastProbe: any;
+      for (let attempt = 0; attempt < 12; attempt += 1) {
+        lastProbe = await emit(firstSocket, 'room:state-probe');
+      }
+      expect(lastProbe).toEqual({ code: 'RATE_LIMITED' });
 
       expect((await emit(secondSocket, 'game:guess', {
         playerId: wrong.id, roundId: active!.round, eventId: `relay-wrong-turn-${stamp}`,
@@ -1081,6 +1098,13 @@ describe('multiplayer socket integration', () => {
         expect(applied.feedback.attributes).not.toHaveProperty('region');
       }
       expect((await getRoom(created.room.id))?.currentTurnKey).toBe(second.key);
+      expect(await emit(secondSocket, 'room:state-probe')).toMatchObject({
+        roomId: created.room.id,
+        roundId: active!.round,
+        status: 'playing',
+        gameMode: 'relay',
+        currentTurnKey: second.key,
+      });
       expect((await emit(secondSocket, 'game:guess', {
         playerId: wrong.id, roundId: active!.round, eventId: `relay-duplicate-${stamp}`,
       })).code).toBe('ALREADY_GUESSED');
@@ -1095,6 +1119,7 @@ describe('multiplayer socket integration', () => {
     } finally {
       a.disconnect();
       b.disconnect();
+      c.disconnect();
     }
   });
 

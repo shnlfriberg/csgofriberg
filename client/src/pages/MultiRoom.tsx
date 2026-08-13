@@ -62,8 +62,19 @@ interface RelayAbort {
   playerKey: string;
 }
 
+interface RoomStateProbe {
+  roomId: string;
+  roundId: number;
+  stateVersion: number;
+  status: RoomState['status'];
+  gameMode: 'classic' | 'relay';
+  currentTurnKey: string | null;
+}
+
 const DEFAULT_ROUND_DURATION_MS = 120_000;
 const NEXT_ROUND_DELAY_MS = 6_000;
+const RELAY_STATE_PROBE_INTERVAL_MS = 3_000;
+const RELAY_STATE_PROBE_TIMEOUT_MS = 5_000;
 
 interface ServerClockAnchor {
   serverNow: number;
@@ -98,6 +109,15 @@ export function resolveGuessCooldownMs(serverValue: unknown, roomValue: number):
   return typeof serverValue === 'number' && Number.isFinite(serverValue)
     ? Math.max(0, serverValue)
     : Math.max(0, roomValue);
+}
+
+export function relayStateProbeNeedsSync(room: RoomState, probe: RoomStateProbe): boolean {
+  return probe.roomId !== room.id
+    || probe.roundId !== room.roundId
+    || probe.stateVersion !== room.stateVersion
+    || probe.status !== room.status
+    || probe.gameMode !== (room.gameMode ?? 'classic')
+    || probe.currentTurnKey !== (room.currentTurnKey ?? null);
 }
 
 function applyRoomPatchState(current: RoomState, patch: RoomPatch): RoomState {
@@ -557,8 +577,20 @@ export default function MultiRoom() {
       serverNow?: number;
     }) => {
       setRoom((current) => {
-        if (!current || current.id !== p.roomId || current.roundId !== p.roundId) return current;
-        if (p.stateVersion <= current.stateVersion) return current;
+        if (!current || current.id !== p.roomId) return current;
+        if (current.roundId !== p.roundId) {
+          if (p.stateVersion >= current.stateVersion) syncRoom(socket);
+          return current;
+        }
+        if (p.stateVersion < current.stateVersion) return current;
+        if (p.stateVersion === current.stateVersion) {
+          if (
+            current.gameMode === 'relay'
+            && p.currentTurnKey !== undefined
+            && (p.currentTurnKey ?? null) !== (current.currentTurnKey ?? null)
+          ) syncRoom(socket);
+          return current;
+        }
         if (p.stateVersion !== current.stateVersion + 1) {
           syncRoom(socket);
           return current;
@@ -660,6 +692,69 @@ export default function MultiRoom() {
     };
   }, [applyRoomSnapshot, navigate, syncRoom, t]);
 
+  useEffect(() => {
+    if (room?.gameMode !== 'relay' || room.status !== 'playing') return;
+    const socket = getSocket();
+    const roomId = room.id;
+    let stopped = false;
+    let probeTimer: number | undefined;
+    let ackTimer: number | undefined;
+
+    const scheduleProbe = () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      probeTimer = window.setTimeout(runProbe, RELAY_STATE_PROBE_INTERVAL_MS);
+    };
+    const runProbe = () => {
+      probeTimer = undefined;
+      const current = roomRef.current;
+      if (
+        document.visibilityState !== 'visible'
+        || current?.id !== roomId
+        || current.gameMode !== 'relay'
+        || current.status !== 'playing'
+      ) {
+        return;
+      }
+
+      let settled = false;
+      ackTimer = window.setTimeout(() => {
+        if (stopped || settled) return;
+        settled = true;
+        ackTimer = undefined;
+        scheduleProbe();
+      }, RELAY_STATE_PROBE_TIMEOUT_MS);
+      socket.emit('room:state-probe', {}, (res?: RoomStateProbe & { code?: string }) => {
+        if (stopped || settled) return;
+        settled = true;
+        if (ackTimer !== undefined) window.clearTimeout(ackTimer);
+        ackTimer = undefined;
+        const latest = roomRef.current;
+        if (res?.code === 'NOT_IN_ROOM') {
+          syncRoom(socket);
+        } else if (res && !res.code && latest && relayStateProbeNeedsSync(latest, res)) {
+          syncRoom(socket);
+        }
+        scheduleProbe();
+      });
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible' || probeTimer !== undefined || ackTimer !== undefined) {
+        return;
+      }
+      scheduleProbe();
+    };
+
+    scheduleProbe();
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      stopped = true;
+      if (probeTimer !== undefined) window.clearTimeout(probeTimer);
+      if (ackTimer !== undefined) window.clearTimeout(ackTimer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [room?.gameMode, room?.id, room?.status, syncRoom]);
+
   const emit = (event: string, payload: unknown = {}) => {
     getSocket().emit(event, payload, (res: any) => {
       if (res?.code) toast.error(translate(res.code));
@@ -707,6 +802,12 @@ export default function MultiRoom() {
       }
       if (res?.code === 'ROOM_BUSY') {
         syncRoom(socket);
+        finish(false);
+        return;
+      }
+      if (res?.code === 'NOT_YOUR_TURN') {
+        syncRoom(socket);
+        toast.error(translate(res.code));
         finish(false);
         return;
       }

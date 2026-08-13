@@ -13,6 +13,7 @@ import {
   deleteRoom,
   getRoom,
   getRoomForIdentity,
+  getRoomStateProbeForIdentity,
   releaseRoomCapacity,
   reserveRoomCapacity,
   saveRoom,
@@ -37,6 +38,7 @@ import {
   roomJoinPayloadSchema,
   roomPlayerStatsPayloadSchema,
   roomReadyPayloadSchema,
+  roomStateProbePayloadSchema,
 } from '../schemas';
 import { SocketEventContext, SocketLifecycle } from './context';
 import { cancelLocalTimer } from '../timers';
@@ -71,6 +73,25 @@ export async function handleRoomSync(
     selfKey: me.key,
     serverNow: Date.now(),
   });
+}
+
+export async function handleRoomStateProbe(
+  context: RoomEventContext,
+  _payload: z.infer<typeof roomStateProbePayloadSchema>,
+  ack?: SocketAck
+): Promise<void> {
+  const { socket, me, restorePromise } = context;
+  await restorePromise;
+  if (!(await socketAllowedWithIp(socket, 'state-probe', me.key, 12, 240, 10))) {
+    ack?.({ code: 'RATE_LIMITED' });
+    return;
+  }
+  const probe = await getRoomStateProbeForIdentity(me.key);
+  if (!probe) {
+    ack?.({ code: 'NOT_IN_ROOM' });
+    return;
+  }
+  ack?.(probe);
 }
 
 export async function handleRoomPlayerStats(
@@ -561,6 +582,12 @@ export function registerRoomEvents(context: RoomEventContext): void {
     context.socket,
     'room:sync',
     (payload, ack) => handleRoomSync(context, payload, ack)
+  );
+  registerSocketEvent(
+    context.socket,
+    'room:state-probe',
+    (payload, ack) => handleRoomStateProbe(context, payload, ack),
+    roomStateProbePayloadSchema
   );
   registerSocketEvent(
     context.socket,
