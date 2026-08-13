@@ -98,6 +98,14 @@ describe('desktop/mobile layout contracts', () => {
     );
   });
 
+  it('keeps player autocomplete bounded and touch-scrollable on Safari', () => {
+    const game = readCss('../../src/styles/game.css');
+    expect(game).toMatch(/\.autocomplete-list\s*\{[\s\S]*max-height:\s*42vh;[\s\S]*max-height:\s*min\(42vh,\s*420px\);[\s\S]*overflow-y:\s*auto;[\s\S]*-webkit-overflow-scrolling:\s*touch;[\s\S]*touch-action:\s*pan-y;/);
+
+    const responsive = readCss('../../src/styles/responsive.css');
+    expect(responsive).toMatch(/\.game-page\.keyboard-active\s+\.autocomplete-list\s*\{[\s\S]*max-height:\s*38vh;[\s\S]*max-height:\s*min\(38vh,\s*13rem\);[\s\S]*max-height:\s*38dvh;/);
+  });
+
   it('orders mobile multiplayer lobby actions by workflow priority', () => {
     const responsive = readCss('../../src/styles/responsive.css');
     expect(responsive).toMatch(

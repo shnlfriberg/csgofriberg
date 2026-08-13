@@ -289,8 +289,15 @@
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: 0 -8px 28px rgba(26, 34, 51, 0.16);
+  /* Keep the vh fallback for Safari versions that do not parse dynamic viewport units. */
+  max-height: 42vh;
+  max-height: min(42vh, 420px);
   max-height: 42dvh;
+  max-height: min(42dvh, 420px);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   z-index: 30;
 }
 .autocomplete-list li {

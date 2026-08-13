@@ -85,7 +85,12 @@
     margin-top: 3px;
     font-size: 0.75rem;
   }
-  .game-page.keyboard-active .autocomplete-list { max-height: min(38dvh, 13rem); }
+  .game-page.keyboard-active .autocomplete-list {
+    max-height: 38vh;
+    max-height: min(38vh, 13rem);
+    max-height: 38dvh;
+    max-height: min(38dvh, 13rem);
+  }
 
   .card { padding: 16px; border-radius: 13px; }
   .single-lobby-action { align-items: stretch; flex-direction: column; }
