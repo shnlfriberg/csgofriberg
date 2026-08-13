@@ -2,6 +2,7 @@
 
 FROM node:26-trixie-slim AS build
 
+ARG PNPM_VERSION=11.13.1
 ARG RESOURCE_VERSION=""
 
 ENV PNPM_HOME=/pnpm
@@ -9,7 +10,8 @@ ENV PATH=$PNPM_HOME:$PATH
 ENV RESOURCE_VERSION=$RESOURCE_VERSION
 WORKDIR /workspace
 
-RUN corepack enable
+RUN npm install --global "pnpm@${PNPM_VERSION}" \
+ && pnpm --version
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY client/package.json client/package.json
