@@ -225,11 +225,9 @@ async function main() {
   const server = http.createServer(app);
   const io = new Server(server, {
     cors: { origin: config.corsOrigins, credentials: true },
-    perMessageDeflate: {
-      threshold: 4 * 1024,
-      serverNoContextTakeover: true,
-      clientNoContextTakeover: true,
-    },
+    // Keep WebSocket extensions disabled until compression can be gated before
+    // the Engine.IO handshake. Namespace middleware runs too late for this.
+    perMessageDeflate: false,
   });
   app.set('io', io);
   let shuttingDown = false;
