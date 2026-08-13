@@ -16,6 +16,10 @@ let server: http.Server;
 let baseUrl: string;
 const USER_AGENT = 'csgofriberg-pow-integration-test';
 const TEST_IP = `198.51.100.${(Date.now() % 250) + 1}`;
+const TEST_POW_DIFFICULTY = 16;
+const TEST_REGISTER_POW_DIFFICULTY = 17;
+const originalPowDifficulty = config.powDifficulty;
+const originalPowRegisterDifficulty = config.powRegisterDifficulty;
 
 function setCookies(response: Response): string[] {
   const getSetCookie = (response.headers as any).getSetCookie?.bind(response.headers);
@@ -45,6 +49,8 @@ function solve(challenge: string, difficulty: number): string {
 
 describe('proof of work gateway', () => {
   beforeAll(async () => {
+    config.powDifficulty = TEST_POW_DIFFICULTY;
+    config.powRegisterDifficulty = TEST_REGISTER_POW_DIFFICULTY;
     await initDb();
     await initRedis();
     const app = express();
@@ -60,8 +66,12 @@ describe('proof of work gateway', () => {
   });
 
   afterAll(async () => {
-    if (!server) return;
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    try {
+      if (server) await new Promise<void>((resolve) => server.close(() => resolve()));
+    } finally {
+      config.powDifficulty = originalPowDifficulty;
+      config.powRegisterDifficulty = originalPowRegisterDifficulty;
+    }
   });
 
   it('does not issue a guest identity before PoW succeeds', async () => {
