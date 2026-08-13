@@ -159,6 +159,103 @@ describe('MultiRoom replay', () => {
     expect(screen.queryByText('Opponent Round 1')).not.toBeInTheDocument();
   });
 
+  it('replays each relay round in the shared board after viewing the settlement', async () => {
+    const user = userEvent.setup();
+    const relayRoom: RoomState = {
+      ...room,
+      gameMode: 'relay',
+      totalRounds: 3,
+      relaySolvedRounds: 2,
+      round: 3,
+      roundId: 3,
+      relayGuesses: [{
+        actorKey: 'g:opponent',
+        guessedAt: Date.now(),
+        feedback: guess(30, 'Relay final live guess'),
+      }],
+      matchResult: { winnerKey: null, reason: 'relay_complete', answer: room.matchResult!.answer },
+      matchReplay: {
+        ...room.matchReplay!,
+        gameMode: 'relay',
+        totalRounds: 3,
+        relaySolvedRounds: 2,
+        result: 'cooperative',
+        rounds: [
+          {
+            round: 1,
+            reason: 'guessed',
+            winner: null,
+            answer,
+            me: { guesses: [] },
+            opponent: { guesses: [] },
+            sharedGuesses: [
+              { actor: 'me', feedback: guess(31, 'Relay round 1 me'), guessTime: 800 },
+              { actor: 'opponent', feedback: guess(32, 'Relay round 1 opponent'), guessTime: 900 },
+            ],
+          },
+          {
+            round: 2,
+            reason: 'exhausted',
+            winner: null,
+            answer,
+            me: { guesses: [] },
+            opponent: { guesses: [] },
+            sharedGuesses: [
+              { actor: 'opponent', feedback: guess(33, 'Relay round 2 opponent'), guessTime: 1_000 },
+            ],
+          },
+          {
+            round: 3,
+            reason: 'guessed',
+            winner: null,
+            answer,
+            me: { guesses: [] },
+            opponent: { guesses: [] },
+            sharedGuesses: [
+              { actor: 'me', feedback: guess(34, 'Relay round 3 me'), guessTime: 1_100 },
+            ],
+          },
+        ],
+      },
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relayRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+
+    await user.click(await screen.findByRole('button', { name: '查看对局' }));
+    expect(screen.getByText('第 1 / 3 轮')).toBeInTheDocument();
+    expect(screen.getByText('Relay round 1 me')).toBeInTheDocument();
+    expect(screen.queryByText('Relay final live guess')).not.toBeInTheDocument();
+    expect(screen.getByText('本局共同猜中')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '下一轮' }));
+    expect(screen.getByText('第 2 / 3 轮')).toBeInTheDocument();
+    expect(screen.getByText('Relay round 2 opponent')).toBeInTheDocument();
+    expect(screen.queryByText('Relay round 1 me')).not.toBeInTheDocument();
+    expect(screen.getByText('本局未猜中')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '查看结算' }));
+    const settlement = await screen.findByRole('dialog');
+    expect(within(settlement).getByRole('heading', { name: '接力挑战完成' })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByText('第 2 / 3 轮')).toBeInTheDocument();
+    expect(screen.getByText('Relay round 2 opponent')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '下一轮' }));
+    expect(screen.getByText('第 3 / 3 轮')).toBeInTheDocument();
+    expect(screen.getByText('Relay round 3 me')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: '上一轮' }));
+    expect(screen.getByText('第 2 / 3 轮')).toBeInTheDocument();
+    expect(screen.getByText('Relay round 2 opponent')).toBeInTheDocument();
+  });
+
   it('keeps my board full-size and renders other players as compact expandable rows', async () => {
     const user = userEvent.setup();
     const multiRoom: RoomState = {

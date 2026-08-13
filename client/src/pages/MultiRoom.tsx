@@ -1132,6 +1132,26 @@ export default function MultiRoom() {
   const displayedRightPlayer = rightPlayer && replayRound
     ? { ...rightPlayer, guessCount: replayRound.opponent.guesses.length, guesses: replayRound.opponent.guesses }
     : rightPlayer;
+  const displayedRelayGuesses = room.gameMode === 'relay'
+    ? replayRound
+      ? (replayRound.sharedGuesses ?? []).map((guess) => ({
+          feedback: guess.feedback,
+          label: guess.actor === 'me'
+            ? me?.name ?? t('replay.mySide')
+            : guess.actor === 'opponent'
+              ? opponent?.name ?? replay?.opponent?.displayId ?? '-'
+              : '-',
+          tone: guess.actor === 'me' ? 'self' as const : guess.actor === 'opponent' ? 'other' as const : undefined,
+        }))
+      : (room.relayGuesses ?? []).map((guess) => {
+          const player = room.players.find((candidate) => candidate.key === guess.actorKey);
+          return {
+            feedback: guess.feedback,
+            label: player?.name ?? '-',
+            tone: guess.actorKey === myKey ? 'self' as const : 'other' as const,
+          };
+        })
+    : [];
 
   return (
     <Page
@@ -1282,11 +1302,13 @@ export default function MultiRoom() {
             <strong>{t('replay.roundPage', { current: replayRoundIndex + 1, total: replay.rounds.length })}</strong>
             <span>{t('replay.correctAnswer', { name: replayRound.answer.nickname })}</span>
             <span className="badge">
-              {replayRound.winner === 'me'
-                ? t('replay.meWon')
-                : replayRound.winner === 'opponent'
-                  ? t('replay.opponentWon')
-                  : t('common.draw')}
+              {room.gameMode === 'relay'
+                ? t(replayRound.reason === 'guessed' ? 'multi.relayRoundSolved' : 'multi.relayRoundMissed')
+                : replayRound.winner === 'me'
+                  ? t('replay.meWon')
+                  : replayRound.winner === 'opponent'
+                    ? t('replay.opponentWon')
+                    : t('common.draw')}
             </span>
           </div>
           <button
@@ -1422,7 +1444,7 @@ export default function MultiRoom() {
           <div className="card player-board relay-board" style={{ margin: 0 }}>
             <h3>
               {t('multi.sharedGuesses')}
-              <span className="muted">{room.relayGuesses?.length ?? 0}/{room.maxGuesses}</span>
+              <span className="muted">{displayedRelayGuesses.length}/{room.maxGuesses}</span>
               {room.currentTurnKey && (
                 <span className="badge amber">
                   {t('multi.currentTurn', {
@@ -1431,17 +1453,14 @@ export default function MultiRoom() {
                 </span>
               )}
             </h3>
-            {room.relayGuesses?.length ? (
+            {displayedRelayGuesses.length ? (
               <GuessBoard
-                guesses={room.relayGuesses.map((guess) => guess.feedback)}
-                rowAnnotations={room.relayGuesses.map((guess) => {
-                  const label = room.players.find((player) => player.key === guess.actorKey)?.name ?? '-';
-                  return {
-                    content: label,
-                    title: label,
-                    tone: guess.actorKey === myKey ? 'self' as const : 'other' as const,
-                  };
-                })}
+                guesses={displayedRelayGuesses.map((guess) => guess.feedback)}
+                rowAnnotations={displayedRelayGuesses.map((guess) => ({
+                  content: guess.label,
+                  title: guess.label,
+                  tone: guess.tone,
+                }))}
               />
             ) : <p className="muted">{t('multi.noGuesses')}</p>}
             <div className="guess-list-end" ref={activeGuessListEndRef} aria-hidden="true" />
