@@ -132,7 +132,7 @@ export interface StoredRoom {
 }
 
 export const DEFAULT_ROOM_MAX_GUESSES = 8;
-export const MIN_ROOM_MAX_GUESSES = 1;
+export const MIN_ROOM_MAX_GUESSES = 2;
 export const MAX_ROOM_MAX_GUESSES = 15;
 export const DEFAULT_ROOM_GUESS_INTERVAL_MS = 1_500;
 export const MIN_ROOM_GUESS_INTERVAL_MS = 0;

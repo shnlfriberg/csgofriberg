@@ -1138,7 +1138,7 @@ describe('multiplayer socket integration', () => {
     const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
     try {
       expect(await emit(a, 'room:create', {
-        dbType: 'easy', boType: 1, maxGuesses: 0, guessIntervalMs: 1_500,
+        dbType: 'easy', boType: 1, maxGuesses: 1, guessIntervalMs: 1_500,
       })).toEqual({ code: 'VALIDATION_FAILED' });
       expect(await emit(a, 'room:create', {
         dbType: 'easy', boType: 1, maxGuesses: 8, guessIntervalMs: 10_001,

@@ -163,17 +163,17 @@ describe('MultiLobby matchmaking', () => {
     const roundDuration = screen.getByRole('spinbutton', { name: '最大猜测时间' });
     const createRoom = screen.getByRole('button', { name: '创建房间' });
 
-    fireEvent.change(maxGuesses, { target: { value: '16' } });
+    fireEvent.change(maxGuesses, { target: { value: '1' } });
     fireEvent.change(guessInterval, { target: { value: '10.1' } });
     fireEvent.change(roundDuration, { target: { value: '601' } });
 
-    expect(maxGuesses).toHaveValue(16);
+    expect(maxGuesses).toHaveValue(1);
     expect(guessInterval).toHaveValue(10.1);
     expect(roundDuration).toHaveValue(601);
     expect(maxGuesses).toHaveAttribute('aria-invalid', 'true');
     expect(guessInterval).toHaveAttribute('aria-invalid', 'true');
     expect(roundDuration).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByText('请输入 1 到 15 之间的整数')).toBeInTheDocument();
+    expect(screen.getByText('请输入 2 到 15 之间的整数')).toBeInTheDocument();
     expect(screen.getByText('请输入 0 到 10 之间的数值')).toBeInTheDocument();
     expect(screen.getByText('请输入 10 到 600 之间的整数')).toBeInTheDocument();
     expect(createRoom).toBeDisabled();
@@ -191,7 +191,7 @@ describe('MultiLobby matchmaking', () => {
     expect(maxGuesses).toHaveAttribute('aria-invalid', 'false');
     expect(guessInterval).toHaveAttribute('aria-invalid', 'false');
     expect(roundDuration).toHaveAttribute('aria-invalid', 'false');
-    expect(screen.queryByText('请输入 1 到 15 之间的整数')).not.toBeInTheDocument();
+    expect(screen.queryByText('请输入 2 到 15 之间的整数')).not.toBeInTheDocument();
     expect(screen.queryByText('请输入 0 到 10 之间的数值')).not.toBeInTheDocument();
     expect(screen.queryByText('请输入 10 到 600 之间的整数')).not.toBeInTheDocument();
     expect(createRoom).toBeEnabled();

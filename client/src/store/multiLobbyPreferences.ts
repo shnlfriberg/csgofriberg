@@ -1,7 +1,7 @@
 const STORAGE_KEY = 'csgofriberg.multi-lobby-preferences';
 const BO_OPTIONS = new Set([1, 3, 5, 7]);
 export const DEFAULT_MULTI_MAX_GUESSES = 8;
-export const MIN_MULTI_MAX_GUESSES = 1;
+export const MIN_MULTI_MAX_GUESSES = 2;
 export const MAX_MULTI_MAX_GUESSES = 15;
 export const DEFAULT_MULTI_GUESS_INTERVAL_SECONDS = 1.5;
 export const MIN_MULTI_GUESS_INTERVAL_SECONDS = 0;
