@@ -76,6 +76,7 @@ const room: RoomState = {
   winsNeeded: 2,
   maxGuesses: 8,
   guessIntervalMs: 1_500,
+  roundDurationMs: 120_000,
   roundEndsAt: null,
   matchStartsAt: null,
   spectatorCount: 0,
@@ -527,6 +528,7 @@ describe('MultiRoom replay', () => {
       boType: 5,
       maxGuesses: 12,
       guessIntervalMs: 2_500,
+      roundDurationMs: 300_000,
       verifiedOnly: true,
       anonymous: true,
       round: 0,
@@ -551,7 +553,7 @@ describe('MultiRoom replay', () => {
     const attributes = await screen.findByRole('region', { name: '房间设置' });
     expect(within(attributes).getByText('数据库：简单版')).toBeInTheDocument();
     expect(within(attributes).getByText('赛制：BO5')).toBeInTheDocument();
-    expect(within(attributes).getByText('每局最多 12 次 · 猜测间隔 2.5 秒'))
+    expect(within(attributes).getByText('每局最多 12 次 · 最大猜测时间 300 秒 · 猜测间隔 2.5 秒'))
       .toBeInTheDocument();
     expect(within(attributes).getByText('允许观战')).toBeInTheDocument();
     expect(within(attributes).getByText('仅允许已验证邮箱用户加入')).toBeInTheDocument();

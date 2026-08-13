@@ -28,13 +28,22 @@ import {
   saveMultiLobbyPreferences,
   MAX_MULTI_GUESS_INTERVAL_SECONDS,
   MAX_MULTI_MAX_GUESSES,
+  MAX_MULTI_ROUND_DURATION_SECONDS,
   MIN_MULTI_GUESS_INTERVAL_SECONDS,
   MIN_MULTI_MAX_GUESSES,
+  MIN_MULTI_ROUND_DURATION_SECONDS,
 } from '../store/multiLobbyPreferences';
 import { useAuth } from '../store/auth';
 
 type DbType = string;
 const BO_OPTIONS = [1, 3, 5, 7];
+const DEFAULT_ROUND_DURATION_MS = 120_000;
+
+function parseNumberDraft(draft: string): number | null {
+  if (!draft.trim()) return null;
+  const value = Number(draft);
+  return Number.isFinite(value) ? value : null;
+}
 
 function OptionGroup<T extends string | number>({
   label,
@@ -86,6 +95,16 @@ export default function MultiLobby() {
   const [guessIntervalSeconds, setGuessIntervalSeconds] = useState(
     initialPreferences.guessIntervalSeconds
   );
+  const [roundDurationSeconds, setRoundDurationSeconds] = useState(
+    initialPreferences.roundDurationSeconds
+  );
+  const [maxGuessesDraft, setMaxGuessesDraft] = useState(String(initialPreferences.maxGuesses));
+  const [guessIntervalDraft, setGuessIntervalDraft] = useState(
+    String(initialPreferences.guessIntervalSeconds)
+  );
+  const [roundDurationDraft, setRoundDurationDraft] = useState(
+    String(initialPreferences.roundDurationSeconds)
+  );
   const anonymous = true;
   const [mmDbType, setMmDbType] = useState<DbType>(initialPreferences.matchmakingDifficulty);
   const mmAnonymous = true;
@@ -108,6 +127,22 @@ export default function MultiLobby() {
   const replacingRoomRef = useRef(false);
   const matchOptionsRef = useRef({ dbType: mmDbType, anonymous: mmAnonymous });
   matchOptionsRef.current = { dbType: mmDbType, anonymous: mmAnonymous };
+
+  const parsedMaxGuesses = parseNumberDraft(maxGuessesDraft);
+  const parsedGuessInterval = parseNumberDraft(guessIntervalDraft);
+  const parsedRoundDuration = parseNumberDraft(roundDurationDraft);
+  const maxGuessesValid = parsedMaxGuesses !== null
+    && Number.isInteger(parsedMaxGuesses)
+    && parsedMaxGuesses >= MIN_MULTI_MAX_GUESSES
+    && parsedMaxGuesses <= MAX_MULTI_MAX_GUESSES;
+  const guessIntervalValid = parsedGuessInterval !== null
+    && parsedGuessInterval >= MIN_MULTI_GUESS_INTERVAL_SECONDS
+    && parsedGuessInterval <= MAX_MULTI_GUESS_INTERVAL_SECONDS;
+  const roundDurationValid = parsedRoundDuration !== null
+    && Number.isInteger(parsedRoundDuration)
+    && parsedRoundDuration >= MIN_MULTI_ROUND_DURATION_SECONDS
+    && parsedRoundDuration <= MAX_MULTI_ROUND_DURATION_SECONDS;
+  const advancedSettingsValid = maxGuessesValid && guessIntervalValid && roundDurationValid;
 
   useEffect(() => {
     const cooldownUntil = Number(
@@ -137,6 +172,7 @@ export default function MultiLobby() {
       verifiedEmailOnly,
       maxGuesses,
       guessIntervalSeconds,
+      roundDurationSeconds,
       matchmakingDifficulty: mmDbType,
     });
   }, [
@@ -148,6 +184,7 @@ export default function MultiLobby() {
     maxGuesses,
     maxPlayers,
     mmDbType,
+    roundDurationSeconds,
     totalRounds,
     verifiedEmailOnly,
   ]);
@@ -286,7 +323,7 @@ export default function MultiLobby() {
   };
 
   const create = async (replaceExisting = false) => {
-    if (creating) return;
+    if (creating || !advancedSettingsValid) return;
     setCreating(true);
     if (!replaceExisting && currentRoom) {
       if (!await leaveCurrentFor(currentRoom, currentRole, t('multi.createNewRoom'))) {
@@ -305,6 +342,7 @@ export default function MultiLobby() {
       anonymous,
       maxGuesses,
       guessIntervalMs: Math.round(guessIntervalSeconds * 1000),
+      roundDurationMs: roundDurationSeconds * 1000,
     }, (res: any) => {
       if (res?.code === 'ALREADY_IN_ROOM' && res.room) {
         setCreating(false);
@@ -450,7 +488,8 @@ export default function MultiLobby() {
             {' · '}{createdRoom.anonymous ? t('multi.anonymousRoom') : t('multi.showNames')}
             {' · '}{t('multi.customRulesSummary', {
               guesses: createdRoom.maxGuesses,
-              seconds: createdRoom.guessIntervalMs / 1000,
+              interval: createdRoom.guessIntervalMs / 1000,
+              duration: (createdRoom.roundDurationMs ?? DEFAULT_ROUND_DURATION_MS) / 1000,
             })}
           </p>
           <button className="btn btn-lg" onClick={() => navigate('/multi/room')}>
@@ -538,11 +577,16 @@ export default function MultiLobby() {
                       max={MAX_MULTI_MAX_GUESSES}
                       step={1}
                       aria-label={t('multi.maxGuessesLabel')}
-                      value={maxGuesses}
+                      aria-invalid={!maxGuessesValid}
+                      aria-describedby={!maxGuessesValid ? 'max-guesses-error' : undefined}
+                      value={maxGuessesDraft}
                       onChange={(event) => {
-                        const value = event.currentTarget.valueAsNumber;
+                        const draft = event.currentTarget.value;
+                        setMaxGuessesDraft(draft);
+                        const value = parseNumberDraft(draft);
                         if (
-                          Number.isInteger(value)
+                          value !== null
+                          && Number.isInteger(value)
                           && value >= MIN_MULTI_MAX_GUESSES
                           && value <= MAX_MULTI_MAX_GUESSES
                         ) {
@@ -552,6 +596,14 @@ export default function MultiLobby() {
                     />
                     <span>{t('multi.guessCountUnit')}</span>
                   </span>
+                  {!maxGuessesValid && (
+                    <span id="max-guesses-error" className="room-number-error">
+                      {t('multi.integerRangeError', {
+                        min: MIN_MULTI_MAX_GUESSES,
+                        max: MAX_MULTI_MAX_GUESSES,
+                      })}
+                    </span>
+                  )}
                 </label>
                 <label className="room-number-setting">
                   <span>{t('multi.guessIntervalLabel')}</span>
@@ -563,11 +615,15 @@ export default function MultiLobby() {
                       max={MAX_MULTI_GUESS_INTERVAL_SECONDS}
                       step={0.1}
                       aria-label={t('multi.guessIntervalLabel')}
-                      value={guessIntervalSeconds}
+                      aria-invalid={!guessIntervalValid}
+                      aria-describedby={!guessIntervalValid ? 'guess-interval-error' : undefined}
+                      value={guessIntervalDraft}
                       onChange={(event) => {
-                        const value = event.currentTarget.valueAsNumber;
+                        const draft = event.currentTarget.value;
+                        setGuessIntervalDraft(draft);
+                        const value = parseNumberDraft(draft);
                         if (
-                          Number.isFinite(value)
+                          value !== null
                           && value >= MIN_MULTI_GUESS_INTERVAL_SECONDS
                           && value <= MAX_MULTI_GUESS_INTERVAL_SECONDS
                         ) {
@@ -577,11 +633,61 @@ export default function MultiLobby() {
                     />
                     <span>{t('multi.secondsUnit')}</span>
                   </span>
+                  {!guessIntervalValid && (
+                    <span id="guess-interval-error" className="room-number-error">
+                      {t('multi.numberRangeError', {
+                        min: MIN_MULTI_GUESS_INTERVAL_SECONDS,
+                        max: MAX_MULTI_GUESS_INTERVAL_SECONDS,
+                      })}
+                    </span>
+                  )}
+                </label>
+                <label className="room-number-setting">
+                  <span>{t('multi.roundDurationLabel')}</span>
+                  <span className="room-number-input">
+                    <input
+                      className="input"
+                      type="number"
+                      min={MIN_MULTI_ROUND_DURATION_SECONDS}
+                      max={MAX_MULTI_ROUND_DURATION_SECONDS}
+                      step={1}
+                      aria-label={t('multi.roundDurationLabel')}
+                      aria-invalid={!roundDurationValid}
+                      aria-describedby={!roundDurationValid ? 'round-duration-error' : undefined}
+                      value={roundDurationDraft}
+                      onChange={(event) => {
+                        const draft = event.currentTarget.value;
+                        setRoundDurationDraft(draft);
+                        const value = parseNumberDraft(draft);
+                        if (
+                          value !== null
+                          && Number.isInteger(value)
+                          && value >= MIN_MULTI_ROUND_DURATION_SECONDS
+                          && value <= MAX_MULTI_ROUND_DURATION_SECONDS
+                        ) {
+                          setRoundDurationSeconds(value);
+                        }
+                      }}
+                    />
+                    <span>{t('multi.secondsUnit')}</span>
+                  </span>
+                  {!roundDurationValid && (
+                    <span id="round-duration-error" className="room-number-error">
+                      {t('multi.integerRangeError', {
+                        min: MIN_MULTI_ROUND_DURATION_SECONDS,
+                        max: MAX_MULTI_ROUND_DURATION_SECONDS,
+                      })}
+                    </span>
+                  )}
                 </label>
               </div>
             </details>
             <div style={{ textAlign: 'center', marginTop: 14 }}>
-              <button className="btn btn-lg" onClick={() => void create()} disabled={creating}>
+              <button
+                className="btn btn-lg"
+                onClick={() => void create()}
+                disabled={creating || !advancedSettingsValid}
+              >
                 {creating ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <Zap size={16} />}
                 {creating ? t('multi.creating') : t('multi.createRoom')}
               </button>

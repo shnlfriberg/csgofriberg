@@ -107,6 +107,7 @@ export interface StoredRoom {
   relayGuesses: StoredRelayGuess[];
   maxGuesses: number;
   guessIntervalMs: number;
+  roundDurationMs: number;
   rematchAllowed: boolean;
   rematchInviterKey: string | null;
   rematchAcceptedKeys: string[];
@@ -136,6 +137,9 @@ export const MAX_ROOM_MAX_GUESSES = 15;
 export const DEFAULT_ROOM_GUESS_INTERVAL_MS = 1_500;
 export const MIN_ROOM_GUESS_INTERVAL_MS = 0;
 export const MAX_ROOM_GUESS_INTERVAL_MS = 10_000;
+export const DEFAULT_ROOM_ROUND_DURATION_MS = 120_000;
+export const MIN_ROOM_ROUND_DURATION_MS = 10_000;
+export const MAX_ROOM_ROUND_DURATION_MS = 600_000;
 export const MIN_CLASSIC_ROOM_PLAYERS = 2;
 export const MAX_CLASSIC_ROOM_PLAYERS = 8;
 
@@ -151,6 +155,7 @@ interface RoomGuessTarget {
   targetPlayerId: number;
   maxGuesses: number;
   guessIntervalMs: number;
+  roundDurationMs: number;
   gameMode?: GameMode;
   currentTurnKey?: string | null;
 }
@@ -250,6 +255,11 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
     || room.guessIntervalMs < MIN_ROOM_GUESS_INTERVAL_MS
     || room.guessIntervalMs > MAX_ROOM_GUESS_INTERVAL_MS
   ) room.guessIntervalMs = DEFAULT_ROOM_GUESS_INTERVAL_MS;
+  if (
+    !Number.isInteger(room.roundDurationMs)
+    || room.roundDurationMs < MIN_ROOM_ROUND_DURATION_MS
+    || room.roundDurationMs > MAX_ROOM_ROUND_DURATION_MS
+  ) room.roundDurationMs = DEFAULT_ROOM_ROUND_DURATION_MS;
   room.readyCheckEndsAt ??= null;
   if (typeof room.rematchAllowed !== 'boolean') room.rematchAllowed = false;
   room.rematchInviterKey ??= null;
@@ -385,6 +395,7 @@ export async function getRoom(id: string): Promise<StoredRoom | null> {
   room.updatedAt = Number(meta.updatedAt || room.updatedAt);
   if (meta.maxGuesses) room.maxGuesses = Number(meta.maxGuesses);
   if (meta.guessIntervalMs) room.guessIntervalMs = Number(meta.guessIntervalMs);
+  if (meta.roundDurationMs) room.roundDurationMs = Number(meta.roundDurationMs);
   room.roundEndsAt = parseNullableNumber(meta.roundEndsAt);
   room.nextRoundAt = parseNullableNumber(meta.nextRoundAt);
   room.roundResult = parseNullableJson<StoredRoundResult>(meta.roundResult);
@@ -741,16 +752,26 @@ export async function getRoomGuessTarget(
           round: room.round,
           maxGuesses: room.maxGuesses,
           guessIntervalMs: room.guessIntervalMs,
+          roundDurationMs: room.roundDurationMs,
           gameMode: room.gameMode,
           currentTurnKey: room.currentTurnKey,
         }
       : null;
   }
-  const [targetRaw, roundRaw, maxGuessesRaw, guessIntervalMsRaw, gameModeRaw, currentTurnKeyRaw] = await client.hmGet(roomMetaKey(roomId), [
+  const [
+    targetRaw,
+    roundRaw,
+    maxGuessesRaw,
+    guessIntervalMsRaw,
+    roundDurationMsRaw,
+    gameModeRaw,
+    currentTurnKeyRaw,
+  ] = await client.hmGet(roomMetaKey(roomId), [
     'targetPlayerId',
     'round',
     'maxGuesses',
     'guessIntervalMs',
+    'roundDurationMs',
     'gameMode',
     'currentTurnKey',
   ]);
@@ -758,6 +779,7 @@ export async function getRoomGuessTarget(
   const round = Number(roundRaw);
   const maxGuesses = Number(maxGuessesRaw);
   const guessIntervalMs = Number(guessIntervalMsRaw);
+  const roundDurationMs = Number(roundDurationMsRaw);
   if (
     Number.isInteger(targetPlayerId)
     && targetPlayerId > 0
@@ -768,8 +790,19 @@ export async function getRoomGuessTarget(
     && Number.isInteger(guessIntervalMs)
     && guessIntervalMs >= MIN_ROOM_GUESS_INTERVAL_MS
     && guessIntervalMs <= MAX_ROOM_GUESS_INTERVAL_MS
+    && Number.isInteger(roundDurationMs)
+    && roundDurationMs >= MIN_ROOM_ROUND_DURATION_MS
+    && roundDurationMs <= MAX_ROOM_ROUND_DURATION_MS
   ) {
-    const target = { round, targetPlayerId, maxGuesses, guessIntervalMs, gameMode: gameModeRaw === 'relay' ? 'relay' as const : 'classic' as const, currentTurnKey: currentTurnKeyRaw || null };
+    const target = {
+      round,
+      targetPlayerId,
+      maxGuesses,
+      guessIntervalMs,
+      roundDurationMs,
+      gameMode: gameModeRaw === 'relay' ? 'relay' as const : 'classic' as const,
+      currentTurnKey: currentTurnKeyRaw || null,
+    };
     roomTargetCache.set(roomId, target);
     return target;
   }
@@ -783,6 +816,7 @@ export async function getRoomGuessTarget(
     round: String(room.round),
     maxGuesses: String(room.maxGuesses),
     guessIntervalMs: String(room.guessIntervalMs),
+    roundDurationMs: String(room.roundDurationMs),
     revision: String(room.revision),
     updatedAt: String(room.updatedAt),
   });
@@ -792,6 +826,7 @@ export async function getRoomGuessTarget(
     targetPlayerId: room.targetPlayerId,
     maxGuesses: room.maxGuesses,
     guessIntervalMs: room.guessIntervalMs,
+    roundDurationMs: room.roundDurationMs,
     gameMode: room.gameMode,
     currentTurnKey: room.currentTurnKey,
   };
@@ -1026,6 +1061,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
         targetPlayerId: room.targetPlayerId,
         maxGuesses: room.maxGuesses,
         guessIntervalMs: room.guessIntervalMs,
+        roundDurationMs: room.roundDurationMs,
         gameMode: room.gameMode,
         currentTurnKey: room.currentTurnKey,
       });
@@ -1094,7 +1130,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
   }
   const result = await evalCachedStateScript(
-    'room-save-v6',
+    'room-save-v7',
     `local incoming = cjson.decode(ARGV[1])
      local identityCount = tonumber(ARGV[6])
      local metaKey = KEYS[4 + identityCount]
@@ -1168,6 +1204,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
        'relayGuesses', nullableJson(incoming.relayGuesses),
        'maxGuesses', tostring(incoming.maxGuesses or 8),
        'guessIntervalMs', tostring(incoming.guessIntervalMs or 1500),
+       'roundDurationMs', tostring(incoming.roundDurationMs or 120000),
        'revision', tostring(incoming.revision or 0),
        'updatedAt', tostring(incoming.updatedAt or 0))
      redis.call('DEL', playersKey, guessesKey, eventsKey, spectatorsKey)
@@ -1265,6 +1302,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
       targetPlayerId: room.targetPlayerId,
       maxGuesses: room.maxGuesses,
       guessIntervalMs: room.guessIntervalMs,
+      roundDurationMs: room.roundDurationMs,
       gameMode: room.gameMode,
       currentTurnKey: room.currentTurnKey,
     });

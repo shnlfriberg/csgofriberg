@@ -222,6 +222,7 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     winsNeeded: winsNeeded(room.boType),
     maxGuesses: room.maxGuesses,
     guessIntervalMs: room.guessIntervalMs,
+    roundDurationMs: room.roundDurationMs,
     roundEndsAt: room.roundEndsAt,
     matchStartsAt: room.status === 'starting' ? room.nextRoundAt : null,
     roundId: room.round,

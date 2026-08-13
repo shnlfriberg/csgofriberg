@@ -2,11 +2,14 @@ import { z } from 'zod';
 import {
   DEFAULT_ROOM_GUESS_INTERVAL_MS,
   DEFAULT_ROOM_MAX_GUESSES,
+  DEFAULT_ROOM_ROUND_DURATION_MS,
   MAX_ROOM_GUESS_INTERVAL_MS,
   MAX_ROOM_MAX_GUESSES,
+  MAX_ROOM_ROUND_DURATION_MS,
   MAX_CLASSIC_ROOM_PLAYERS,
   MIN_ROOM_GUESS_INTERVAL_MS,
   MIN_ROOM_MAX_GUESSES,
+  MIN_ROOM_ROUND_DURATION_MS,
   MIN_CLASSIC_ROOM_PLAYERS,
 } from '../services/roomStore';
 
@@ -31,6 +34,10 @@ export const roomCreatePayloadSchema = z.object({
     .min(MIN_ROOM_GUESS_INTERVAL_MS)
     .max(MAX_ROOM_GUESS_INTERVAL_MS)
     .default(DEFAULT_ROOM_GUESS_INTERVAL_MS),
+  roundDurationMs: z.number().int()
+    .min(MIN_ROOM_ROUND_DURATION_MS)
+    .max(MAX_ROOM_ROUND_DURATION_MS)
+    .default(DEFAULT_ROOM_ROUND_DURATION_MS),
 });
 
 export const roomJoinPayloadSchema = z.object({

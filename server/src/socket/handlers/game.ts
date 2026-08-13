@@ -13,7 +13,6 @@ import { allowLocalGuess, socketAllowed } from '../connection';
 import {
   FINISHED_ROOM_TTL_MS,
   NEXT_ROUND_DELAY_MS,
-  ROUND_TIME_MS,
 } from '../constants';
 import { registerSocketEvent, SocketAck } from '../event';
 import {
@@ -124,7 +123,7 @@ export async function handleGameGuess(
     targetPlayerId: targetState.targetPlayerId,
     feedback: compareGuess(guess, target),
     maxGuesses: targetState.maxGuesses,
-    roundDurationMs: ROUND_TIME_MS,
+    roundDurationMs: targetState.roundDurationMs,
     nextRoundDelayMs: NEXT_ROUND_DELAY_MS,
     minGuessIntervalMs: targetState.guessIntervalMs,
     rateLimit: 12,

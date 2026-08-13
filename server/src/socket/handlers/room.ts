@@ -164,6 +164,7 @@ export async function handleRoomCreate(
     relayGuesses: [],
     maxGuesses: payload.maxGuesses,
     guessIntervalMs: payload.guessIntervalMs,
+    roundDurationMs: payload.roundDurationMs,
     rematchAllowed: true,
     rematchInviterKey: null,
     rematchAcceptedKeys: [],

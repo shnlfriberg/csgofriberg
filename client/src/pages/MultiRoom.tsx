@@ -62,7 +62,7 @@ interface RelayAbort {
   playerKey: string;
 }
 
-const ROUND_TIME_MS = 120_000;
+const DEFAULT_ROUND_DURATION_MS = 120_000;
 const NEXT_ROUND_DELAY_MS = 6_000;
 
 interface ServerClockAnchor {
@@ -437,7 +437,12 @@ export default function MultiRoom() {
       setReplayRoundIndex(null);
       setOfflineNote('');
       setRoundExpired(false);
-      applyRoomSnapshot(p.room, false, p.serverNow, ROUND_TIME_MS);
+      applyRoomSnapshot(
+        p.room,
+        false,
+        p.serverNow,
+        p.room.roundDurationMs ?? DEFAULT_ROUND_DURATION_MS
+      );
     };
     const onRoundOver = (p: { room: RoomState; serverNow?: number }) => {
       setGuessCooldownUntil(0);
@@ -1215,7 +1220,8 @@ export default function MultiRoom() {
                 })}</li>
                 <li>{t('multi.customRulesSummary', {
                   guesses: room.maxGuesses,
-                  seconds: room.guessIntervalMs / 1000,
+                  interval: room.guessIntervalMs / 1000,
+                  duration: (room.roundDurationMs ?? DEFAULT_ROUND_DURATION_MS) / 1000,
                 })}</li>
                 <li>{room.allowSpectators
                   ? t('multi.allowSpectating')

@@ -720,7 +720,7 @@
 .room-more-settings[open] .room-more-settings-chevron { transform: rotate(180deg); }
 .room-more-settings-fields {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 4px 0 2px;
 }
@@ -744,6 +744,13 @@
   padding-inline: 10px;
 }
 .room-number-input > span { color: var(--text-light); white-space: nowrap; }
+.room-number-error {
+  color: var(--danger);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.room-number-input .input[aria-invalid='true'] { border-color: var(--danger); }
 .matchmaking-requirement { margin: 8px 0 0; color: var(--warning); }
 .match-report-dialog { width: min(540px, 100%); }
 .match-report-link {

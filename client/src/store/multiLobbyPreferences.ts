@@ -6,6 +6,9 @@ export const MAX_MULTI_MAX_GUESSES = 15;
 export const DEFAULT_MULTI_GUESS_INTERVAL_SECONDS = 1.5;
 export const MIN_MULTI_GUESS_INTERVAL_SECONDS = 0;
 export const MAX_MULTI_GUESS_INTERVAL_SECONDS = 10;
+export const DEFAULT_MULTI_ROUND_DURATION_SECONDS = 120;
+export const MIN_MULTI_ROUND_DURATION_SECONDS = 10;
+export const MAX_MULTI_ROUND_DURATION_SECONDS = 600;
 
 export interface MultiLobbyPreferences {
   gameMode: 'classic' | 'relay';
@@ -17,6 +20,7 @@ export interface MultiLobbyPreferences {
   verifiedEmailOnly: boolean;
   maxGuesses: number;
   guessIntervalSeconds: number;
+  roundDurationSeconds: number;
   matchmakingDifficulty: string;
 }
 
@@ -34,6 +38,7 @@ export function loadMultiLobbyPreferences(
     verifiedEmailOnly: false,
     maxGuesses: DEFAULT_MULTI_MAX_GUESSES,
     guessIntervalSeconds: DEFAULT_MULTI_GUESS_INTERVAL_SECONDS,
+    roundDurationSeconds: DEFAULT_MULTI_ROUND_DURATION_SECONDS,
     matchmakingDifficulty: fallbackDifficulty,
   };
   try {
@@ -75,6 +80,11 @@ export function loadMultiLobbyPreferences(
         && stored.guessIntervalSeconds <= MAX_MULTI_GUESS_INTERVAL_SECONDS
         ? stored.guessIntervalSeconds
         : defaults.guessIntervalSeconds,
+      roundDurationSeconds: Number.isInteger(stored.roundDurationSeconds)
+        && Number(stored.roundDurationSeconds) >= MIN_MULTI_ROUND_DURATION_SECONDS
+        && Number(stored.roundDurationSeconds) <= MAX_MULTI_ROUND_DURATION_SECONDS
+        ? Number(stored.roundDurationSeconds)
+        : defaults.roundDurationSeconds,
       matchmakingDifficulty: typeof stored.matchmakingDifficulty === 'string'
         && difficultySet.has(stored.matchmakingDifficulty)
         ? stored.matchmakingDifficulty

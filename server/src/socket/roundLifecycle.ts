@@ -4,7 +4,6 @@ import { pickTargetAvoidingRecent, rememberTargetSelection } from '../services/t
 import {
   FINISHED_ROOM_TTL_MS,
   NEXT_ROUND_DELAY_MS,
-  ROUND_TIME_MS,
 } from './constants';
 import { appendReplayRound, persistMatch } from './matchLifecycle';
 import { cleanupRoom } from './roomMaintenance';
@@ -39,7 +38,7 @@ export async function startRound(io: Server, roomId: string): Promise<boolean> {
     room.readyCheckEndsAt = null;
     room.round += 1;
     room.targetPlayerId = target.id;
-    room.roundEndsAt = Date.now() + ROUND_TIME_MS;
+    room.roundEndsAt = Date.now() + room.roundDurationMs;
     room.nextRoundAt = null;
     room.eventResults = {};
     room.roundResult = null;
@@ -75,7 +74,7 @@ export async function startRound(io: Server, roomId: string): Promise<boolean> {
     room: publicRoom(room, viewerKey),
     serverNow: Date.now(),
   }));
-  setLocalTimer(`round:${roomId}`, ROUND_TIME_MS, () => {
+  setLocalTimer(`round:${roomId}`, room.roundDurationMs, () => {
     return finishRound(io, roomId, null, 'timeout', room.round);
   });
   return true;

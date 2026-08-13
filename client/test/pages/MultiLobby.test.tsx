@@ -64,8 +64,10 @@ describe('MultiLobby matchmaking', () => {
     await user.click(screen.getByText('更多设置'));
     const maxGuesses = screen.getByRole('spinbutton', { name: '最大猜测次数' });
     const guessInterval = screen.getByRole('spinbutton', { name: '猜测间隔' });
+    const roundDuration = screen.getByRole('spinbutton', { name: '最大猜测时间' });
     fireEvent.change(maxGuesses, { target: { value: '12' } });
     fireEvent.change(guessInterval, { target: { value: '2.5' } });
+    fireEvent.change(roundDuration, { target: { value: '300' } });
     await user.click(easyButtons[1]);
 
     await waitFor(() => {
@@ -80,6 +82,7 @@ describe('MultiLobby matchmaking', () => {
         verifiedEmailOnly: true,
         maxGuesses: 12,
         guessIntervalSeconds: 2.5,
+        roundDurationSeconds: 300,
         matchmakingDifficulty: 'easy',
         });
     });
@@ -96,6 +99,7 @@ describe('MultiLobby matchmaking', () => {
     await user.click(screen.getByText('更多设置'));
     expect(screen.getByRole('spinbutton', { name: '最大猜测次数' })).toHaveValue(12);
     expect(screen.getByRole('spinbutton', { name: '猜测间隔' })).toHaveValue(2.5);
+    expect(screen.getByRole('spinbutton', { name: '最大猜测时间' })).toHaveValue(300);
   });
 
   it('persists relay mode and sends cooperative round settings', async () => {
@@ -133,14 +137,70 @@ describe('MultiLobby matchmaking', () => {
     await user.click(screen.getByText('更多设置'));
     const maxGuesses = screen.getByRole('spinbutton', { name: '最大猜测次数' });
     const guessInterval = screen.getByRole('spinbutton', { name: '猜测间隔' });
+    const roundDuration = screen.getByRole('spinbutton', { name: '最大猜测时间' });
     fireEvent.change(maxGuesses, { target: { value: '15' } });
     fireEvent.change(guessInterval, { target: { value: '0' } });
+    fireEvent.change(roundDuration, { target: { value: '600' } });
     await user.click(screen.getByRole('button', { name: '创建房间' }));
 
     expect(socket.emit).toHaveBeenCalledWith('room:create', expect.objectContaining({
       verifiedOnly: true,
       maxGuesses: 15,
       guessIntervalMs: 0,
+      roundDurationMs: 600_000,
+    }), expect.any(Function));
+    expect(roundDuration).toHaveAttribute('min', '10');
+    expect(roundDuration).toHaveAttribute('max', '600');
+  });
+
+  it('shows range hints and blocks room creation until advanced settings are valid', async () => {
+    const user = userEvent.setup();
+    renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
+
+    await user.click(screen.getByText('更多设置'));
+    const maxGuesses = screen.getByRole('spinbutton', { name: '最大猜测次数' });
+    const guessInterval = screen.getByRole('spinbutton', { name: '猜测间隔' });
+    const roundDuration = screen.getByRole('spinbutton', { name: '最大猜测时间' });
+    const createRoom = screen.getByRole('button', { name: '创建房间' });
+
+    fireEvent.change(maxGuesses, { target: { value: '16' } });
+    fireEvent.change(guessInterval, { target: { value: '10.1' } });
+    fireEvent.change(roundDuration, { target: { value: '601' } });
+
+    expect(maxGuesses).toHaveValue(16);
+    expect(guessInterval).toHaveValue(10.1);
+    expect(roundDuration).toHaveValue(601);
+    expect(maxGuesses).toHaveAttribute('aria-invalid', 'true');
+    expect(guessInterval).toHaveAttribute('aria-invalid', 'true');
+    expect(roundDuration).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByText('请输入 1 到 15 之间的整数')).toBeInTheDocument();
+    expect(screen.getByText('请输入 0 到 10 之间的数值')).toBeInTheDocument();
+    expect(screen.getByText('请输入 10 到 600 之间的整数')).toBeInTheDocument();
+    expect(createRoom).toBeDisabled();
+    await user.click(createRoom);
+    expect(socket.emit).not.toHaveBeenCalledWith(
+      'room:create',
+      expect.anything(),
+      expect.any(Function)
+    );
+
+    fireEvent.change(maxGuesses, { target: { value: '15' } });
+    fireEvent.change(guessInterval, { target: { value: '10' } });
+    fireEvent.change(roundDuration, { target: { value: '600' } });
+
+    expect(maxGuesses).toHaveAttribute('aria-invalid', 'false');
+    expect(guessInterval).toHaveAttribute('aria-invalid', 'false');
+    expect(roundDuration).toHaveAttribute('aria-invalid', 'false');
+    expect(screen.queryByText('请输入 1 到 15 之间的整数')).not.toBeInTheDocument();
+    expect(screen.queryByText('请输入 0 到 10 之间的数值')).not.toBeInTheDocument();
+    expect(screen.queryByText('请输入 10 到 600 之间的整数')).not.toBeInTheDocument();
+    expect(createRoom).toBeEnabled();
+
+    await user.click(createRoom);
+    expect(socket.emit).toHaveBeenCalledWith('room:create', expect.objectContaining({
+      maxGuesses: 15,
+      guessIntervalMs: 10_000,
+      roundDurationMs: 600_000,
     }), expect.any(Function));
   });
 });

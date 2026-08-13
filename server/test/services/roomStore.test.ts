@@ -31,6 +31,7 @@ function makeRoom(id: string): StoredRoom {
     relayGuesses: [],
     maxGuesses: 8,
     guessIntervalMs: 1_500,
+    roundDurationMs: 120_000,
     rematchAllowed: true,
     rematchInviterKey: null,
     rematchAcceptedKeys: [],
@@ -65,9 +66,14 @@ describe('roomStore local fallback', () => {
     const legacy = room as unknown as Record<string, unknown>;
     delete legacy.maxGuesses;
     delete legacy.guessIntervalMs;
+    delete legacy.roundDurationMs;
     await saveRoom(room);
     const stored = await getRoom(room.id);
-    expect(stored).toMatchObject({ maxGuesses: 8, guessIntervalMs: 1_500 });
+    expect(stored).toMatchObject({
+      maxGuesses: 8,
+      guessIntervalMs: 1_500,
+      roundDurationMs: 120_000,
+    });
     if (stored) await deleteRoom(stored);
   });
 

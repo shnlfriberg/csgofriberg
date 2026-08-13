@@ -183,6 +183,7 @@ export interface RoomState {
   winsNeeded: number;
   maxGuesses: number;
   guessIntervalMs: number;
+  roundDurationMs: number;
   roundEndsAt: number | null;
   matchStartsAt: number | null;
   spectatorCount: number;
