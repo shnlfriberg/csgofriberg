@@ -381,6 +381,60 @@ describe('MultiRoom replay', () => {
     expect(within(table).getByText('Opponent relay guess')).toBeInTheDocument();
   });
 
+  it.each([
+    ['guessed', '本局共同猜中'],
+    ['exhausted', '本局未猜中'],
+  ] as const)('shows the cooperative relay round result for %s', async (reason, title) => {
+    const relayRoom: RoomState = {
+      ...room,
+      status: 'playing',
+      gameMode: 'relay',
+      totalRounds: 3,
+      currentTurnKey: 'g:me',
+      relaySolvedRounds: 0,
+      relayGuesses: [],
+      round: 1,
+      roundId: 1,
+      roundEndsAt: Date.now() + 60_000,
+      matchResult: null,
+      matchReplay: undefined,
+      players: room.players.map((player) => ({ ...player, score: 0, guessCount: 0 })),
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relayRoom, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    expect(await screen.findByPlaceholderText('输入选手昵称...')).toBeEnabled();
+
+    const handler = socket.on.mock.calls.find(([event]) => event === 'round:over')?.[1];
+    expect(handler).toEqual(expect.any(Function));
+    act(() => handler({
+      room: {
+        ...relayRoom,
+        status: 'round_over',
+        stateVersion: relayRoom.stateVersion + 1,
+        roundEndsAt: null,
+        currentTurnKey: null,
+        roundResult: {
+          round: 1,
+          winnerKey: null,
+          reason,
+          answer,
+          nextRoundAt: Date.now() + 6_000,
+        },
+      },
+      serverNow: Date.now(),
+    }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('heading', { name: title })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('heading', { name: '本局平局' })).not.toBeInTheDocument();
+  });
+
   it('shows a match-ended modal when a player leaves an active relay room', async () => {
     const relayRoom: RoomState = {
       ...room,

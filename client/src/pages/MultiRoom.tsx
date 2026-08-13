@@ -1385,7 +1385,9 @@ export default function MultiRoom() {
       {roundOver && !matchOver && (
         <AnswerOverlay
           title={
-            roundOver.winnerKey == null
+            room.gameMode === 'relay'
+              ? t(roundOver.reason === 'guessed' ? 'multi.relayRoundSolved' : 'multi.relayRoundMissed')
+              : roundOver.winnerKey == null
               ? t('multi.roundDraw')
               : roundOver.winnerKey === myKey
                 ? t('multi.roundWon')
