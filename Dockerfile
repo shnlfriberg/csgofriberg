@@ -17,10 +17,12 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY client/package.json client/package.json
 COPY server/package.json server/package.json
 
-# Build-only dependencies stay in this disposable stage. Optional platform
-# packages are required here by tools such as esbuild.
+# Build-only dependencies stay in this disposable stage. Skip lifecycle scripts
+# during the broad install so the local-only SQLite driver cannot invoke
+# node-gyp; esbuild is rebuilt explicitly for the build platform below.
 RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
-    pnpm install --frozen-lockfile
+    pnpm install --frozen-lockfile --ignore-scripts \
+ && pnpm rebuild esbuild
 
 COPY scripts scripts
 COPY pow-wasm pow-wasm
