@@ -2,6 +2,9 @@
   "name": "csgofriberg",
   "version": "1.0.0",
   "packageManager": "pnpm@11.13.1",
+  "engines": {
+    "node": ">=26"
+  },
   "private": true,
   "description": "弗一把 - CS:GO/CS2 Major 选手猜测游戏",
   "scripts": {

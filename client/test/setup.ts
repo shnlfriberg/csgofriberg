@@ -1,7 +1,54 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest';
-import i18n from '../src/i18n';
+
+// Node 26 exposes a process-level localStorage getter that is undefined unless
+// --localstorage-file is provided. jsdom inherits that value in this setup, so
+// provide the small Storage surface used by the app for each test worker.
+function createMemoryStorage(): Storage {
+  const values = new Map<string, string>();
+  return {
+    get length() {
+      return values.size;
+    },
+    clear() {
+      values.clear();
+    },
+    getItem(key: string) {
+      return values.get(String(key)) ?? null;
+    },
+    key(index: number) {
+      return [...values.keys()][index] ?? null;
+    },
+    removeItem(key: string) {
+      values.delete(String(key));
+    },
+    setItem(key: string, value: string) {
+      values.set(String(key), String(value));
+    },
+  };
+}
+
+function installStorage(name: 'localStorage' | 'sessionStorage'): void {
+  const storage = createMemoryStorage();
+  Object.defineProperty(window, name, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: storage,
+  });
+  Object.defineProperty(globalThis, name, {
+    configurable: true,
+    enumerable: true,
+    writable: true,
+    value: storage,
+  });
+}
+
+installStorage('localStorage');
+installStorage('sessionStorage');
+
+let i18n: typeof import('../src/i18n').default;
 
 function installViewportMocks(mobile = false) {
   Object.defineProperty(window, 'matchMedia', {
@@ -36,6 +83,7 @@ function installViewportMocks(mobile = false) {
 }
 
 beforeAll(async () => {
+  i18n = (await import('../src/i18n')).default;
   await i18n.changeLanguage('zh');
 });
 
