@@ -1037,89 +1037,117 @@ describe('multiplayer socket integration', () => {
     }
   });
 
-  it('runs relay rooms with shared guesses and strict turn rotation', async () => {
+  it('runs four-player relay rooms with shared guesses and strict turn rotation', async () => {
     const stamp = Date.now();
-    const tokenA = jwt.sign({ key: `relay-a-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-    const tokenB = jwt.sign({ key: `relay-b-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-    const tokenC = jwt.sign({ key: `relay-c-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-    const a = await connect(withPowCookie(`csgofriberg_guest=${tokenA}`));
-    const b = await connect(withPowCookie(`csgofriberg_guest=${tokenB}`));
-    const c = await connect(withPowCookie(`csgofriberg_guest=${tokenC}`));
+    const keys = ['a', 'b', 'c', 'd'].map((suffix) => `relay-4-${suffix}-${stamp}`);
+    const sockets = await Promise.all(keys.map(async (key) => connect(withPowCookie(
+      `csgofriberg_guest=${jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' })}`
+    ))));
+    const [a, b, c, d] = sockets;
+    const socketByPlayerKey = new Map(keys.map((key, index) => [`g:${key}`, sockets[index]]));
     try {
+      expect(await emit(a, 'room:create', {
+        dbType: 'easy', gameMode: 'relay', totalRounds: 1, maxPlayers: 5,
+      })).toEqual({ code: 'VALIDATION_FAILED' });
       const created = await emit(a, 'room:create', {
-        dbType: 'easy', gameMode: 'relay', totalRounds: 1, maxGuesses: 3, guessIntervalMs: 0,
+        dbType: 'easy', gameMode: 'relay', totalRounds: 1, maxPlayers: 4,
+        maxGuesses: 5, guessIntervalMs: 0,
       });
       createdRoomIds.push(created.room.id);
-      expect(created.room).toMatchObject({ gameMode: 'relay', totalRounds: 1, relaySolvedRounds: 0 });
-      expect(await emit(c, 'room:state-probe')).toEqual({ code: 'NOT_IN_ROOM' });
+      expect(created.room).toMatchObject({
+        gameMode: 'relay', totalRounds: 1, maxPlayers: 4, relaySolvedRounds: 0,
+      });
       await emit(b, 'room:join', { roomId: created.room.id });
+      await emit(c, 'room:join', { roomId: created.room.id });
+      await emit(d, 'room:join', { roomId: created.room.id });
       await emit(b, 'room:ready', { ready: true });
+      await emit(c, 'room:ready', { ready: true });
+      await emit(d, 'room:ready', { ready: true });
       expect((await emit(a, 'game:start')).ok).toBe(true);
       const active = await getRoom(created.room.id);
-      expect(active?.currentTurnKey).toMatch(/^g:relay-[ab]-/);
-      const first = active!.players.find((player) => player.key === active!.currentTurnKey)!;
-      const second = active!.players.find((player) => player.key !== active!.currentTurnKey)!;
-      const firstSocket = first.key.endsWith(`relay-a-${stamp}`) ? a : b;
-      const secondSocket = firstSocket === a ? b : a;
-      const wrong = getDifficultyPlayers('easy').find((player) => player.id !== active!.targetPlayerId)!;
+      expect(active?.players).toHaveLength(4);
+      expect(active?.currentTurnKey).toMatch(/^g:relay-4-[abcd]-/);
+      const turnOrder = active!.players.map((player) => player.key).sort();
+      const firstTurnKey = active!.currentTurnKey!;
+      const firstTurnIndex = turnOrder.indexOf(firstTurnKey);
+      const wrongGuesses = getDifficultyPlayers('easy')
+        .filter((player) => player.id !== active!.targetPlayerId)
+        .slice(0, 4);
+      expect(wrongGuesses).toHaveLength(4);
 
-      expect(await emit(firstSocket, 'room:state-probe')).toMatchObject({
+      expect(await emit(socketByPlayerKey.get(firstTurnKey)!, 'room:state-probe')).toMatchObject({
         roomId: created.room.id,
         roundId: active!.round,
         stateVersion: active!.revision,
         status: 'playing',
         gameMode: 'relay',
-        currentTurnKey: first.key,
+        currentTurnKey: firstTurnKey,
       });
       let lastProbe: any;
       for (let attempt = 0; attempt < 12; attempt += 1) {
-        lastProbe = await emit(firstSocket, 'room:state-probe');
+        lastProbe = await emit(socketByPlayerKey.get(firstTurnKey)!, 'room:state-probe');
       }
       expect(lastProbe).toEqual({ code: 'RATE_LIMITED' });
 
-      expect((await emit(secondSocket, 'game:guess', {
-        playerId: wrong.id, roundId: active!.round, eventId: `relay-wrong-turn-${stamp}`,
+      const secondTurnKey = turnOrder[(firstTurnIndex + 1) % turnOrder.length];
+      expect((await emit(socketByPlayerKey.get(secondTurnKey)!, 'game:guess', {
+        playerId: wrongGuesses[0].id,
+        roundId: active!.round,
+        eventId: `relay-wrong-turn-${stamp}`,
       })).code).toBe('NOT_YOUR_TURN');
-      expect(await emit(firstSocket, 'game:skip-round', { roundId: active!.round }))
+      expect(await emit(socketByPlayerKey.get(firstTurnKey)!, 'game:skip-round', { roundId: active!.round }))
         .toEqual({ code: 'RELAY_SKIP_DISABLED' });
-      const firstApplied = onceEvent(firstSocket, 'game:guess:applied');
-      const secondApplied = onceEvent(secondSocket, 'game:guess:applied');
-      expect((await emit(firstSocket, 'game:guess', {
-        playerId: wrong.id, roundId: active!.round, eventId: `relay-first-${stamp}`,
-      })).code).toBeUndefined();
-      for (const applied of await Promise.all([firstApplied, secondApplied])) {
-        expect(applied).not.toHaveProperty('room');
-        expect(applied).toMatchObject({
-          key: first.key,
-          feedback: { playerId: wrong.id, nickname: wrong.nickname },
-          currentTurnKey: second.key,
-          guessedAt: expect.any(Number),
-        });
-        expect(applied.feedback.attributes).not.toHaveProperty('region');
+
+      for (let guessIndex = 0; guessIndex < wrongGuesses.length; guessIndex += 1) {
+        const actorKey = turnOrder[(firstTurnIndex + guessIndex) % turnOrder.length];
+        const nextTurnKey = turnOrder[(firstTurnIndex + guessIndex + 1) % turnOrder.length];
+        const appliedEvents = sockets.map((socket) => onceEvent(socket, 'game:guess:applied'));
+        expect((await emit(socketByPlayerKey.get(actorKey)!, 'game:guess', {
+          playerId: wrongGuesses[guessIndex].id,
+          roundId: active!.round,
+          eventId: `relay-rotate-${guessIndex}-${stamp}`,
+        })).code).toBeUndefined();
+        for (const applied of await Promise.all(appliedEvents)) {
+          expect(applied).not.toHaveProperty('room');
+          expect(applied).toMatchObject({
+            key: actorKey,
+            feedback: {
+              playerId: wrongGuesses[guessIndex].id,
+              nickname: wrongGuesses[guessIndex].nickname,
+            },
+            currentTurnKey: nextTurnKey,
+            guessedAt: expect.any(Number),
+          });
+          expect(applied.feedback.attributes).not.toHaveProperty('region');
+        }
+        expect((await getRoom(created.room.id))?.currentTurnKey).toBe(nextTurnKey);
       }
-      expect((await getRoom(created.room.id))?.currentTurnKey).toBe(second.key);
-      expect(await emit(secondSocket, 'room:state-probe')).toMatchObject({
+
+      expect(await emit(socketByPlayerKey.get(secondTurnKey)!, 'room:state-probe')).toMatchObject({
         roomId: created.room.id,
         roundId: active!.round,
         status: 'playing',
         gameMode: 'relay',
-        currentTurnKey: second.key,
+        currentTurnKey: firstTurnKey,
       });
-      expect((await emit(secondSocket, 'game:guess', {
-        playerId: wrong.id, roundId: active!.round, eventId: `relay-duplicate-${stamp}`,
+      expect((await emit(socketByPlayerKey.get(firstTurnKey)!, 'game:guess', {
+        playerId: wrongGuesses[0].id,
+        roundId: active!.round,
+        eventId: `relay-duplicate-${stamp}`,
       })).code).toBe('ALREADY_GUESSED');
       const matchOver = onceEvent(a, 'match:over');
-      expect((await emit(secondSocket, 'game:guess', {
+      expect((await emit(socketByPlayerKey.get(firstTurnKey)!, 'game:guess', {
         playerId: active!.targetPlayerId, roundId: active!.round, eventId: `relay-solve-${stamp}`,
       })).code).toBeUndefined();
       const finished = (await matchOver).room;
       expect(finished).toMatchObject({ gameMode: 'relay', relaySolvedRounds: 1 });
       expect(finished.matchResult).toMatchObject({ winnerKey: null, reason: 'cooperative_score' });
-      expect(finished.relayGuesses.map((guess: any) => guess.actorKey)).toEqual([first.key, second.key]);
+      expect(finished.relayGuesses.map((guess: any) => guess.actorKey)).toEqual([
+        ...Array.from({ length: 4 }, (_, index) => turnOrder[(firstTurnIndex + index) % turnOrder.length]),
+        firstTurnKey,
+      ]);
     } finally {
-      a.disconnect();
-      b.disconnect();
-      c.disconnect();
+      sockets.forEach((socket) => socket.disconnect());
     }
   });
 

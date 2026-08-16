@@ -7,6 +7,7 @@ import {
   MAX_ROOM_MAX_GUESSES,
   MAX_ROOM_ROUND_DURATION_MS,
   MAX_CLASSIC_ROOM_PLAYERS,
+  MAX_RELAY_ROOM_PLAYERS,
   MIN_ROOM_GUESS_INTERVAL_MS,
   MIN_ROOM_MAX_GUESSES,
   MIN_ROOM_ROUND_DURATION_MS,
@@ -40,6 +41,14 @@ export const roomCreatePayloadSchema = z.object({
     .min(MIN_ROOM_ROUND_DURATION_MS)
     .max(MAX_ROOM_ROUND_DURATION_MS)
     .default(DEFAULT_ROOM_ROUND_DURATION_MS),
+}).superRefine((payload, context) => {
+  if (payload.gameMode === 'relay' && payload.maxPlayers > MAX_RELAY_ROOM_PLAYERS) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['maxPlayers'],
+      message: `Relay rooms support at most ${MAX_RELAY_ROOM_PLAYERS} players`,
+    });
+  }
 });
 
 export const roomJoinPayloadSchema = z.object({

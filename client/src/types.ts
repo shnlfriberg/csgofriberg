@@ -122,6 +122,7 @@ export interface MatchReplayRound {
   }>;
   sharedGuesses?: Array<{
     actor: 'me' | 'opponent' | null;
+    actorDisplayId?: string | null;
     feedback: GuessFeedback;
     guessTime: number | null;
   }>;

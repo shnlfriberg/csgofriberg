@@ -551,8 +551,10 @@ router.get(
           const guess = getPlayer(Number(storedGuess.playerId));
           if (!guess) return [];
           const actorKey = typeof storedGuess.actorKey === 'string' ? storedGuess.actorKey : '';
+          const actor = participants.find((participant) => participant.key === actorKey);
           return [{
             actor: actorKey === identityKey ? 'me' as const : opponent && actorKey === opponent.key ? 'opponent' as const : null,
+            actorDisplayId: actor?.displayId ?? null,
             feedback: compareGuess(guess, target),
             guessTime: Number.isFinite(Number(storedGuess.guessTime)) ? Number(storedGuess.guessTime) : null,
           }];

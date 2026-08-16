@@ -105,16 +105,21 @@ describe('MultiLobby matchmaking', () => {
     const user = userEvent.setup();
     renderAtRoute(<MultiLobby />, { route: '/multi', path: '/multi' });
 
+    const playerLimit = await screen.findByRole('combobox', { name: '房间人数上限' });
+    await user.selectOptions(playerLimit, '8');
     await user.click(await screen.findByRole('button', { name: '合作接力' }));
+    expect(playerLimit).toHaveValue('4');
+    expect(screen.queryByRole('option', { name: '5 人' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: '5' }));
     await user.click(screen.getByRole('button', { name: '创建房间' }));
 
     expect(socket.emit).toHaveBeenCalledWith('room:create', expect.objectContaining({
       gameMode: 'relay',
       totalRounds: 5,
+      maxPlayers: 4,
     }), expect.any(Function));
     expect(JSON.parse(localStorage.getItem('csgofriberg.multi-lobby-preferences') ?? '{}'))
-      .toMatchObject({ gameMode: 'relay', totalRounds: 5 });
+      .toMatchObject({ gameMode: 'relay', totalRounds: 5, maxPlayers: 4 });
   });
 
   it('saves, selects, updates, and deletes named browser presets', async () => {

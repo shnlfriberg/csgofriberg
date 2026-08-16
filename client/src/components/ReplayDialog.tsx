@@ -219,11 +219,15 @@ export default function ReplayDialog({
                             rowAnnotations={activeRound.sharedGuesses.map((guess) => {
                               const label = guess.actor === 'me'
                                 ? t('replay.mySide')
-                                : guess.actor === 'opponent' ? replay.opponent?.displayId ?? '-' : '-';
+                                : guess.actor === 'opponent'
+                                  ? replay.opponent?.displayId ?? '-'
+                                  : guess.actorDisplayId ?? '-';
                               return {
                                 content: label,
                                 title: label,
-                                tone: guess.actor === 'me' ? 'self' as const : guess.actor === 'opponent' ? 'other' as const : undefined,
+                                tone: guess.actor === 'me'
+                                  ? 'self' as const
+                                  : label !== '-' ? 'other' as const : undefined,
                               };
                             })}
                           />

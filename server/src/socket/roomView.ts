@@ -156,10 +156,12 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
         sharedGuesses: round.sharedGuesses?.flatMap((guess) => {
           const player = getPlayer(guess.playerId);
           if (!player) return [];
+          const actorIdentity = room.players.find((candidate) => candidate.key === guess.actorKey);
           return [{
             actor: guess.actorKey === me.key
               ? 'me' as const
               : opponent && guess.actorKey === opponent.key ? 'opponent' as const : null,
+            actorDisplayId: actorIdentity ? identityDisplayName(actorIdentity) : null,
             feedback: visibleGuess(compareGuess(player, target)),
             guessTime: guess.guessTime,
           }];

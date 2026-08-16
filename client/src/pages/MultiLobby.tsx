@@ -30,11 +30,14 @@ import {
   loadMultiLobbyPresets,
   saveMultiLobbyPresets,
   MultiLobbyPreset,
+  MAX_CLASSIC_MULTI_PLAYERS,
   MAX_MULTI_GUESS_INTERVAL_SECONDS,
   MAX_MULTI_MAX_GUESSES,
   MAX_MULTI_ROUND_DURATION_SECONDS,
+  MAX_RELAY_MULTI_PLAYERS,
   MIN_MULTI_GUESS_INTERVAL_SECONDS,
   MIN_MULTI_MAX_GUESSES,
+  MIN_MULTI_PLAYERS,
   MIN_MULTI_ROUND_DURATION_SECONDS,
 } from '../store/multiLobbyPreferences';
 import { useAuth } from '../store/auth';
@@ -172,6 +175,21 @@ export default function MultiLobby() {
   };
   const selectedPreset = presets.find((preset) => preset.name === selectedPresetName);
   const selectedPresetValue = selectedPreset?.name ?? '';
+  const maxPlayerOptions = Array.from(
+    {
+      length: (gameMode === 'relay'
+        ? MAX_RELAY_MULTI_PLAYERS
+        : MAX_CLASSIC_MULTI_PLAYERS) - MIN_MULTI_PLAYERS + 1,
+    },
+    (_, index) => MIN_MULTI_PLAYERS + index
+  );
+
+  const changeGameMode = (nextMode: 'classic' | 'relay') => {
+    setGameMode(nextMode);
+    if (nextMode === 'relay') {
+      setMaxPlayers((current) => Math.min(current, MAX_RELAY_MULTI_PLAYERS));
+    }
+  };
 
   const applyPreset = (preset: MultiLobbyPreset) => {
     setSelectedPresetName(preset.name);
@@ -419,7 +437,7 @@ export default function MultiLobby() {
       gameMode,
       totalRounds,
       boType,
-      maxPlayers: gameMode === 'classic' ? maxPlayers : 2,
+      maxPlayers,
       allowSpectators,
       verifiedOnly: verifiedEmailOnly,
       anonymous,
@@ -598,7 +616,7 @@ export default function MultiLobby() {
               label={t('multi.gameModeLabel')}
               options={['classic', 'relay']}
               value={gameMode}
-              onChange={setGameMode}
+              onChange={changeGameMode}
               format={(v) => t(v === 'relay' ? 'multi.relayMode' : 'multi.classicMode')}
             />
             <OptionGroup
@@ -608,23 +626,21 @@ export default function MultiLobby() {
               onChange={gameMode === 'relay' ? setTotalRounds : setBoType}
               format={(v) => gameMode === 'relay' ? String(v) : `BO${v}`}
             />
-            {gameMode === 'classic' && (
-              <label className="option-row room-player-limit-setting">
-                <span className="opt-label">{t('multi.maxPlayersLabel')}</span>
-                <select
-                  className="input room-player-limit-select"
-                  aria-label={t('multi.maxPlayersLabel')}
-                  value={maxPlayers}
-                  onChange={(event) => setMaxPlayers(Number(event.currentTarget.value))}
-                >
-                  {[2, 3, 4, 5, 6, 7, 8].map((count) => (
-                    <option key={count} value={count}>
-                      {t('multi.playerCountValue', { count })}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
+            <label className="option-row room-player-limit-setting">
+              <span className="opt-label">{t('multi.maxPlayersLabel')}</span>
+              <select
+                className="input room-player-limit-select"
+                aria-label={t('multi.maxPlayersLabel')}
+                value={maxPlayers}
+                onChange={(event) => setMaxPlayers(Number(event.currentTarget.value))}
+              >
+                {maxPlayerOptions.map((count) => (
+                  <option key={count} value={count}>
+                    {t('multi.playerCountValue', { count })}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button className="btn btn-ghost room-more-settings-button" type="button" onClick={() => setSettingsOpen(true)}>
               <Settings2 size={16} aria-hidden="true" />
               {t('multi.moreSettings')}

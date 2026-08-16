@@ -511,6 +511,8 @@ describe('MultiRoom replay', () => {
     expect(within(table).getByText('Opponent')).toHaveClass('guess-row-actor-other');
     expect(within(table).getByText('My relay guess')).toBeInTheDocument();
     expect(within(table).getByText('Opponent relay guess')).toBeInTheDocument();
+    expect(within(relayBoard as HTMLElement).getByText('轮到你')).toBeInTheDocument();
+    expect(within(relayBoard as HTMLElement).getByText('下一位：Opponent')).toBeInTheDocument();
   });
 
   it.each([

@@ -151,6 +151,7 @@ export const MIN_ROOM_ROUND_DURATION_MS = 10_000;
 export const MAX_ROOM_ROUND_DURATION_MS = 600_000;
 export const MIN_CLASSIC_ROOM_PLAYERS = 2;
 export const MAX_CLASSIC_ROOM_PLAYERS = 8;
+export const MAX_RELAY_ROOM_PLAYERS = 4;
 
 const ROOM_TTL_SECONDS = 6 * 60 * 60;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
@@ -244,12 +245,15 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   if (room.gameMode !== 'relay') room.gameMode = 'classic';
   if (![1, 3, 5, 7].includes(Number(room.totalRounds))) room.totalRounds = room.gameMode === 'relay' ? 3 : room.boType;
   if (room.gameMode === 'classic') room.totalRounds = room.boType;
+  const maxPlayersForMode = room.gameMode === 'relay'
+    ? MAX_RELAY_ROOM_PLAYERS
+    : MAX_CLASSIC_ROOM_PLAYERS;
   if (
     !Number.isInteger(room.maxPlayers)
     || room.maxPlayers < MIN_CLASSIC_ROOM_PLAYERS
-    || room.maxPlayers > MAX_CLASSIC_ROOM_PLAYERS
+    || room.maxPlayers > maxPlayersForMode
   ) room.maxPlayers = 2;
-  if (room.gameMode === 'relay' || room.matchmaking) room.maxPlayers = 2;
+  if (room.matchmaking) room.maxPlayers = 2;
   room.currentTurnKey ??= null;
   if (!Number.isInteger(room.relaySolvedRounds) || room.relaySolvedRounds < 0) room.relaySolvedRounds = 0;
   if (!Array.isArray(room.relayGuesses)) room.relayGuesses = [];
@@ -794,7 +798,13 @@ if shouldFinish then
   if matchOver then matchResult = cjson.encode({winnerKey=cjson.null, reason='cooperative_score', forfeitedKey=cjson.null}) end
 else
   local keys = redis.call('HKEYS', KEYS[7])
-  for _, key in ipairs(keys) do if key ~= identity then nextTurn = key break end end
+  table.sort(keys)
+  for index, key in ipairs(keys) do
+    if key == identity then
+      nextTurn = keys[(index % #keys) + 1]
+      break
+    end
+  end
 end
 local revision = tonumber(meta[5] or 0) + 1
 redis.call('HSET', KEYS[2], 'status', status, 'roundEndsAt', roundEndsAt, 'nextRoundAt', nextRoundAt, 'roundResult', roundResult, 'matchResult', matchResult, 'currentTurnKey', nextTurn, 'relaySolvedRounds', solved, 'relayGuesses', cjson.encode(relayGuesses), 'revision', revision, 'updatedAt', now)
@@ -971,7 +981,14 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
           room.roundResult = { round: room.round, winnerKey: null, reason: input.feedback.correct ? 'guessed' : 'exhausted', matchOver, nextRoundAt: room.nextRoundAt };
           if (matchOver) room.matchResult = { winnerKey: null, reason: 'cooperative_score', forfeitedKey: null };
         } else {
-          room.currentTurnKey = room.players.find((candidate) => candidate.key !== input.identity)?.key ?? null;
+          const relayPlayerKeys = room.players
+            .filter((candidate) => !candidate.eliminated)
+            .map((candidate) => candidate.key)
+            .sort();
+          const currentIndex = relayPlayerKeys.indexOf(input.identity);
+          room.currentTurnKey = currentIndex >= 0
+            ? relayPlayerKeys[(currentIndex + 1) % relayPlayerKeys.length] ?? null
+            : null;
         }
         return { kind: 'applied', feedback: input.feedback, relayGuess, round: room.round, correct: input.feedback.correct, shouldFinish, matchOver, revision: room.revision, playerKeys: room.players.map((candidate) => candidate.key), room };
       }
@@ -1078,7 +1095,7 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
     String(input.minGuessIntervalMs),
     String(input.roundDurationMs),
   ];
-  const scriptName = input.gameMode === 'relay' ? 'apply-relay-guess-hash-v1' : 'apply-room-guess-hash-v5';
+  const scriptName = input.gameMode === 'relay' ? 'apply-relay-guess-hash-v2' : 'apply-room-guess-hash-v5';
   const script = input.gameMode === 'relay' ? APPLY_RELAY_GUESS_HASH_SCRIPT : APPLY_ROOM_GUESS_HASH_SCRIPT;
   let result = await evalStateScript(scriptName, script, keys, args);
   if (typeof result !== 'string') throw new Error('INVALID_GUESS_RESULT');

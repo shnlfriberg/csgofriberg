@@ -1,6 +1,9 @@
 const STORAGE_KEY = 'csgofriberg.multi-lobby-preferences';
 const PRESETS_STORAGE_KEY = 'csgofriberg.multi-lobby-presets';
 const BO_OPTIONS = new Set([1, 3, 5, 7]);
+export const MIN_MULTI_PLAYERS = 2;
+export const MAX_CLASSIC_MULTI_PLAYERS = 8;
+export const MAX_RELAY_MULTI_PLAYERS = 4;
 export const DEFAULT_MULTI_MAX_GUESSES = 8;
 export const MIN_MULTI_MAX_GUESSES = 2;
 export const MAX_MULTI_MAX_GUESSES = 15;
@@ -48,7 +51,11 @@ function isValidPreset(value: unknown, availableDifficulties: readonly string[])
     && typeof preset.totalRounds === 'number' && BO_OPTIONS.has(preset.totalRounds)
     && typeof preset.createDifficulty === 'string' && availableDifficulties.includes(preset.createDifficulty)
     && typeof preset.boType === 'number' && BO_OPTIONS.has(preset.boType)
-    && Number.isInteger(preset.maxPlayers) && Number(preset.maxPlayers) >= 2 && Number(preset.maxPlayers) <= 8
+    && Number.isInteger(preset.maxPlayers)
+    && Number(preset.maxPlayers) >= MIN_MULTI_PLAYERS
+    && Number(preset.maxPlayers) <= (preset.gameMode === 'relay'
+      ? MAX_RELAY_MULTI_PLAYERS
+      : MAX_CLASSIC_MULTI_PLAYERS)
     && typeof preset.allowSpectators === 'boolean'
     && typeof preset.verifiedEmailOnly === 'boolean'
     && Number.isInteger(preset.maxGuesses) && Number(preset.maxGuesses) >= MIN_MULTI_MAX_GUESSES && Number(preset.maxGuesses) <= MAX_MULTI_MAX_GUESSES
@@ -103,9 +110,13 @@ export function loadMultiLobbyPreferences(
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults;
     const stored = JSON.parse(raw) as Partial<MultiLobbyPreferences>;
+    const gameMode = stored.gameMode === 'relay' ? 'relay' : 'classic';
+    const maxPlayersForMode = gameMode === 'relay'
+      ? MAX_RELAY_MULTI_PLAYERS
+      : MAX_CLASSIC_MULTI_PLAYERS;
     const difficultySet = new Set(availableDifficulties);
     return {
-      gameMode: stored.gameMode === 'relay' ? 'relay' : 'classic',
+      gameMode,
       totalRounds: typeof stored.totalRounds === 'number' && BO_OPTIONS.has(stored.totalRounds)
         ? stored.totalRounds
         : defaults.totalRounds,
@@ -117,8 +128,8 @@ export function loadMultiLobbyPreferences(
         ? stored.boType
         : defaults.boType,
       maxPlayers: Number.isInteger(stored.maxPlayers)
-        && Number(stored.maxPlayers) >= 2
-        && Number(stored.maxPlayers) <= 8
+        && Number(stored.maxPlayers) >= MIN_MULTI_PLAYERS
+        && Number(stored.maxPlayers) <= maxPlayersForMode
         ? Number(stored.maxPlayers)
         : defaults.maxPlayers,
       allowSpectators: typeof stored.allowSpectators === 'boolean'

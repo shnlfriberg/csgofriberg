@@ -179,7 +179,7 @@ export async function handleRoomCreate(
     boType,
     gameMode,
     totalRounds,
-    maxPlayers: gameMode === 'classic' ? payload.maxPlayers : 2,
+    maxPlayers: payload.maxPlayers,
     currentTurnKey: null,
     relaySolvedRounds: 0,
     relayGuesses: [],

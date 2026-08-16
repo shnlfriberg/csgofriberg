@@ -1113,6 +1113,18 @@ export default function MultiRoom() {
   const isLargeClassicRoom = room.gameMode !== 'relay' && room.players.length > 2;
   const isCrowdedClassicRoom = room.gameMode !== 'relay' && (room.maxPlayers ?? 2) >= 3;
   const replay = room.matchReplay;
+  const relayTurnPlayers = room.gameMode === 'relay'
+    ? room.players.filter((player) => !player.eliminated).map((player) => player.key).sort()
+    : [];
+  const relayCurrentTurnIndex = room.currentTurnKey
+    ? relayTurnPlayers.indexOf(room.currentTurnKey)
+    : -1;
+  const nextRelayTurnKey = relayCurrentTurnIndex >= 0 && relayTurnPlayers.length > 1
+    ? relayTurnPlayers[(relayCurrentTurnIndex + 1) % relayTurnPlayers.length]
+    : null;
+  const nextRelayTurnPlayer = nextRelayTurnKey
+    ? room.players.find((player) => player.key === nextRelayTurnKey)
+    : null;
   const replayRound = replayRoundIndex == null ? null : replay?.rounds[replayRoundIndex] ?? null;
   const replayParticipantIdByPlayerKey = new Map(
     room.players.map((player, index) => [player.key, replay?.participants?.[index]?.id])
@@ -1446,11 +1458,22 @@ export default function MultiRoom() {
               {t('multi.sharedGuesses')}
               <span className="muted">{displayedRelayGuesses.length}/{room.maxGuesses}</span>
               {room.currentTurnKey && (
-                <span className="badge amber">
-                  {t('multi.currentTurn', {
-                    player: room.players.find((player) => player.key === room.currentTurnKey)?.name ?? '-',
-                  })}
-                </span>
+                <>
+                  <span className="badge amber">
+                    {room.currentTurnKey === myKey
+                      ? t('multi.yourTurn')
+                      : t('multi.currentTurn', {
+                        player: room.players.find((player) => player.key === room.currentTurnKey)?.name ?? '-',
+                      })}
+                  </span>
+                  {nextRelayTurnPlayer && (
+                    <span className="muted">
+                      {nextRelayTurnKey === myKey
+                        ? t('multi.nextTurnSelf')
+                        : t('multi.nextTurn', { player: nextRelayTurnPlayer.name })}
+                    </span>
+                  )}
+                </>
               )}
             </h3>
             {displayedRelayGuesses.length ? (

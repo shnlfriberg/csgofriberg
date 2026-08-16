@@ -62,6 +62,29 @@ const stats: PlayerPerformanceStats = {
 };
 
 describe('ReplayDialog', () => {
+  it('labels guesses made by additional relay teammates', () => {
+    const relayReplay: MultiReplay = {
+      ...replay,
+      gameMode: 'relay',
+      totalRounds: 1,
+      relaySolvedRounds: 1,
+      result: 'cooperative',
+      rounds: [{
+        ...replay.rounds[0],
+        sharedGuesses: [{
+          actor: null,
+          actorDisplayId: 'Teammate C',
+          feedback: guess,
+          guessTime: 900,
+        }],
+      }],
+    };
+
+    render(<ReplayDialog replay={relayReplay} onClose={vi.fn()} />);
+
+    expect(screen.getByText('Teammate C')).toBeInTheDocument();
+  });
+
   it('shows compact decision times only when explicitly enabled', () => {
     const timedReplay: MultiReplay = {
       ...replay,
