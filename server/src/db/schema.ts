@@ -250,6 +250,8 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.integer('relay_solved_rounds').notNullable().defaultTo(0);
       t.integer('winner_id').nullable().references('id').inTable('users');
       t.string('winner_key', 80).nullable();
+      t.string('winner_team', 1).nullable();
+      t.text('winner_keys').notNullable().defaultTo('[]');
       t.string('finish_reason', 32).nullable();
       t.string('forfeited_key', 80).nullable();
       t.text('players').notNullable().defaultTo('[]');
@@ -290,6 +292,7 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.integer('match_id').notNullable().references('id').inTable('match_records').onDelete('CASCADE');
       t.integer('user_id').nullable().references('id').inTable('users');
       t.string('player_key', 80).notNullable();
+      t.string('team', 1).nullable();
       t.string('player_name', 32).notNullable().defaultTo('');
       t.integer('score').notNullable().defaultTo(0);
       t.boolean('is_winner').notNullable().defaultTo(false);
@@ -303,6 +306,15 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   }
   if (!(await instance.schema.hasColumn('match_records', 'game_mode'))) {
     await instance.schema.alterTable('match_records', (t) => t.string('game_mode', 16).notNullable().defaultTo('classic'));
+  }
+  if (!(await instance.schema.hasColumn('match_records', 'winner_team'))) {
+    await instance.schema.alterTable('match_records', (t) => t.string('winner_team', 1).nullable());
+  }
+  if (!(await instance.schema.hasColumn('match_records', 'winner_keys'))) {
+    await instance.schema.alterTable('match_records', (t) => t.text('winner_keys').notNullable().defaultTo('[]'));
+  }
+  if (!(await instance.schema.hasColumn('match_players', 'team'))) {
+    await instance.schema.alterTable('match_players', (t) => t.string('team', 1).nullable());
   }
   if (!(await instance.schema.hasColumn('match_records', 'total_rounds'))) {
     await instance.schema.alterTable('match_records', (t) => t.integer('total_rounds').notNullable().defaultTo(3));

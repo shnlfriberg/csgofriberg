@@ -6,7 +6,8 @@ import { logTransientError } from './transientLog';
 import { DIFFICULTY_LEVELS } from '../difficulties';
 
 export type BoType = 1 | 3 | 5 | 7;
-export type GameMode = 'classic' | 'relay';
+export type GameMode = 'classic' | 'relay' | 'relay2v2';
+export type RoomTeam = 'a' | 'b';
 export type DbType = string;
 export type MatchmakingPool = 'restricted' | 'verified';
 export type RoomStatus = 'waiting' | 'starting' | 'playing' | 'round_over' | 'finished';
@@ -46,6 +47,7 @@ export interface StoredPlayer extends StoredIdentity {
   disconnectDeadline: number | null;
   eliminated: boolean;
   eliminationReason: 'player_left' | 'disconnect_timeout' | null;
+  team: RoomTeam | null;
 }
 
 export interface StoredSpectator extends StoredIdentity {
@@ -60,10 +62,13 @@ export interface StoredRoundResult {
   reason: 'guessed' | 'exhausted' | 'timeout' | 'skipped' | 'surrender';
   matchOver: boolean;
   nextRoundAt: number | null;
+  winnerTeam?: RoomTeam | null;
 }
 
 export interface StoredMatchResult {
   winnerKey: string | null;
+  winnerTeam?: RoomTeam | null;
+  winnerKeys?: string[];
   reason: string;
   forfeitedKey: string | null;
 }
@@ -88,6 +93,14 @@ export interface StoredReplayRound {
     guessedAt: number;
     guessTime: number;
   }>;
+  winnerTeam?: RoomTeam | null;
+  teamGuesses?: Record<RoomTeam, Array<{
+    actorKey: string;
+    playerId: number;
+    guessedAt: number;
+    guessTime: number;
+  }>>;
+  teamScores?: Record<RoomTeam, number>;
 }
 
 export interface StoredRelayGuess {
@@ -114,6 +127,11 @@ export interface StoredRoom {
   currentTurnKey: string | null;
   relaySolvedRounds: number;
   relayGuesses: StoredRelayGuess[];
+  teamScores: Record<RoomTeam, number>;
+  teamTurnKeys: Record<RoomTeam, string | null>;
+  teamGuesses: Record<RoomTeam, StoredRelayGuess[]>;
+  teamLastGuessAt: Record<RoomTeam, number | null>;
+  teamExhausted: Record<RoomTeam, boolean>;
   maxGuesses: number;
   guessIntervalMs: number;
   roundDurationMs: number;
@@ -152,6 +170,7 @@ export const MAX_ROOM_ROUND_DURATION_MS = 600_000;
 export const MIN_CLASSIC_ROOM_PLAYERS = 2;
 export const MAX_CLASSIC_ROOM_PLAYERS = 8;
 export const MAX_RELAY_ROOM_PLAYERS = 4;
+export const MAX_RELAY2V2_ROOM_PLAYERS = 4;
 
 const ROOM_TTL_SECONDS = 6 * 60 * 60;
 const FINISHED_ROOM_TTL_MS = 5 * 60_000;
@@ -242,11 +261,13 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   if (typeof room.verifiedOnly !== 'boolean') room.verifiedOnly = false;
   if (typeof room.anonymous !== 'boolean') room.anonymous = false;
   if (typeof room.matchmaking !== 'boolean') room.matchmaking = false;
-  if (room.gameMode !== 'relay') room.gameMode = 'classic';
-  if (![1, 3, 5, 7].includes(Number(room.totalRounds))) room.totalRounds = room.gameMode === 'relay' ? 3 : room.boType;
+  if (!['classic', 'relay', 'relay2v2'].includes(room.gameMode)) room.gameMode = 'classic';
+  if (![1, 3, 5, 7].includes(Number(room.totalRounds))) room.totalRounds = room.gameMode !== 'classic' ? 3 : room.boType;
   if (room.gameMode === 'classic') room.totalRounds = room.boType;
-  const maxPlayersForMode = room.gameMode === 'relay'
-    ? MAX_RELAY_ROOM_PLAYERS
+  const maxPlayersForMode = room.gameMode === 'relay2v2'
+    ? MAX_RELAY2V2_ROOM_PLAYERS
+    : room.gameMode === 'relay'
+      ? MAX_RELAY_ROOM_PLAYERS
     : MAX_CLASSIC_ROOM_PLAYERS;
   if (
     !Number.isInteger(room.maxPlayers)
@@ -254,10 +275,26 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
     || room.maxPlayers > maxPlayersForMode
   ) room.maxPlayers = 2;
   if (room.matchmaking) room.maxPlayers = 2;
+  if (room.gameMode === 'relay2v2') room.maxPlayers = 4;
   room.currentTurnKey ??= null;
   if (!Number.isInteger(room.relaySolvedRounds) || room.relaySolvedRounds < 0) room.relaySolvedRounds = 0;
   if (!Array.isArray(room.relayGuesses)) room.relayGuesses = [];
   if (room.relayGuesses.length > 15) room.relayGuesses = room.relayGuesses.slice(-15);
+  room.teamScores = room.teamScores && typeof room.teamScores === 'object'
+    ? { a: Number(room.teamScores.a) || 0, b: Number(room.teamScores.b) || 0 }
+    : { a: 0, b: 0 };
+  room.teamTurnKeys = room.teamTurnKeys && typeof room.teamTurnKeys === 'object'
+    ? { a: room.teamTurnKeys.a ?? null, b: room.teamTurnKeys.b ?? null }
+    : { a: null, b: null };
+  room.teamGuesses = room.teamGuesses && typeof room.teamGuesses === 'object'
+    ? { a: Array.isArray(room.teamGuesses.a) ? room.teamGuesses.a : [], b: Array.isArray(room.teamGuesses.b) ? room.teamGuesses.b : [] }
+    : { a: [], b: [] };
+  room.teamLastGuessAt = room.teamLastGuessAt && typeof room.teamLastGuessAt === 'object'
+    ? { a: room.teamLastGuessAt.a ?? null, b: room.teamLastGuessAt.b ?? null }
+    : { a: null, b: null };
+  room.teamExhausted = room.teamExhausted && typeof room.teamExhausted === 'object'
+    ? { a: Boolean(room.teamExhausted.a), b: Boolean(room.teamExhausted.b) }
+    : { a: false, b: false };
   if (
     !Number.isInteger(room.maxGuesses)
     || room.maxGuesses < MIN_ROOM_MAX_GUESSES
@@ -284,7 +321,18 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
   }
   room.roundResult ??= null;
   room.matchResult ??= null;
-  if (room.matchResult) room.matchResult.forfeitedKey ??= null;
+  if (room.matchResult) {
+    room.matchResult.forfeitedKey ??= null;
+    const rawWinnerKeys = (room.matchResult as { winnerKeys?: unknown }).winnerKeys;
+    const parsedWinnerKeys = typeof rawWinnerKeys === 'string'
+      ? (() => {
+          try { return JSON.parse(rawWinnerKeys); } catch { return []; }
+        })()
+      : rawWinnerKeys;
+    room.matchResult.winnerKeys = Array.isArray(parsedWinnerKeys)
+      ? parsedWinnerKeys.filter((key): key is string => typeof key === 'string' && key.length > 0)
+      : [];
+  }
   if (!Array.isArray(room.reports)) room.reports = [];
   if (room.reports.length > 2) room.reports = room.reports.slice(-2);
   if (!Array.isArray(room.replayRounds)) room.replayRounds = [];
@@ -311,6 +359,7 @@ function normalizeRoom(room: StoredRoom): StoredRoom {
     player.skipped ??= false;
     player.eliminated ??= false;
     player.eliminationReason ??= null;
+    player.team ??= null;
   }
   for (const spectator of room.spectators) {
     spectator.connected ??= true;
@@ -420,6 +469,11 @@ export async function getRoom(id: string): Promise<StoredRoom | null> {
   if (meta.relayGuesses) {
     try { room.relayGuesses = JSON.parse(meta.relayGuesses) as StoredRelayGuess[]; } catch { room.relayGuesses = []; }
   }
+  for (const key of ['teamScores', 'teamTurnKeys', 'teamGuesses', 'teamLastGuessAt', 'teamExhausted'] as const) {
+    if (meta[key]) {
+      try { (room as any)[key] = JSON.parse(meta[key]); } catch { /* keep snapshot */ }
+    }
+  }
   return normalizeRoom(room);
 }
 
@@ -460,7 +514,7 @@ export async function getRoomStateProbeForIdentity(
       roundId: room.round,
       stateVersion: room.revision,
       status: room.status === 'starting' ? 'waiting' : room.status,
-      gameMode: room.gameMode === 'relay' ? 'relay' : 'classic',
+      gameMode: room.gameMode,
       currentTurnKey: room.currentTurnKey ?? null,
     };
   };
@@ -509,7 +563,7 @@ export async function getRoomStateProbeForIdentity(
       roundId,
       stateVersion,
       status: status === 'starting' ? 'waiting' : status,
-      gameMode: gameModeRaw === 'relay' ? 'relay' : 'classic',
+      gameMode: gameModeRaw === 'relay2v2' ? 'relay2v2' : gameModeRaw === 'relay' ? 'relay' : 'classic',
       currentTurnKey: currentTurnKeyRaw || null,
     };
   }
@@ -887,7 +941,7 @@ export async function getRoomGuessTarget(
       maxGuesses,
       guessIntervalMs,
       roundDurationMs,
-      gameMode: gameModeRaw === 'relay' ? 'relay' as const : 'classic' as const,
+      gameMode: gameModeRaw === 'relay2v2' ? 'relay2v2' as const : gameModeRaw === 'relay' ? 'relay' as const : 'classic' as const,
       currentTurnKey: currentTurnKeyRaw || null,
     };
     roomTargetCache.set(roomId, target);
@@ -922,6 +976,7 @@ export async function getRoomGuessTarget(
 }
 
 export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyRoomGuessResult> {
+  if (input.gameMode === 'relay2v2') return applyRelay2v2Guess(input);
   const client = stateRedis();
   if (!client) {
     const result = await withRoomLock(input.roomId, (room): ApplyRoomGuessResult => {
@@ -1294,6 +1349,11 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
        'totalRounds', tostring(incoming.totalRounds or incoming.boType or 3),
        'maxPlayers', tostring(incoming.maxPlayers or 2),
        'currentTurnKey', nullableString(incoming.currentTurnKey),
+       'teamScores', nullableJson(incoming.teamScores),
+       'teamTurnKeys', nullableJson(incoming.teamTurnKeys),
+       'teamGuesses', nullableJson(incoming.teamGuesses),
+       'teamLastGuessAt', nullableJson(incoming.teamLastGuessAt),
+       'teamExhausted', nullableJson(incoming.teamExhausted),
        'relaySolvedRounds', tostring(incoming.relaySolvedRounds or 0),
        'relayGuesses', nullableJson(incoming.relayGuesses),
        'maxGuesses', tostring(incoming.maxGuesses or 8),
@@ -1310,7 +1370,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
           connected=player.connected, disconnectDeadline=player.disconnectDeadline,
           guessCount=#playerGuesses, guessTimes=player.guessTimes or {},
           lastGuessAt=player.lastGuessAt, skipped=player.skipped == true,
-          eliminated=player.eliminated == true, eliminationReason=player.eliminationReason
+          eliminated=player.eliminated == true, eliminationReason=player.eliminationReason, team=player.team
        }
        redis.call('HSET', playersKey, player.key, cjson.encode(metadata))
        redis.call('HSET', guessesKey, player.key,
@@ -1673,6 +1733,69 @@ export async function queueOrTakeOpponent(
     }
   );
   return typeof result === 'string' ? JSON.parse(result) as QueuedIdentity : null;
+}
+
+async function applyRelay2v2Guess(input: ApplyRoomGuessInput): Promise<ApplyRoomGuessResult> {
+  const result = await withRoomLock(input.roomId, (room): ApplyRoomGuessResult => {
+    const player = room.players.find((candidate) => candidate.key === input.identity);
+    const team = player?.team;
+    if (!player || !team) return { kind: 'error', code: 'TEAM_NOT_SELECTED' };
+    const eventKey = `${input.identity}:${input.eventId}`;
+    const previousIndex = room.eventResults[eventKey];
+    if (previousIndex !== undefined) {
+      const previous = room.teamGuesses[team][previousIndex];
+      return previous ? { kind: 'duplicate', feedback: previous.feedback, relayGuess: previous, round: room.round, revision: room.revision } : { kind: 'error', code: 'NO_ACTIVE_ROUND' };
+    }
+    if (room.status !== 'playing' || !room.targetPlayerId) return { kind: 'error', code: 'NO_ACTIVE_ROUND' };
+    if (room.round !== input.expectedRound || room.targetPlayerId !== input.targetPlayerId) return { kind: 'error', code: 'STALE_ROUND' };
+    const now = Date.now();
+    if (room.roundEndsAt && room.roundEndsAt <= now) return { kind: 'error', code: 'NO_ACTIVE_ROUND', reason: 'deadline_passed' };
+    if (player.socketId !== input.socketId) return { kind: 'error', code: 'STALE_CONNECTION' };
+    if (player.eliminated) return { kind: 'error', code: 'PLAYER_ELIMINATED' };
+    if (room.teamTurnKeys[team] !== input.identity) return { kind: 'error', code: 'NOT_YOUR_TURN' };
+    const guesses = room.teamGuesses[team];
+    if (room.teamExhausted[team] || guesses.length >= input.maxGuesses) return { kind: 'error', code: 'GUESS_LIMIT_REACHED' };
+    if (guesses.some((guess) => guess.playerId === input.feedback.playerId)) return { kind: 'error', code: 'ALREADY_GUESSED' };
+    const lastGuessAt = room.teamLastGuessAt[team] ?? 0;
+    if (lastGuessAt && now - lastGuessAt < input.minGuessIntervalMs) return { kind: 'error', code: 'GUESS_COOLDOWN', retryAfterMs: input.minGuessIntervalMs - (now - lastGuessAt) };
+    const guessTime = Math.max(0, Math.min(input.roundDurationMs, now - ((room.roundEndsAt ?? now) - input.roundDurationMs)));
+    const relayGuess: StoredRelayGuess = { actorKey: input.identity, playerId: input.feedback.playerId, feedback: input.feedback, guessedAt: now, guessTime };
+    guesses.push(relayGuess);
+    room.eventResults[eventKey] = guesses.length - 1;
+    player.guesses.push(input.feedback);
+    player.guessTimes.push(guessTime);
+    player.lastGuessAt = now;
+    room.teamLastGuessAt[team] = now;
+    const teamDone = input.feedback.correct || guesses.length >= input.maxGuesses;
+    if (teamDone) room.teamExhausted[team] = true;
+    let matchOver = false;
+    if (input.feedback.correct) {
+      room.teamScores[team] += 1;
+      room.roundEndsAt = null;
+      room.currentTurnKey = null;
+      room.teamTurnKeys = { a: null, b: null };
+      room.status = room.teamScores[team] >= Math.ceil(room.boType / 2) ? 'finished' : 'round_over';
+      room.nextRoundAt = room.status === 'finished' ? null : now + input.nextRoundDelayMs;
+      matchOver = room.status === 'finished';
+      room.roundResult = { round: room.round, winnerKey: null, winnerTeam: team, reason: 'guessed', matchOver, nextRoundAt: room.nextRoundAt };
+      if (matchOver) room.matchResult = { winnerKey: null, winnerTeam: team, winnerKeys: room.players.filter((candidate) => candidate.team === team).map((candidate) => candidate.key), reason: 'score', forfeitedKey: null };
+    } else {
+      const teamMembers = room.players.filter((candidate) => candidate.team === team && !candidate.eliminated);
+      const next = teamMembers.find((candidate) => candidate.key !== input.identity)?.key ?? input.identity;
+      room.teamTurnKeys[team] = room.teamExhausted[team] ? null : next;
+      if (room.teamExhausted.a && room.teamExhausted.b) {
+        room.roundEndsAt = null;
+        room.teamTurnKeys = { a: null, b: null };
+        room.status = 'round_over';
+        room.nextRoundAt = now + input.nextRoundDelayMs;
+        room.roundResult = { round: room.round, winnerKey: null, winnerTeam: null, reason: 'exhausted', matchOver: false, nextRoundAt: room.nextRoundAt };
+      }
+    }
+    const shouldFinish = input.feedback.correct || (room.teamExhausted.a && room.teamExhausted.b);
+    return { kind: 'applied', feedback: input.feedback, relayGuess, round: room.round, correct: input.feedback.correct, shouldFinish, matchOver, revision: room.revision, playerKeys: room.players.map((candidate) => candidate.key), room };
+  }, (value) => value.kind === 'applied');
+  if (result?.kind === 'applied' && result.room) result.revision = result.room.revision;
+  return result ?? { kind: 'error', code: 'NO_ACTIVE_ROUND' };
 }
 
 export async function requeueCandidate(dbType: DbType, identity: QueuedIdentity): Promise<void> {

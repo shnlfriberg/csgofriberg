@@ -15,7 +15,7 @@ export const MIN_MULTI_ROUND_DURATION_SECONDS = 10;
 export const MAX_MULTI_ROUND_DURATION_SECONDS = 600;
 
 export interface MultiLobbyPreferences {
-  gameMode: 'classic' | 'relay';
+  gameMode: 'classic' | 'relay' | 'relay2v2';
   totalRounds: number;
   createDifficulty: string;
   boType: number;
@@ -30,7 +30,7 @@ export interface MultiLobbyPreferences {
 
 export interface MultiLobbyPreset {
   name: string;
-  gameMode: 'classic' | 'relay';
+  gameMode: 'classic' | 'relay' | 'relay2v2';
   totalRounds: number;
   createDifficulty: string;
   boType: number;
@@ -47,15 +47,16 @@ function isValidPreset(value: unknown, availableDifficulties: readonly string[])
   const preset = value as Partial<MultiLobbyPreset>;
   return typeof preset.name === 'string' && preset.name.trim().length > 0
     && preset.name.length <= 40
-    && (preset.gameMode === 'classic' || preset.gameMode === 'relay')
+    && (preset.gameMode === 'classic' || preset.gameMode === 'relay' || preset.gameMode === 'relay2v2')
     && typeof preset.totalRounds === 'number' && BO_OPTIONS.has(preset.totalRounds)
     && typeof preset.createDifficulty === 'string' && availableDifficulties.includes(preset.createDifficulty)
     && typeof preset.boType === 'number' && BO_OPTIONS.has(preset.boType)
     && Number.isInteger(preset.maxPlayers)
     && Number(preset.maxPlayers) >= MIN_MULTI_PLAYERS
-    && Number(preset.maxPlayers) <= (preset.gameMode === 'relay'
+    && Number(preset.maxPlayers) <= (preset.gameMode === 'relay' || preset.gameMode === 'relay2v2'
       ? MAX_RELAY_MULTI_PLAYERS
       : MAX_CLASSIC_MULTI_PLAYERS)
+    && (preset.gameMode !== 'relay2v2' || preset.maxPlayers === 4)
     && typeof preset.allowSpectators === 'boolean'
     && typeof preset.verifiedEmailOnly === 'boolean'
     && Number.isInteger(preset.maxGuesses) && Number(preset.maxGuesses) >= MIN_MULTI_MAX_GUESSES && Number(preset.maxGuesses) <= MAX_MULTI_MAX_GUESSES
@@ -110,8 +111,8 @@ export function loadMultiLobbyPreferences(
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults;
     const stored = JSON.parse(raw) as Partial<MultiLobbyPreferences>;
-    const gameMode = stored.gameMode === 'relay' ? 'relay' : 'classic';
-    const maxPlayersForMode = gameMode === 'relay'
+    const gameMode = stored.gameMode === 'relay2v2' ? 'relay2v2' : stored.gameMode === 'relay' ? 'relay' : 'classic';
+    const maxPlayersForMode = gameMode === 'relay' || gameMode === 'relay2v2'
       ? MAX_RELAY_MULTI_PLAYERS
       : MAX_CLASSIC_MULTI_PLAYERS;
     const difficultySet = new Set(availableDifficulties);
@@ -127,7 +128,7 @@ export function loadMultiLobbyPreferences(
       boType: typeof stored.boType === 'number' && BO_OPTIONS.has(stored.boType)
         ? stored.boType
         : defaults.boType,
-      maxPlayers: Number.isInteger(stored.maxPlayers)
+      maxPlayers: gameMode === 'relay2v2' ? 4 : Number.isInteger(stored.maxPlayers)
         && Number(stored.maxPlayers) >= MIN_MULTI_PLAYERS
         && Number(stored.maxPlayers) <= maxPlayersForMode
         ? Number(stored.maxPlayers)

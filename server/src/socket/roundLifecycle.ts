@@ -44,9 +44,19 @@ export async function startRound(io: Server, roomId: string): Promise<boolean> {
     room.roundResult = null;
     room.matchResult = null;
     room.relayGuesses = [];
+    room.teamScores = { a: room.teamScores.a, b: room.teamScores.b };
+    room.teamGuesses = { a: [], b: [] };
+    room.teamLastGuessAt = { a: null, b: null };
+    room.teamExhausted = { a: false, b: false };
     room.currentTurnKey = room.gameMode === 'relay'
       ? activePlayers[Math.floor(Math.random() * activePlayers.length)]?.key ?? null
       : null;
+    if (room.gameMode === 'relay2v2') {
+      for (const team of ['a', 'b'] as const) {
+        const members = activePlayers.filter((player) => player.team === team);
+        room.teamTurnKeys[team] = members[Math.floor(Math.random() * members.length)]?.key ?? null;
+      }
+    }
     for (const player of room.players) {
       player.guesses = [];
       player.guessTimes = [];
@@ -89,6 +99,17 @@ export async function finishRound(
 ): Promise<void> {
   const result = await withRoomLock(roomId, (room) => {
     if (room.status !== 'playing' || room.round !== expectedRound) return null;
+    if (room.gameMode === 'relay2v2') {
+      room.roundEndsAt = null;
+      room.currentTurnKey = null;
+      room.teamTurnKeys = { a: null, b: null };
+      const matchOver = false;
+      room.status = 'round_over';
+      room.nextRoundAt = Date.now() + NEXT_ROUND_DELAY_MS;
+      room.roundResult = { round: room.round, winnerKey: null, winnerTeam: null, reason: 'timeout', matchOver, nextRoundAt: room.nextRoundAt };
+      appendReplayRound(room);
+      return { room, matchOver };
+    }
     const winner = room.players.find((player) => player.key === winnerKey);
     if (winner) winner.score += 1;
     room.roundEndsAt = null;

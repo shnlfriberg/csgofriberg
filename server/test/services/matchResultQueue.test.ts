@@ -132,4 +132,35 @@ describe('match result persistence', () => {
       await db('report_whitelist').where({ identity_key: playerB }).del();
     }
   });
+
+  it('normalizes legacy serialized relay2v2 winner keys before persistence', async () => {
+    const stamp = Date.now();
+    const recordId = `relay2v2-winners-${stamp}`;
+    const playerA = `g:relay2v2-a-${stamp}`;
+    const playerB = `g:relay2v2-b-${stamp}`;
+    try {
+      await persistMatchResult({
+        recordId,
+        dbType: 'easy',
+        boType: 1,
+        gameMode: 'relay2v2',
+        winnerKey: null,
+        winnerTeam: 'a',
+        winnerKeys: JSON.stringify([playerA]) as unknown as string[],
+        reason: 'score',
+        forfeitedKey: null,
+        participants: [
+          { key: playerA, userId: null, name: 'A', score: 1, team: 'a' },
+          { key: playerB, userId: null, name: 'B', score: 0, team: 'b' },
+        ],
+        rounds: [],
+      });
+      const match = await db('match_records').where({ room_id: recordId }).first('id', 'winner_keys');
+      expect(match.winner_keys).toBe(JSON.stringify([playerA]));
+      expect(await db('match_players').where({ match_id: match.id, player_key: playerA }).first('is_winner'))
+        .toMatchObject({ is_winner: 1 });
+    } finally {
+      await db('match_records').where({ room_id: recordId }).del();
+    }
+  });
 });

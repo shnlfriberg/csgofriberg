@@ -29,6 +29,11 @@ function makeRoom(id: string): StoredRoom {
     currentTurnKey: null,
     relaySolvedRounds: 0,
     relayGuesses: [],
+    teamScores: { a: 0, b: 0 },
+    teamTurnKeys: { a: null, b: null },
+    teamGuesses: { a: [], b: [] },
+    teamLastGuessAt: { a: null, b: null },
+    teamExhausted: { a: false, b: false },
     maxGuesses: 8,
     guessIntervalMs: 1_500,
     roundDurationMs: 120_000,
@@ -44,6 +49,7 @@ function makeRoom(id: string): StoredRoom {
       key: 'u:1', userId: 1, name: 'one', socketId: 's1', ready: true,
       score: 0, guesses: [], lastGuessAt: null, connected: true, disconnectDeadline: null,
       guessTimes: [], skipped: false, eliminated: false, eliminationReason: null,
+      team: null,
     }],
     spectators: [],
     targetPlayerId: null,
@@ -202,6 +208,63 @@ describe('roomStore local fallback', () => {
       if (stored) await deleteRoom(stored);
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it('keeps relay2v2 guesses and turn rotation independent for each team', async () => {
+    const room = makeRoom(`RELAY2V2${Date.now()}`);
+    room.gameMode = 'relay2v2';
+    room.maxPlayers = 4;
+    room.maxGuesses = 2;
+    room.guessIntervalMs = 0;
+    room.status = 'playing';
+    room.round = 1;
+    room.targetPlayerId = 99;
+    room.roundEndsAt = Date.now() + 60_000;
+    room.players = ['a1', 'a2', 'b1', 'b2'].map((key, index) => ({
+      key,
+      userId: null,
+      name: key,
+      socketId: `s${index + 1}`,
+      ready: true,
+      score: 0,
+      guesses: [],
+      guessTimes: [],
+      lastGuessAt: null,
+      skipped: false,
+      connected: true,
+      disconnectDeadline: null,
+      eliminated: false,
+      eliminationReason: null,
+      team: index < 2 ? 'a' as const : 'b' as const,
+    }));
+    room.teamTurnKeys = { a: 'a1', b: 'b1' };
+    await saveRoom(room);
+    try {
+      const wrong = (identity: string, socketId: string, eventId: string, playerId: number) => applyRoomGuess({
+        roomId: room.id, identity, socketId, expectedRound: 1, eventId, targetPlayerId: 99,
+        feedback: { playerId, correct: false } as any, maxGuesses: 2, roundDurationMs: 120_000,
+        nextRoundDelayMs: 100, minGuessIntervalMs: 0, rateLimit: 12, rateWindowSeconds: 10,
+        gameMode: 'relay2v2',
+      });
+      expect((await wrong('a2', 's2', 'relay2v2-wrong-turn', 1))).toMatchObject({ kind: 'error', code: 'NOT_YOUR_TURN' });
+      expect((await wrong('a1', 's1', 'relay2v2-a-first', 1))).toMatchObject({ kind: 'applied', shouldFinish: false });
+      expect((await wrong('a2', 's2', 'relay2v2-a-second', 2))).toMatchObject({ kind: 'applied', shouldFinish: false });
+      const afterA = await getRoom(room.id);
+      expect(afterA).toMatchObject({ status: 'playing', teamExhausted: { a: true, b: false }, teamTurnKeys: { a: null, b: 'b1' } });
+      expect((await wrong('b1', 's3', 'relay2v2-b-first', 3))).toMatchObject({ kind: 'applied', shouldFinish: false });
+      expect((await getRoom(room.id))?.teamTurnKeys.b).toBe('b2');
+      expect((await wrong('b2', 's4', 'relay2v2-b-second', 4))).toMatchObject({
+        kind: 'applied', shouldFinish: true, matchOver: false,
+      });
+      expect(await getRoom(room.id)).toMatchObject({
+        status: 'round_over',
+        matchResult: null,
+        roundResult: { reason: 'exhausted', matchOver: false },
+      });
+    } finally {
+      const stored = await getRoom(room.id);
+      if (stored) await deleteRoom(stored);
     }
   });
 });

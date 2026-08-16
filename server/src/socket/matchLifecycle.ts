@@ -27,6 +27,7 @@ export function appendReplayRound(room: StoredRoom): void {
     targetPlayerId: room.targetPlayerId,
     winnerKey: result.winnerKey,
     reason: result.reason,
+    winnerTeam: result.winnerTeam ?? null,
     guessesByPlayer: Object.fromEntries(
       room.players.map((player) => [player.key, player.guesses.map((guess) => guess.playerId)])
     ),
@@ -40,6 +41,20 @@ export function appendReplayRound(room: StoredRoom): void {
         guessedAt: guess.guessedAt,
         guessTime: guess.guessTime,
       })),
+    } : {}),
+    ...(room.gameMode === 'relay2v2' ? {
+      teamGuesses: { a: room.teamGuesses.a.map((guess) => ({
+        actorKey: guess.actorKey,
+        playerId: guess.playerId,
+        guessedAt: guess.guessedAt,
+        guessTime: guess.guessTime,
+      })), b: room.teamGuesses.b.map((guess) => ({
+        actorKey: guess.actorKey,
+        playerId: guess.playerId,
+        guessedAt: guess.guessedAt,
+        guessTime: guess.guessTime,
+      })) },
+      teamScores: { ...room.teamScores },
     } : {}),
   });
   if (room.replayRounds.length > 30) room.replayRounds = room.replayRounds.slice(-30);
@@ -70,6 +85,8 @@ export async function persistMatch(
     totalRounds: room.totalRounds,
     relaySolvedRounds: room.relaySolvedRounds,
     winnerKey,
+    winnerTeam: room.matchResult?.winnerTeam ?? null,
+    winnerKeys: room.matchResult?.winnerKeys ?? (winnerKey ? [winnerKey] : []),
     reason: room.matchResult?.reason ?? 'score',
     forfeitedKey,
     participants: room.players.map((player) => ({
@@ -77,6 +94,7 @@ export async function persistMatch(
       userId: player.userId,
       name: identityDisplayName(player),
       score: player.score,
+      team: player.team,
       eliminated: player.eliminated,
       eliminationReason: player.eliminationReason,
     })),
@@ -89,7 +107,7 @@ export async function persistMatch(
   await acknowledgeSchedule(`persist|${room.id}|0`);
 }
 
-export type RematchOutcome = 'wanted' | 'withdrawn' | 'updated' | 'started';
+export type RematchOutcome = 'wanted' | 'withdrawn' | 'updated' | 'waiting' | 'started';
 
 export function rematchError(
   room: StoredRoom,
@@ -163,6 +181,11 @@ export function resetForRematch(room: StoredRoom, autoStart = false): void {
   room.currentTurnKey = null;
   room.relaySolvedRounds = 0;
   room.relayGuesses = [];
+  room.teamScores = { a: 0, b: 0 };
+  room.teamTurnKeys = { a: null, b: null };
+  room.teamGuesses = { a: [], b: [] };
+  room.teamLastGuessAt = { a: null, b: null };
+  room.teamExhausted = { a: false, b: false };
   room.createdAt = now;
   if (retainedKeys.size) room.players = room.players.filter((player) => retainedKeys.has(player.key));
   if (!room.players.some((player) => player.key === room.hostKey)) {
@@ -189,7 +212,7 @@ export async function eliminatePlayer(
   socketId?: string
 ): Promise<'eliminated' | 'finished' | 'stale' | 'ignored'> {
   const result = await withRoomLock(roomId, (room) => {
-    if (!['starting', 'playing', 'round_over'].includes(room.status) || room.gameMode !== 'classic') {
+    if (!['starting', 'playing', 'round_over'].includes(room.status) || !['classic', 'relay2v2'].includes(room.gameMode)) {
       return null;
     }
     const player = room.players.find((candidate) => candidate.key === playerKey);
@@ -203,6 +226,19 @@ export async function eliminatePlayer(
     player.disconnectDeadline = null;
     player.eliminated = true;
     player.eliminationReason = reason;
+    if (room.gameMode === 'relay2v2') {
+      const winnerTeam = player.team === 'a' ? 'b' : player.team === 'b' ? 'a' : null;
+      const winnerKeys = winnerTeam
+        ? room.players.filter((candidate) => candidate.team === winnerTeam && candidate.key !== playerKey).map((candidate) => candidate.key)
+        : [];
+      room.status = 'finished';
+      room.roundEndsAt = null;
+      room.nextRoundAt = null;
+      room.currentTurnKey = null;
+      room.teamTurnKeys = { a: null, b: null };
+      room.matchResult = { winnerKey: null, winnerTeam, winnerKeys, reason, forfeitedKey: playerKey };
+      return { room, finished: true as const, winnerKey: null };
+    }
     room.rematchInviterKey = null;
     room.rematchAcceptedKeys = [];
     room.rematchRequiredKeys = [];

@@ -569,6 +569,62 @@ describe('MultiRoom replay', () => {
     expect(within(dialog).queryByRole('heading', { name: '本局平局' })).not.toBeInTheDocument();
   });
 
+  it('continues a scoreless 2v2 round without showing a settlement dialog', async () => {
+    const relay2v2Room: RoomState = {
+      ...room,
+      status: 'playing',
+      gameMode: 'relay2v2',
+      round: 1,
+      roundId: 1,
+      roundEndsAt: Date.now() + 60_000,
+      teamScores: { a: 0, b: 0 },
+      teamTurnKeys: { a: 'g:me', b: 'g:b1' },
+      teamExhausted: { a: false, b: false },
+      teamGuesses: { a: [], b: [] },
+      matchResult: null,
+      matchReplay: undefined,
+      players: [
+        { ...room.players[0], score: 0, team: 'a' },
+        { ...room.players[1], score: 0, team: 'a' },
+        { key: 'g:b1', name: 'B1', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [], team: 'b' },
+        { key: 'g:b2', name: 'B2', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [], team: 'b' },
+      ],
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relay2v2Room, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    expect(await screen.findByPlaceholderText('输入选手昵称...')).toBeEnabled();
+
+    const handler = socket.on.mock.calls.find(([event]) => event === 'round:over')?.[1];
+    act(() => handler({
+      room: {
+        ...relay2v2Room,
+        status: 'round_over',
+        stateVersion: relay2v2Room.stateVersion + 1,
+        roundEndsAt: null,
+        teamTurnKeys: { a: null, b: null },
+        teamExhausted: { a: true, b: true },
+        roundResult: {
+          round: 1,
+          winnerKey: null,
+          winnerTeam: null,
+          reason: 'exhausted',
+          answer,
+          nextRoundAt: Date.now() + 6_000,
+        },
+      },
+      serverNow: Date.now(),
+    }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.queryByText('本局无得分，进入加赛')).not.toBeInTheDocument();
+  });
+
   it('shows a match-ended modal when a player leaves an active relay room', async () => {
     const relayRoom: RoomState = {
       ...room,

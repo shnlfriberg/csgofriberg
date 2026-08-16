@@ -33,5 +33,6 @@ export function makeRoomPlayer(
     disconnectDeadline: null,
     eliminated: false,
     eliminationReason: null,
+    team: null,
   };
 }

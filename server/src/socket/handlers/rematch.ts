@@ -98,14 +98,15 @@ export async function handleRematchWant(
       return { room: locked, outcome: payload.wanted ? 'wanted' as const : 'withdrawn' as const };
     }
     await lifecycle.persistMatch(locked, locked.matchResult!.winnerKey);
-    lifecycle.resetForRematch(locked, true);
-    return { room: locked, outcome: 'started' as const };
+    const waitForPlayers = locked.gameMode === 'relay2v2' && locked.rematchRequiredKeys.length < 4;
+    lifecycle.resetForRematch(locked, !waitForPlayers);
+    return { room: locked, outcome: waitForPlayers ? 'waiting' as const : 'started' as const };
   }, (value) => 'room' in value);
   if (!result || 'code' in result) {
     ack?.({ code: result?.code ?? 'REMATCH_NOT_AVAILABLE' });
     return;
   }
-  if (result.outcome === 'started') {
+  if (result.outcome === 'started' || result.outcome === 'waiting') {
     cancelLocalTimer(`cleanup:${result.room.id}`);
     await acknowledgeSchedule(`cleanup|${result.room.id}|0`);
   }

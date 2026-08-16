@@ -93,13 +93,18 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
   const me = room.players.find((player) => player.key === viewerKey);
   const opponent = room.players.find((player) => player.key !== viewerKey);
   if (!me) return null;
+  const winnerKeys = Array.isArray(room.matchResult.winnerKeys)
+    ? room.matchResult.winnerKeys
+    : [];
   const participantIdByKey = new Map(room.players.map((player, index) => [player.key, `p${index + 1}`]));
   const participants = room.players.map((player) => ({
     id: participantIdByKey.get(player.key)!,
     displayId: identityDisplayName(player),
     score: player.score,
     isMe: player.key === viewerKey,
-    isWinner: player.key === room.matchResult?.winnerKey,
+    isWinner: room.gameMode === 'relay2v2'
+      ? winnerKeys.includes(player.key)
+      : player.key === room.matchResult?.winnerKey,
     eliminated: player.eliminated,
     eliminationReason: player.eliminationReason,
   }));
@@ -115,6 +120,8 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
     finishedAt: new Date(room.updatedAt).toISOString(),
     result: room.gameMode === 'relay'
       ? 'cooperative' as const
+      : room.gameMode === 'relay2v2'
+        ? (room.matchResult.winnerTeam === me.team ? 'won' as const : room.matchResult.winnerTeam ? 'lost' as const : 'draw' as const)
       : room.matchResult.winnerKey === me.key
         ? 'won' as const
         : room.matchResult.winnerKey
@@ -203,6 +210,18 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     totalRounds: room.totalRounds,
     maxPlayers: room.maxPlayers,
     currentTurnKey: room.currentTurnKey,
+    teamScores: room.teamScores,
+    teamTurnKeys: room.teamTurnKeys,
+    teamExhausted: room.teamExhausted,
+    teamGuesses: Object.fromEntries((['a', 'b'] as const).map((team) => {
+      const viewerTeam = room.players.find((candidate) => candidate.key === viewerKey)?.team;
+      const visible = viewerIsSpectator || roundIsComplete || viewerTeam === team;
+      return [team, room.teamGuesses[team].map((guess) => ({
+        actorKey: guess.actorKey,
+        guessedAt: guess.guessedAt,
+        feedback: visible ? visibleGuess(guess.feedback) : hiddenGuess(guess.feedback),
+      }))];
+    })),
     relaySolvedRounds: room.relaySolvedRounds,
     relayGuesses: room.relayGuesses.map((guess) => ({
       actorKey: guess.actorKey,
@@ -234,6 +253,7 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
       ? null
       : {
           winnerKey: room.roundResult.winnerKey,
+          winnerTeam: room.roundResult.winnerTeam ?? null,
           reason: room.roundResult.reason,
           nextRoundAt: room.roundResult.nextRoundAt,
           answer: answerView(room.targetPlayerId),
@@ -241,6 +261,8 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
     matchResult: room.matchResult
       ? {
           winnerKey: room.matchResult.winnerKey,
+          winnerTeam: room.matchResult.winnerTeam ?? null,
+          winnerKeys: Array.isArray(room.matchResult.winnerKeys) ? room.matchResult.winnerKeys : [],
           reason: room.matchResult.reason,
           answer: answerView(room.targetPlayerId),
         }
@@ -252,6 +274,8 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
         const guess = getPlayer(feedback.playerId);
         return refreshGuessFeedback(feedback, guess, target);
       });
+      const viewerTeam = room.players.find((candidate) => candidate.key === viewerKey)?.team;
+      const sameTeam = room.gameMode === 'relay2v2' && viewerTeam && player.team === viewerTeam;
       return {
         key: player.key,
         name: identityDisplayName(player),
@@ -262,7 +286,8 @@ export function buildPublicRoom(room: StoredRoom, viewerKey: string) {
         guessCount: guesses.length,
         eliminated: player.eliminated,
         eliminationReason: player.eliminationReason,
-        guesses: viewerIsSpectator || roundIsComplete || player.key === viewerKey
+        team: player.team,
+        guesses: viewerIsSpectator || roundIsComplete || player.key === viewerKey || sameTeam
           ? guesses.map(visibleGuess)
           : guesses.map(hiddenGuess),
       };

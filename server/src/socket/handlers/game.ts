@@ -54,8 +54,13 @@ export async function handleGameStart(
     }
     if (locked.status === 'starting' || locked.status === 'playing') return 'ALREADY_STARTED';
     if (locked.status !== 'waiting') return 'ROOM_NOT_READY';
-    if (locked.players.length < 2) return 'NEED_TWO_PLAYERS';
-    if (!locked.players.every((player) => player.ready && player.connected)) {
+    if (locked.gameMode === 'relay2v2') {
+      if (locked.players.length !== 4) return 'NEED_FOUR_PLAYERS';
+      if (locked.players.filter((player) => player.team === 'a').length !== 2
+        || locked.players.filter((player) => player.team === 'b').length !== 2) return 'TEAMS_NOT_READY';
+    } else if (locked.players.length < 2) return 'NEED_TWO_PLAYERS';
+    if (!locked.players.every((player) => player.connected)
+      || !locked.players.filter((player) => player.key !== locked.hostKey).every((player) => player.ready)) {
       return 'PLAYERS_NOT_READY';
     }
     locked.status = 'starting';
@@ -156,7 +161,7 @@ export async function handleGameGuess(
   };
   if (result.kind === 'duplicate') {
     ack?.({ cooldownMs: targetState.guessIntervalMs });
-    if (targetState.gameMode === 'relay') {
+    if (targetState.gameMode === 'relay' || targetState.gameMode === 'relay2v2') {
       const current = await getRoom(roomId);
       if (current && result.relayGuess) socket.emit('game:guess:applied', {
         ...delta,
@@ -176,15 +181,21 @@ export async function handleGameGuess(
   }
   ack?.({ cooldownMs: targetState.guessIntervalMs });
   if (!result.shouldFinish) {
-    if (result.room?.gameMode === 'relay') {
+    if (result.room?.gameMode === 'relay' || result.room?.gameMode === 'relay2v2') {
       if (!result.relayGuess) throw new Error('MISSING_RELAY_GUESS_DELTA');
-      emitRoomViews(io, result.room, 'game:guess:applied', () => ({
-        ...delta,
-        feedback: visibleGuess(result.feedback),
-        guessedAt: result.relayGuess!.guessedAt,
-        currentTurnKey: result.room!.currentTurnKey,
-        serverNow: Date.now(),
-      }));
+      emitRoomViews(io, result.room, 'game:guess:applied', (viewerKey) => {
+        const actor = result.room!.players.find((candidate) => candidate.key === me.key);
+        const viewer = result.room!.players.find((candidate) => candidate.key === viewerKey);
+        const sameTeam = result.room!.gameMode === 'relay2v2' && actor?.team && actor.team === viewer?.team;
+        return {
+          ...delta,
+          feedback: result.room!.gameMode === 'relay' || sameTeam ? visibleGuess(result.feedback) : hiddenGuess(result.feedback),
+          guessedAt: result.relayGuess!.guessedAt,
+          currentTurnKey: result.room!.currentTurnKey,
+          teamTurnKeys: result.room!.teamTurnKeys,
+          serverNow: Date.now(),
+        };
+      });
       return;
     }
     for (const playerKey of result.playerKeys) {
@@ -200,7 +211,7 @@ export async function handleGameGuess(
   }
   if (!result.shouldFinish) return;
   if (!finishedRoom) throw new Error('MISSING_FINISHED_ROOM_SNAPSHOT');
-  const winnerKey = finishedRoom.gameMode === 'relay' ? null : result.correct ? me.key : null;
+  const winnerKey = finishedRoom.gameMode === 'relay' || finishedRoom.gameMode === 'relay2v2' ? null : result.correct ? me.key : null;
   if (result.matchOver) {
     emitRoomViews(io, finishedRoom, 'match:over', (viewerKey) => ({
       room: publicRoom(finishedRoom, viewerKey),

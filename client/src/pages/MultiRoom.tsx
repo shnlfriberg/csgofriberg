@@ -46,6 +46,7 @@ import ModalPortal from '../components/ModalPortal';
 
 interface RoundOver {
   winnerKey: string | null;
+  winnerTeam?: 'a' | 'b' | null;
   reason: string;
   nextRoundAt: number | null;
   answer: AnswerInfo | null;
@@ -53,6 +54,7 @@ interface RoundOver {
 
 interface MatchOver {
   winnerKey: string | null;
+  winnerTeam?: 'a' | 'b' | null;
   reason: string;
   answer: AnswerInfo | null;
 }
@@ -67,7 +69,7 @@ interface RoomStateProbe {
   roundId: number;
   stateVersion: number;
   status: RoomState['status'];
-  gameMode: 'classic' | 'relay';
+  gameMode: 'classic' | 'relay' | 'relay2v2';
   currentTurnKey: string | null;
 }
 
@@ -151,6 +153,7 @@ function matchOverReason(
   t: TFunction
 ): string {
   if (result.reason === 'score') return t('multi.matchReasons.score');
+  if (result.reason === 'draw') return t('common.draw');
   if (result.reason === 'last_player_standing') return t('multi.matchReasons.lastPlayerStanding');
   if (result.reason === 'opponent_left') {
     if (isSpectator) return t('multi.matchReasons.sideLeft');
@@ -415,7 +418,11 @@ export default function MultiRoom() {
     roomRef.current = state;
     setRoom(state);
     setRoundExpired(state.status !== 'playing');
-    setRoundOver(state.matchResult ? null : state.roundResult);
+    const relay2v2Overtime = state.gameMode === 'relay2v2'
+      && state.status === 'round_over'
+      && !state.matchResult
+      && !state.roundResult?.winnerTeam;
+    setRoundOver(relay2v2Overtime || state.matchResult ? null : state.roundResult);
     setMatchOver(state.matchResult);
     if (!state.matchResult) {
       setMatchOverVisible(false);
@@ -516,7 +523,7 @@ export default function MultiRoom() {
     const onRematchUpdate = (p: {
       roomId: string;
       stateVersion: number;
-      outcome: 'wanted' | 'withdrawn' | 'updated' | 'started';
+      outcome: 'wanted' | 'withdrawn' | 'updated' | 'waiting' | 'started';
       actorKey: string;
       acceptedKeys?: string[];
       requiredKeys?: string[];
@@ -547,7 +554,7 @@ export default function MultiRoom() {
         roomRef.current = next;
         return next;
       });
-      if (p.outcome === 'started') {
+      if (p.outcome === 'started' || p.outcome === 'waiting') {
         setGuessCooldownUntil(0);
         setRoundExpired(true);
         setRoundOver(null);
@@ -574,6 +581,7 @@ export default function MultiRoom() {
       feedback: MultiplayerGuessFeedback;
       guessedAt?: number;
       currentTurnKey?: string | null;
+      teamTurnKeys?: { a: string | null; b: string | null };
       serverNow?: number;
     }) => {
       setRoom((current) => {
@@ -585,9 +593,12 @@ export default function MultiRoom() {
         if (p.stateVersion < current.stateVersion) return current;
         if (p.stateVersion === current.stateVersion) {
           if (
-            current.gameMode === 'relay'
+            (current.gameMode === 'relay'
             && p.currentTurnKey !== undefined
-            && (p.currentTurnKey ?? null) !== (current.currentTurnKey ?? null)
+            && (p.currentTurnKey ?? null) !== (current.currentTurnKey ?? null))
+            || (current.gameMode === 'relay2v2'
+              && p.teamTurnKeys !== undefined
+              && (p.teamTurnKeys.a !== current.teamTurnKeys?.a || p.teamTurnKeys.b !== current.teamTurnKeys?.b))
           ) syncRoom(socket);
           return current;
         }
@@ -607,13 +618,28 @@ export default function MultiRoom() {
               { actorKey: p.key, guessedAt: p.guessedAt ?? Date.now(), feedback: relayFeedback },
             ]
           : current.relayGuesses;
+        const actorTeam = current.players.find((player) => player.key === p.key)?.team;
+        const teamGuesses = current.gameMode === 'relay2v2' && actorTeam
+          ? {
+              a: actorTeam === 'a'
+                ? [...(current.teamGuesses?.a ?? []), { actorKey: p.key, guessedAt: p.guessedAt ?? Date.now(), feedback }]
+                : current.teamGuesses?.a ?? [],
+              b: actorTeam === 'b'
+                ? [...(current.teamGuesses?.b ?? []), { actorKey: p.key, guessedAt: p.guessedAt ?? Date.now(), feedback }]
+                : current.teamGuesses?.b ?? [],
+            }
+          : current.teamGuesses;
         const next: RoomState = {
           ...current,
           stateVersion: p.stateVersion,
           currentTurnKey: current.gameMode === 'relay'
             ? p.currentTurnKey ?? null
             : current.currentTurnKey,
+          teamTurnKeys: current.gameMode === 'relay2v2'
+            ? p.teamTurnKeys ?? current.teamTurnKeys
+            : current.teamTurnKeys,
           relayGuesses,
+          teamGuesses,
           players: current.players.map((player) => {
             if (player.key !== p.key) return player;
             return {
@@ -624,7 +650,7 @@ export default function MultiRoom() {
           }),
         };
         roomRef.current = next;
-        if (current.gameMode === 'relay') {
+        if (current.gameMode === 'relay' || (current.gameMode === 'relay2v2' && actorTeam === current.players.find((player) => player.key === myKeyRef.current)?.team)) {
           const anchor = createClockAnchor(p.serverNow) ?? clockAnchorRef.current;
           const localGuessedAt = localDeadline(p.guessedAt, anchor);
           setGuessCooldownUntil(localGuessedAt ? localGuessedAt + current.guessIntervalMs : 0);
@@ -678,7 +704,7 @@ export default function MultiRoom() {
       socket.off('round:start', onRoundStart);
       socket.off('round:over', onRoundOver);
       socket.off('match:over', onMatchOver);
-      socket.off('relay:aborted', onRelayAborted);
+    socket.off('relay:aborted', onRelayAborted);
       socket.off('match:ready-ended', onReadyEnded);
       socket.off('match:rematch:update', onRematchUpdate);
       socket.off('player:offline', onOffline);
@@ -938,6 +964,8 @@ export default function MultiRoom() {
   const me = room?.players.find((p) => p.key === myKey);
   const opponent = room?.players.find((p) => p.key !== myKey);
   const isSpectator = !!room && !me;
+  const isRelay2v2 = room?.gameMode === 'relay2v2';
+  const myTeam = me?.team ?? null;
   const isHost = room?.hostKey === myKey;
   const playing = room?.status === 'playing';
   const rematchAcceptedKeys = room?.rematchInvite?.acceptedKeys ?? [];
@@ -1110,8 +1138,8 @@ export default function MultiRoom() {
   const compactPlayers = me
     ? rankedPlayers.filter((player) => player.key !== myKey)
     : rankedPlayers;
-  const isLargeClassicRoom = room.gameMode !== 'relay' && room.players.length > 2;
-  const isCrowdedClassicRoom = room.gameMode !== 'relay' && (room.maxPlayers ?? 2) >= 3;
+  const isLargeClassicRoom = (room.gameMode ?? 'classic') === 'classic' && room.players.length > 2;
+  const isCrowdedClassicRoom = (room.gameMode ?? 'classic') === 'classic' && (room.maxPlayers ?? 2) >= 3;
   const replay = room.matchReplay;
   const relayTurnPlayers = room.gameMode === 'relay'
     ? room.players.filter((player) => !player.eliminated).map((player) => player.key).sort()
@@ -1124,6 +1152,10 @@ export default function MultiRoom() {
     : null;
   const nextRelayTurnPlayer = nextRelayTurnKey
     ? room.players.find((player) => player.key === nextRelayTurnKey)
+    : null;
+  const ownTeamTurnKey = me?.team ? room.teamTurnKeys?.[me.team] ?? null : null;
+  const ownTeamTurnPlayer = ownTeamTurnKey
+    ? room.players.find((player) => player.key === ownTeamTurnKey)
     : null;
   const replayRound = replayRoundIndex == null ? null : replay?.rounds[replayRoundIndex] ?? null;
   const replayParticipantIdByPlayerKey = new Map(
@@ -1170,6 +1202,8 @@ export default function MultiRoom() {
       className={`game-page multi-game-page${inputFocused ? ' keyboard-active' : ''}`}
       title={room.gameMode === 'relay'
         ? t('multi.relayRoomTitle', { rounds: room.totalRounds ?? 3 })
+        : room.gameMode === 'relay2v2'
+          ? t('multi.relay2v2Mode')
         : t('multi.roomTitle', { bo: room.boType })}
       icon={<Globe size={17} />}
       actions={
@@ -1199,7 +1233,7 @@ export default function MultiRoom() {
               {leaving ? t('multi.leaving') : isSpectator ? t('multi.exitSpectating') : t('multi.leaveRoom')}
             </span>
           </button>
-          {playing && me && room.gameMode !== 'relay' && (
+          {playing && me && (room.gameMode ?? 'classic') === 'classic' && (
             <button
               className="btn btn-ghost btn-sm"
               disabled={roundExpired || skipBusy || me.skipped}
@@ -1228,6 +1262,8 @@ export default function MultiRoom() {
             ? room.status === 'waiting'
               ? t('multi.relayWaitingStatus', { database: difficultyLabel(t, room.dbType), total: room.totalRounds ?? 3 })
               : t('multi.relayStatus', { solved: room.relaySolvedRounds, total: room.totalRounds, round: room.round })
+            : room.gameMode === 'relay2v2'
+              ? t('multi.teamScore', { a: room.teamScores?.a ?? 0, b: room.teamScores?.b ?? 0 })
             : room.status === 'waiting'
               ? t('multi.waitingStatus', { database: difficultyLabel(t, room.dbType), wins: room.winsNeeded })
               : t('multi.playingStatus', { round: room.round, wins: room.winsNeeded })}
@@ -1259,9 +1295,13 @@ export default function MultiRoom() {
               ? t('multi.waitingForTurn', {
                 player: room.players.find((player) => player.key === room.currentTurnKey)?.name ?? '-',
               })
-              : <GuessCooldownStatus until={guessCooldownUntil} />}
+              : room.gameMode === 'relay2v2' && ownTeamTurnKey !== myKey
+                ? t('multi.waitingForTurn', { player: ownTeamTurnPlayer?.name ?? '-' })
+                : <GuessCooldownStatus until={guessCooldownUntil} />}
             disabled={Boolean(relayAbort) || roundExpired || me.skipped || (room.gameMode === 'relay'
               ? room.currentTurnKey !== myKey || (room.relayGuesses?.length ?? 0) >= room.maxGuesses
+              : room.gameMode === 'relay2v2'
+                ? room.teamTurnKeys?.[myTeam ?? 'a'] !== myKey || Boolean(room.teamExhausted?.[myTeam ?? 'a'])
               : me.guessCount >= room.maxGuesses)}
           />
         ) : undefined
@@ -1282,19 +1322,29 @@ export default function MultiRoom() {
         </div>
       ) : <div className="card score-bar">
         <span className="player-name score-bar-player-left">
-          {leftPlayer?.key === room.hostKey && <Crown size={16} color="var(--warning)" />}
-          <span className="player-id-text">{leftPlayer?.name ?? '-'}</span>
-          {statsButton(leftPlayer)}
+          {room.gameMode === 'relay2v2' ? (
+            <span className="player-id-text">{t('multi.blueTeam')}</span>
+          ) : <>
+            {leftPlayer?.key === room.hostKey && <Crown size={16} color="var(--warning)" />}
+            <span className="player-id-text">{leftPlayer?.name ?? '-'}</span>
+            {statsButton(leftPlayer)}
+          </>}
         </span>
         <span className="score">
           {room.gameMode === 'relay'
             ? t('multi.relayProgress', { solved: room.relaySolvedRounds, total: room.totalRounds })
+            : room.gameMode === 'relay2v2'
+              ? `${room.teamScores?.a ?? 0} : ${room.teamScores?.b ?? 0}`
             : `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`}
         </span>
         <span className="player-name score-bar-player-right">
-          {rightPlayer?.key === room.hostKey && <Crown size={16} color="var(--warning)" />}
-          <span className="player-id-text">{rightPlayer?.name ?? t('multi.waitingForJoin')}</span>
-          {statsButton(rightPlayer)}
+          {room.gameMode === 'relay2v2' ? (
+            <span className="player-id-text">{t('multi.redTeam')}</span>
+          ) : <>
+            {rightPlayer?.key === room.hostKey && <Crown size={16} color="var(--warning)" />}
+            <span className="player-id-text">{rightPlayer?.name ?? t('multi.waitingForJoin')}</span>
+            {statsButton(rightPlayer)}
+          </>}
         </span>
       </div>}
 
@@ -1393,8 +1443,24 @@ export default function MultiRoom() {
                   {t('multi.notReady')}
                 </span>
               )}
+              {isRelay2v2 && p.team && <span className="badge">{p.team === 'a' ? t('multi.blueTeam') : t('multi.redTeam')}</span>}
             </div>
           ))}
+          {isRelay2v2 && me && (
+            <div className="room-ready-actions">
+              <span className="muted">{t('multi.chooseTeam')}</span>
+              {(['a', 'b'] as const).map((team) => (
+                <button
+                  key={team}
+                  className={`btn btn-sm ${me.team === team ? 'btn-accent' : 'btn-ghost'}`}
+                  disabled={room.players.filter((player) => player.team === team).length >= 2 && me.team !== team}
+                  onClick={() => emit('room:team-select', { team })}
+                >
+                  {team === 'a' ? t('multi.blueTeam') : t('multi.redTeam')}
+                </button>
+              ))}
+            </div>
+          )}
           {room.players.length < 2 && (
             <p className="muted">{t('multi.waitingOpponent')}</p>
           )}
@@ -1431,7 +1497,9 @@ export default function MultiRoom() {
                 <button
                   className="btn btn-success"
                   onClick={() => emit('game:start')}
-                  disabled={room.players.length < 2 || !room.players.every((p) => p.ready)}
+                  disabled={isRelay2v2
+                    ? room.players.length !== 4 || room.players.filter((p) => p.team === 'a').length !== 2 || room.players.filter((p) => p.team === 'b').length !== 2 || !room.players.every((p) => p.connected) || !room.players.filter((p) => p.key !== room.hostKey).every((p) => p.ready)
+                    : room.players.length < 2 || !room.players.every((p) => p.connected) || !room.players.filter((p) => p.key !== room.hostKey).every((p) => p.ready)}
                 >
                   <Play size={16} />
                   {t('multi.startGame')}
@@ -1452,7 +1520,48 @@ export default function MultiRoom() {
 
       {/* 对局区:左右分栏(移动端上下堆叠) */}
       {room.status !== 'waiting' && (
-        room.gameMode === 'relay' ? (
+        room.gameMode === 'relay2v2' ? (
+          <div className="boards relay2v2-boards">
+            {(['a', 'b'] as const).map((team) => {
+              const members = room.players.filter((player) => player.team === team);
+              const activeKey = room.teamTurnKeys?.[team] ?? null;
+              const activeIndex = activeKey ? members.findIndex((player) => player.key === activeKey) : -1;
+              const nextPlayer = activeIndex >= 0 && members.length > 1
+                ? members[(activeIndex + 1) % members.length]
+                : null;
+              const guesses = room.teamGuesses?.[team] ?? [];
+              return (
+                <div className="card player-board" key={team} style={{ margin: 0 }}>
+                  <h3>{team === 'a' ? t('multi.blueTeam') : t('multi.redTeam')}
+                    <span className="muted">{room.teamScores?.[team] ?? 0} · {guesses.length}/{room.maxGuesses}</span>
+                    {activeKey ? (
+                      <>
+                        <span className="badge amber">
+                          {activeKey === myKey
+                            ? t('multi.yourTurn')
+                            : t('multi.currentTurn', { player: room.players.find((player) => player.key === activeKey)?.name ?? '-' })}
+                        </span>
+                        {nextPlayer && (
+                          <span className="muted">
+                            {nextPlayer.key === myKey
+                              ? t('multi.nextTurnSelf')
+                              : t('multi.nextTurn', { player: nextPlayer.name })}
+                          </span>
+                        )}
+                      </>
+                    ) : <span className="badge amber">
+                      {room.teamExhausted?.[team]
+                        ? t('multi.relay2v2TeamExhausted')
+                        : t('multi.relay2v2RoundComplete')}
+                    </span>}
+                  </h3>
+                  <p className="muted">{members.map((player) => player.name).join(' / ')}</p>
+                  {guesses.length ? <GuessBoard guesses={guesses.map((guess) => guess.feedback)} /> : <p className="muted">{t('multi.noGuesses')}</p>}
+                </div>
+              );
+            })}
+          </div>
+        ) : room.gameMode === 'relay' ? (
           <div className="card player-board relay-board" style={{ margin: 0 }}>
             <h3>
               {t('multi.sharedGuesses')}
@@ -1541,13 +1650,19 @@ export default function MultiRoom() {
           title={
             room.gameMode === 'relay'
               ? t(roundOver.reason === 'guessed' ? 'multi.relayRoundSolved' : 'multi.relayRoundMissed')
-              : roundOver.winnerKey == null
-              ? t('multi.roundDraw')
-              : roundOver.winnerKey === myKey
-                ? t('multi.roundWon')
-                : isSpectator
-                  ? t('multi.playerWonRound', { player: room.players.find((p) => p.key === roundOver.winnerKey)?.name ?? '' })
-                  : t('multi.roundLost')
+              : room.gameMode === 'relay2v2'
+                ? roundOver.winnerTeam
+                  ? t('multi.teamWonRound', {
+                    team: roundOver.winnerTeam === 'a' ? t('multi.blueTeam') : t('multi.redTeam'),
+                  })
+                  : t('multi.relay2v2Overtime')
+                : roundOver.winnerKey == null
+                  ? t('multi.roundDraw')
+                  : roundOver.winnerKey === myKey
+                    ? t('multi.roundWon')
+                    : isSpectator
+                      ? t('multi.playerWonRound', { player: room.players.find((p) => p.key === roundOver.winnerKey)?.name ?? '' })
+                      : t('multi.roundLost')
           }
           answer={roundOver.answer}
           onClose={() => setRoundOver(null)}
@@ -1574,13 +1689,19 @@ export default function MultiRoom() {
           title={
             room.gameMode === 'relay'
               ? t('multi.relayMatchComplete')
-              : matchOver.winnerKey == null
-              ? t('multi.matchEnded')
-              : isLargeClassicRoom || isSpectator
-                ? t('multi.playerWonMatch', { player: room.players.find((p) => p.key === matchOver.winnerKey)?.name ?? '' })
-                : matchOver.winnerKey === myKey
-                  ? t('multi.matchWon')
-                  : t('multi.matchLost')
+              : room.gameMode === 'relay2v2'
+                ? matchOver.winnerTeam
+                  ? t('multi.teamWonMatch', {
+                    team: matchOver.winnerTeam === 'a' ? t('multi.blueTeam') : t('multi.redTeam'),
+                  })
+                  : t('multi.matchEnded')
+                : matchOver.winnerKey == null
+                  ? t('multi.matchEnded')
+                  : isLargeClassicRoom || isSpectator
+                    ? t('multi.playerWonMatch', { player: room.players.find((p) => p.key === matchOver.winnerKey)?.name ?? '' })
+                    : matchOver.winnerKey === myKey
+                      ? t('multi.matchWon')
+                      : t('multi.matchLost')
           }
           answer={matchOver.answer}
           onClose={() => setMatchOverVisible(false)}
@@ -1590,7 +1711,12 @@ export default function MultiRoom() {
                 {room.gameMode === 'relay' ? t('multi.relayFinalScore', {
                   solved: room.relaySolvedRounds ?? 0,
                   total: room.totalRounds ?? room.boType,
-                }) : isLargeClassicRoom
+                }) : room.gameMode === 'relay2v2'
+                  ? t('multi.finalScore', {
+                    reason: matchOverReason(matchOver, myKey, isSpectator, t),
+                    score: `${room.teamScores?.a ?? 0} : ${room.teamScores?.b ?? 0}`,
+                  })
+                  : isLargeClassicRoom
                   ? matchOverReason(matchOver, myKey, isSpectator, t)
                   : t('multi.finalScore', {
                       reason: matchOverReason(matchOver, myKey, isSpectator, t),

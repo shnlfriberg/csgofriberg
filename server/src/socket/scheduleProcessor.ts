@@ -55,7 +55,7 @@ async function processDisconnectedPlayer(
       return { kind: 'relay_abort' as const, room };
     }
 
-    if (room.gameMode === 'classic' && room.maxPlayers > 2) {
+    if (room.gameMode === 'relay2v2' || (room.gameMode === 'classic' && room.maxPlayers > 2)) {
       return { kind: 'classic_eliminate' as const, room };
     }
 

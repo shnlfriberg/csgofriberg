@@ -26,6 +26,7 @@ import { registerSocketEvent, SocketAck } from '../event';
 import { generateRoomId, makeRoomPlayer } from '../roomFactory';
 import {
   connectedSpectatorCount,
+  emitRoomViews,
   emitRoomPatch,
   identityChannel,
   identityDisplayName,
@@ -38,6 +39,7 @@ import {
   roomJoinPayloadSchema,
   roomPlayerStatsPayloadSchema,
   roomReadyPayloadSchema,
+  roomTeamSelectPayloadSchema,
   roomStateProbePayloadSchema,
 } from '../schemas';
 import { SocketEventContext, SocketLifecycle } from './context';
@@ -179,10 +181,15 @@ export async function handleRoomCreate(
     boType,
     gameMode,
     totalRounds,
-    maxPlayers: payload.maxPlayers,
+    maxPlayers: gameMode === 'relay2v2' ? 4 : payload.maxPlayers,
     currentTurnKey: null,
     relaySolvedRounds: 0,
     relayGuesses: [],
+    teamScores: { a: 0, b: 0 },
+    teamTurnKeys: { a: null, b: null },
+    teamGuesses: { a: [], b: [] },
+    teamLastGuessAt: { a: null, b: null },
+    teamExhausted: { a: false, b: false },
     maxGuesses: payload.maxGuesses,
     guessIntervalMs: payload.guessIntervalMs,
     roundDurationMs: payload.roundDurationMs,
@@ -292,6 +299,7 @@ export async function handleRoomJoin(
       }
       return { role: 'spectator' as const, room, existing: true };
     }
+    if (room.gameMode === 'relay2v2' && room.players.length >= 4) return { code: 'ROOM_FULL' };
     room.players.push(makeRoomPlayer(me, socket.id, false));
     return { role: 'player' as const, room, existing: false };
   }, (value) => 'role' in value);
@@ -319,6 +327,38 @@ export async function handleRoomJoin(
   ack?.({ room: publicRoom(role.room, me.key), role: role.role });
 }
 
+export async function handleRoomTeamSelect(
+  context: RoomEventContext,
+  payload: z.infer<typeof roomTeamSelectPayloadSchema>,
+  ack?: SocketAck
+): Promise<void> {
+  const { io, socket, me, restorePromise } = context;
+  await restorePromise;
+  const room = await getRoomForIdentity(me.key);
+  if (!room || room.gameMode !== 'relay2v2' || room.status !== 'waiting') {
+    ack?.({ code: 'NOT_IN_WAITING_ROOM' });
+    return;
+  }
+  const result = await withRoomLock(room.id, (locked) => {
+    const player = locked.players.find((candidate) => candidate.key === me.key);
+    if (!player) return { code: 'NOT_IN_ROOM' as const };
+    if (player.socketId !== socket.id) return { code: 'STALE_CONNECTION' as const };
+    const count = locked.players.filter((candidate) => candidate.team === payload.team).length;
+    if (player.team !== payload.team && count >= 2) return { code: 'TEAM_FULL' as const };
+    player.team = payload.team;
+    player.ready = player.key === locked.hostKey;
+    return { room: locked, team: payload.team };
+  }, (value) => Boolean(value && 'room' in value));
+  if (!result || 'code' in result) {
+    ack?.(result ?? { code: 'ROOM_NOT_FOUND' });
+    return;
+  }
+  emitRoomPatch(io, result.room, {
+    players: { updated: [{ key: me.key, team: result.team, ready: me.key === result.room.hostKey }] },
+  });
+  ack?.({ ok: true, room: publicRoom(result.room, me.key) });
+}
+
 export async function handleRoomReady(
   context: RoomEventContext,
   payload: z.infer<typeof roomReadyPayloadSchema>,
@@ -343,7 +383,11 @@ export async function handleRoomReady(
     const player = locked.players.find((candidate) => candidate.key === me.key);
     if (!player) return false;
     if (player.socketId !== socket.id) return 'STALE_CONNECTION' as const;
-    player.ready = payload.ready ?? !player.ready;
+    const nextReady = payload.ready ?? !player.ready;
+    if (locked.gameMode === 'relay2v2' && nextReady && !player.team) {
+      return 'TEAM_NOT_SELECTED' as const;
+    }
+    player.ready = nextReady;
     const startNow = locked.matchmaking && locked.players.length === 2 &&
       locked.players.every((candidate) => candidate.ready && candidate.connected);
     if (startNow) locked.status = 'starting';
@@ -355,6 +399,10 @@ export async function handleRoomReady(
   }
   if (changed === 'READY_CHECK_EXPIRED') {
     await lifecycle.processReadyCheck(io, room.id);
+    ack?.({ code: changed });
+    return;
+  }
+  if (changed === 'TEAM_NOT_SELECTED') {
     ack?.({ code: changed });
     return;
   }
@@ -399,32 +447,56 @@ export async function handleRoomLeave(
       if (player.socketId !== socket.id && locked.rematchAllowed) {
         return { stale: true as const };
       }
+      if (locked.gameMode === 'relay2v2' && player.key === locked.hostKey) {
+        player.connected = false;
+        player.disconnectDeadline = null;
+        locked.rematchAllowed = false;
+        locked.rematchInviterKey = null;
+        locked.rematchAcceptedKeys = [];
+        locked.rematchRequiredKeys = [];
+        return { room: locked, hostLeft: true as const };
+      }
       player.connected = false;
       const requiredKeys = lifecycle.syncRematchPreferences(locked);
       const startNow = requiredKeys.length >= 2
         && requiredKeys.every((key) => locked.rematchAcceptedKeys.includes(key));
       if (startNow) {
         await lifecycle.persistMatch(locked, locked.matchResult!.winnerKey);
-        lifecycle.resetForRematch(locked, true);
+        lifecycle.resetForRematch(locked, !(locked.gameMode === 'relay2v2' && requiredKeys.length < 4));
       }
-      return { room: locked, startNow };
+      return {
+        room: locked,
+        startNow: startNow && !(locked.gameMode === 'relay2v2' && requiredKeys.length < 4),
+        waitingForPlayers: startNow && locked.gameMode === 'relay2v2' && requiredKeys.length < 4,
+      };
     }, (value) => Boolean(value && !('stale' in value)));
     if (left && 'stale' in left) {
       ack?.({ code: 'STALE_CONNECTION' });
       return;
     }
     if (left) {
+      if ('hostLeft' in left) {
+        emitRoomViews(io, left.room, 'match:over', (viewerKey) => ({
+          room: publicRoom(left.room, viewerKey),
+          serverNow: Date.now(),
+        }));
+        socket.leave(room.id);
+        socket.leave(spectatorChannel(room.id));
+        socket.data.roomId = undefined;
+        ack?.({ ok: true });
+        return;
+      }
       lifecycle.emitRematchUpdate(
         io,
         left.room,
-        left.startNow ? 'started' : 'updated',
+        left.startNow ? 'started' : left.waitingForPlayers ? 'waiting' : 'updated',
         me.key,
         { key: me.key, connected: false }
       );
-      if (left.startNow) {
+      if (left.startNow || left.waitingForPlayers) {
         cancelLocalTimer(`cleanup:${left.room.id}`);
         await acknowledgeSchedule(`cleanup|${left.room.id}|0`);
-        await lifecycle.startRound(io, left.room.id);
+        if (left.startNow) await lifecycle.startRound(io, left.room.id);
       }
     }
     await clearIdentityRoom(me.key, room.id);
@@ -519,7 +591,7 @@ export async function handleRoomLeave(
       ack?.({ ok: true });
       return;
     }
-    const outcome = room.maxPlayers > 2
+    const outcome = room.gameMode === 'relay2v2' || room.maxPlayers > 2
       ? await lifecycle.eliminatePlayer(io, room.id, me.key, 'player_left', socket.id)
       : await lifecycle.finishMatch(
           io,
@@ -612,6 +684,12 @@ export function registerRoomEvents(context: RoomEventContext): void {
     'room:ready',
     (payload, ack) => handleRoomReady(context, payload, ack),
     roomReadyPayloadSchema
+  );
+  registerSocketEvent(
+    context.socket,
+    'room:team-select',
+    (payload, ack) => handleRoomTeamSelect(context, payload, ack),
+    roomTeamSelectPayloadSchema
   );
   registerSocketEvent(
     context.socket,

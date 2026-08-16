@@ -102,7 +102,7 @@ export default function MultiLobby() {
   const presetSelectId = useId();
   const presetNameId = useId();
   const [dbType, setDbType] = useState<DbType>(initialPreferences.createDifficulty);
-  const [gameMode, setGameMode] = useState<'classic' | 'relay'>(initialPreferences.gameMode);
+  const [gameMode, setGameMode] = useState<'classic' | 'relay' | 'relay2v2'>(initialPreferences.gameMode);
   const [totalRounds, setTotalRounds] = useState(initialPreferences.totalRounds);
   const [boType, setBoType] = useState(initialPreferences.boType);
   const [maxPlayers, setMaxPlayers] = useState(initialPreferences.maxPlayers);
@@ -177,18 +177,19 @@ export default function MultiLobby() {
   const selectedPresetValue = selectedPreset?.name ?? '';
   const maxPlayerOptions = Array.from(
     {
-      length: (gameMode === 'relay'
+      length: (gameMode === 'relay' || gameMode === 'relay2v2'
         ? MAX_RELAY_MULTI_PLAYERS
         : MAX_CLASSIC_MULTI_PLAYERS) - MIN_MULTI_PLAYERS + 1,
     },
     (_, index) => MIN_MULTI_PLAYERS + index
   );
 
-  const changeGameMode = (nextMode: 'classic' | 'relay') => {
+  const changeGameMode = (nextMode: 'classic' | 'relay' | 'relay2v2') => {
     setGameMode(nextMode);
     if (nextMode === 'relay') {
       setMaxPlayers((current) => Math.min(current, MAX_RELAY_MULTI_PLAYERS));
     }
+    if (nextMode === 'relay2v2') setMaxPlayers(4);
   };
 
   const applyPreset = (preset: MultiLobbyPreset) => {
@@ -268,7 +269,7 @@ export default function MultiLobby() {
       totalRounds,
       createDifficulty: dbType,
       boType,
-      maxPlayers,
+      maxPlayers: gameMode === 'relay2v2' ? 4 : maxPlayers,
       allowSpectators,
       verifiedEmailOnly,
       maxGuesses,
@@ -614,10 +615,10 @@ export default function MultiLobby() {
             />
             <OptionGroup
               label={t('multi.gameModeLabel')}
-              options={['classic', 'relay']}
+              options={['classic', 'relay', 'relay2v2']}
               value={gameMode}
               onChange={changeGameMode}
-              format={(v) => t(v === 'relay' ? 'multi.relayMode' : 'multi.classicMode')}
+              format={(v) => t(v === 'relay2v2' ? 'multi.relay2v2Mode' : v === 'relay' ? 'multi.relayMode' : 'multi.classicMode')}
             />
             <OptionGroup
               label={gameMode === 'relay' ? t('multi.totalRoundsLabel') : t('multi.formatLabel')}
@@ -631,7 +632,8 @@ export default function MultiLobby() {
               <select
                 className="input room-player-limit-select"
                 aria-label={t('multi.maxPlayersLabel')}
-                value={maxPlayers}
+                value={gameMode === 'relay2v2' ? 4 : maxPlayers}
+                disabled={gameMode === 'relay2v2'}
                 onChange={(event) => setMaxPlayers(Number(event.currentTarget.value))}
               >
                 {maxPlayerOptions.map((count) => (

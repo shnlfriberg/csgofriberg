@@ -19,7 +19,7 @@ export interface SocketLifecycle {
   emitRematchUpdate(
     io: Server,
     room: StoredRoom,
-    outcome: 'wanted' | 'withdrawn' | 'updated' | 'started',
+    outcome: 'wanted' | 'withdrawn' | 'updated' | 'waiting' | 'started',
     actorKey: string,
     playerUpdate?: { key: string; connected: boolean }
   ): void;

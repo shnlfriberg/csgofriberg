@@ -72,6 +72,7 @@ export interface RoomPlayer {
   guesses: MultiplayerGuessFeedback[];
   eliminated?: boolean;
   eliminationReason?: 'player_left' | 'disconnect_timeout' | null;
+  team?: 'a' | 'b' | null;
 }
 
 export interface PlayerPerformanceStats {
@@ -132,7 +133,7 @@ export interface MatchReplay {
   id: number | string;
   mode: string;
   boType: number;
-  gameMode?: 'classic' | 'relay';
+  gameMode?: 'classic' | 'relay' | 'relay2v2';
   totalRounds?: number;
   relaySolvedRounds?: number;
   finishedAt: string;
@@ -160,16 +161,24 @@ export interface RoomState {
   readyCheckEndsAt: number | null;
   dbType: string;
   boType: number;
-  gameMode?: 'classic' | 'relay';
+  gameMode?: 'classic' | 'relay' | 'relay2v2';
   totalRounds?: number;
   maxPlayers?: number;
   currentTurnKey?: string | null;
   relaySolvedRounds?: number;
+  teamScores?: { a: number; b: number };
   relayGuesses?: Array<{
     actorKey: string;
     guessedAt: number;
     feedback: GuessFeedback;
   }>;
+  teamTurnKeys?: { a: string | null; b: string | null };
+  teamExhausted?: { a: boolean; b: boolean };
+  teamGuesses?: Record<'a' | 'b', Array<{
+    actorKey: string;
+    guessedAt: number;
+    feedback: MultiplayerGuessFeedback;
+  }>>;
   rematchAllowed: boolean;
   rematchInvite: {
     acceptedKeys?: string[];
@@ -191,6 +200,7 @@ export interface RoomState {
   players: RoomPlayer[];
   roundResult: {
     winnerKey: string | null;
+    winnerTeam?: 'a' | 'b' | null;
     reason: string;
     nextRoundAt: number | null;
     answer: {
@@ -205,6 +215,8 @@ export interface RoomState {
   } | null;
   matchResult: {
     winnerKey: string | null;
+    winnerTeam?: 'a' | 'b' | null;
+    winnerKeys?: string[];
     reason: string;
     answer: {
       nickname: string;

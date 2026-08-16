@@ -8,6 +8,7 @@ import {
   MAX_ROOM_ROUND_DURATION_MS,
   MAX_CLASSIC_ROOM_PLAYERS,
   MAX_RELAY_ROOM_PLAYERS,
+  MAX_RELAY2V2_ROOM_PLAYERS,
   MIN_ROOM_GUESS_INTERVAL_MS,
   MIN_ROOM_MAX_GUESSES,
   MIN_ROOM_ROUND_DURATION_MS,
@@ -24,7 +25,7 @@ export const roomStateProbePayloadSchema = z.object({}).strict();
 
 export const roomCreatePayloadSchema = z.object({
   dbType: difficultyKeySchema,
-  gameMode: z.enum(['classic', 'relay']).default('classic'),
+  gameMode: z.enum(['classic', 'relay', 'relay2v2']).default('classic'),
   boType: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
   totalRounds: z.union([z.literal(1), z.literal(3), z.literal(5), z.literal(7)]).default(3),
   maxPlayers: z.number().int().min(MIN_CLASSIC_ROOM_PLAYERS).max(MAX_CLASSIC_ROOM_PLAYERS).default(2),
@@ -49,6 +50,9 @@ export const roomCreatePayloadSchema = z.object({
       message: `Relay rooms support at most ${MAX_RELAY_ROOM_PLAYERS} players`,
     });
   }
+  if (payload.gameMode === 'relay2v2' && payload.maxPlayers !== MAX_RELAY2V2_ROOM_PLAYERS) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['maxPlayers'], message: '2v2 relay rooms require exactly 4 players' });
+  }
 });
 
 export const roomJoinPayloadSchema = z.object({
@@ -60,6 +64,7 @@ export const rematchResponsePayloadSchema = z.object({ accept: z.boolean() });
 export const rematchWantPayloadSchema = z.object({ wanted: z.boolean() });
 
 export const roomReadyPayloadSchema = z.object({ ready: z.boolean().optional() }).default({});
+export const roomTeamSelectPayloadSchema = z.object({ team: z.enum(['a', 'b']) });
 
 export const matchReportPayloadSchema = z.object({
   description: z.string().trim().max(50).default(''),

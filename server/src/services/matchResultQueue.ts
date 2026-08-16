@@ -14,10 +14,12 @@ export interface MatchResultPayload {
   recordId: string;
   dbType: string;
   boType: number;
-  gameMode?: 'classic' | 'relay';
+  gameMode?: 'classic' | 'relay' | 'relay2v2';
   totalRounds?: number;
   relaySolvedRounds?: number;
   winnerKey: string | null;
+  winnerTeam?: 'a' | 'b' | null;
+  winnerKeys?: string[];
   reason: string;
   forfeitedKey: string | null;
   participants: {
@@ -27,6 +29,7 @@ export interface MatchResultPayload {
     score: number;
     eliminated?: boolean;
     eliminationReason?: 'player_left' | 'disconnect_timeout' | null;
+    team?: 'a' | 'b' | null;
   }[];
   reports?: {
     reporterKey: string;
@@ -52,10 +55,24 @@ const DEAD_LETTER_KEY = redisKey('stream:match-results:dead');
 let workerClient: NonNullable<ReturnType<typeof duplicateRedisClient>> | null = null;
 let pendingClaimCursor = '0-0';
 
+function normalizeWinnerKeys(value: unknown): string[] {
+  const candidates = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? (() => {
+          try { return JSON.parse(value); } catch { return []; }
+        })()
+      : [];
+  return Array.isArray(candidates)
+    ? candidates.filter((key): key is string => typeof key === 'string' && key.length > 0)
+    : [];
+}
+
 export async function persistMatchResult(payload: MatchResultPayload): Promise<void> {
-  const gameMode = payload.gameMode === 'relay' ? 'relay' : 'classic';
+  const gameMode = payload.gameMode === 'relay2v2' ? 'relay2v2' : payload.gameMode === 'relay' ? 'relay' : 'classic';
   const totalRounds = payload.totalRounds ?? payload.boType;
   const relaySolvedRounds = payload.relaySolvedRounds ?? 0;
+  const winnerKeys = normalizeWinnerKeys(payload.winnerKeys);
   const winner = payload.participants.find((player) => player.key === payload.winnerKey);
   const guessMetrics = winningGuessMetricsByPlayer(payload.rounds);
   const participantUserIds = [...new Set(
@@ -99,7 +116,10 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
         player_key: player.key,
         player_name: player.name ?? '',
         score: player.score,
-        is_winner: gameMode === 'classic' && player.key === payload.winnerKey,
+        is_winner: gameMode === 'relay2v2'
+          ? winnerKeys.includes(player.key)
+          : gameMode === 'classic' && player.key === payload.winnerKey,
+        team: player.team ?? null,
         is_eliminated: player.eliminated === true,
         elimination_reason: player.eliminationReason ?? null,
         winning_guess_sum: metrics?.winningGuessSum ?? 0,
@@ -116,6 +136,8 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
         relay_solved_rounds: relaySolvedRounds,
         winner_id: persistedUserId(winner?.userId ?? null),
         winner_key: payload.winnerKey,
+        winner_team: payload.winnerTeam ?? null,
+        winner_keys: JSON.stringify(winnerKeys),
         finish_reason: payload.reason,
         forfeited_key: payload.forfeitedKey,
         replay: JSON.stringify(payload.rounds),
@@ -141,6 +163,7 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
               is_winner: values.is_winner,
               is_eliminated: values.is_eliminated,
               elimination_reason: values.elimination_reason,
+              team: values.team,
               winning_guess_sum: values.winning_guess_sum,
               winning_rounds: values.winning_rounds,
             });
