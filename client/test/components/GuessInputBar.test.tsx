@@ -72,6 +72,21 @@ describe('GuessInputBar', () => {
     expect(screen.getByRole('button', { name: '提交猜测' })).toBeDisabled();
   });
 
+  it('clears focus and closes suggestions when disabled', async () => {
+    const onFocusChange = vi.fn();
+    const view = renderWithProviders(<GuessInputBar onPick={vi.fn()} onFocusChange={onFocusChange} />);
+    const input = screen.getByPlaceholderText('输入选手昵称...');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 's1' } });
+    await screen.findByText('s1mple');
+
+    view.rerender(<GuessInputBar onPick={vi.fn()} onFocusChange={onFocusChange} disabled />);
+
+    expect(input).toBeDisabled();
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(onFocusChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('renders external status only when explicitly provided (e.g. multi cooldown)', () => {
     renderWithProviders(<GuessInputBar onPick={vi.fn()} statusText="冷却 2s" />);
     expect(screen.getByRole('status')).toHaveTextContent('冷却 2s');

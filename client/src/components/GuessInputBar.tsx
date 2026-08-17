@@ -87,6 +87,17 @@ export default function GuessInputBar({
   }, [disabled, submitting]);
 
   useEffect(() => {
+    if (!disabled) return;
+    refocusAfterSubmit.current = false;
+    focused.current = false;
+    tabCycling.current = false;
+    setOpen(false);
+    onFocusChange?.(false);
+    const inputElement = input.current;
+    if (document.activeElement === inputElement) inputElement?.blur();
+  }, [disabled, onFocusChange]);
+
+  useEffect(() => {
     const focusInputOnEnter = (event: KeyboardEvent) => {
       if (
         event.key !== 'Enter' ||

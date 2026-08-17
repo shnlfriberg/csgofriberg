@@ -968,6 +968,11 @@ export default function MultiRoom() {
   const myTeam = me?.team ?? null;
   const isHost = room?.hostKey === myKey;
   const playing = room?.status === 'playing';
+  const guessInputDisabled = !playing || !me || me.eliminated || Boolean(relayAbort) || roundExpired || me?.skipped || (room?.gameMode === 'relay'
+    ? room.currentTurnKey !== myKey || (room.relayGuesses?.length ?? 0) >= room.maxGuesses
+    : room?.gameMode === 'relay2v2'
+      ? room.teamTurnKeys?.[myTeam ?? 'a'] !== myKey || Boolean(room.teamExhausted?.[myTeam ?? 'a'])
+      : (me?.guessCount ?? 0) >= (room?.maxGuesses ?? 0));
   const rematchAcceptedKeys = room?.rematchInvite?.acceptedKeys ?? [];
   const rematchRequiredKeys = room?.rematchInvite?.requiredKeys
     ?? room?.players.filter((player) => player.connected && !player.eliminated).map((player) => player.key)
@@ -979,6 +984,9 @@ export default function MultiRoom() {
     me &&
     room.players.filter((player) => player.connected && !player.eliminated).length >= 2
   );
+  useEffect(() => {
+    if (guessInputDisabled) setInputFocused(false);
+  }, [guessInputDisabled]);
   const viewFinishedMatch = () => {
     if (!room?.matchReplay) {
       setMatchOverVisible(false);
@@ -1314,11 +1322,7 @@ export default function MultiRoom() {
               : room.gameMode === 'relay2v2' && ownTeamTurnKey !== myKey
                 ? t('multi.waitingForTurn', { player: ownTeamTurnPlayer?.name ?? '-' })
                 : <GuessCooldownStatus until={guessCooldownUntil} />}
-            disabled={Boolean(relayAbort) || roundExpired || me.skipped || (room.gameMode === 'relay'
-              ? room.currentTurnKey !== myKey || (room.relayGuesses?.length ?? 0) >= room.maxGuesses
-              : room.gameMode === 'relay2v2'
-                ? room.teamTurnKeys?.[myTeam ?? 'a'] !== myKey || Boolean(room.teamExhausted?.[myTeam ?? 'a'])
-              : me.guessCount >= room.maxGuesses)}
+            disabled={guessInputDisabled}
           />
         ) : undefined
       }
