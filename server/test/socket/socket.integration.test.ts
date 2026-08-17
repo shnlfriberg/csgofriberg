@@ -1151,6 +1151,64 @@ describe('multiplayer socket integration', () => {
     }
   });
 
+  it('shows both relay2v2 teams to spectators while hiding guesses from opponents', async () => {
+    const stamp = Date.now();
+    const keys = ['a1', 'a2', 'b1', 'b2', 'spectator'].map((suffix) => `relay2v2-view-${suffix}-${stamp}`);
+    const sockets = await Promise.all(keys.map(async (key) => connect(withPowCookie(
+      `csgofriberg_guest=${jwt.sign({ key, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' })}`
+    ))));
+    const [a1, a2, b1, b2, spectator] = sockets;
+    const playerKeys = keys.slice(0, 4).map((key) => `g:${key}`);
+    const socketByPlayerKey = new Map(playerKeys.map((key, index) => [key, sockets[index]]));
+    try {
+      const created = await emit(a1, 'room:create', {
+        dbType: 'easy', gameMode: 'relay2v2', boType: 3, maxPlayers: 4,
+        maxGuesses: 8, guessIntervalMs: 0, allowSpectators: true,
+      });
+      createdRoomIds.push(created.room.id);
+      await emit(a2, 'room:join', { roomId: created.room.id });
+      await emit(b1, 'room:join', { roomId: created.room.id });
+      await emit(b2, 'room:join', { roomId: created.room.id });
+      await emit(spectator, 'room:join', { roomId: created.room.id, spectate: true });
+
+      await emit(a1, 'room:team-select', { team: 'a' });
+      await emit(a2, 'room:team-select', { team: 'a' });
+      await emit(b1, 'room:team-select', { team: 'b' });
+      await emit(b2, 'room:team-select', { team: 'b' });
+      await emit(a2, 'room:ready', { ready: true });
+      await emit(b1, 'room:ready', { ready: true });
+      await emit(b2, 'room:ready', { ready: true });
+      expect((await emit(a1, 'game:start')).ok).toBe(true);
+
+      const active = await getRoom(created.room.id);
+      const actorKey = active!.teamTurnKeys.a!;
+      const actorSocket = socketByPlayerKey.get(actorKey)!;
+      const wrongGuess = getDifficultyPlayers('easy').find((player) => player.id !== active!.targetPlayerId)!;
+      const spectatorEvent = onceEvent(spectator, 'game:guess:applied');
+      const opponentEvent = onceEvent(b1, 'game:guess:applied');
+
+      expect((await emit(actorSocket, 'game:guess', {
+        playerId: wrongGuess.id,
+        roundId: active!.round,
+        eventId: `relay2v2-spectator-${stamp}`,
+      })).code).toBeUndefined();
+
+      expect((await spectatorEvent).feedback).toMatchObject({
+        playerId: wrongGuess.id,
+        nickname: wrongGuess.nickname,
+      });
+      expect((await opponentEvent).feedback).toMatchObject({ hidden: true });
+
+      const spectatorSnapshot = await emit(spectator, 'room:sync');
+      expect(spectatorSnapshot.room.teamGuesses.a[0].feedback).toMatchObject({
+        playerId: wrongGuess.id,
+        nickname: wrongGuess.nickname,
+      });
+    } finally {
+      sockets.forEach((socket) => socket.disconnect());
+    }
+  });
+
   it('aborts an active relay room without persistence when a player leaves', async () => {
     const stamp = Date.now();
     const tokenA = jwt.sign({ key: `relay-leave-a-${stamp}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });

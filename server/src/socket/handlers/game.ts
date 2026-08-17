@@ -186,10 +186,13 @@ export async function handleGameGuess(
       emitRoomViews(io, result.room, 'game:guess:applied', (viewerKey) => {
         const actor = result.room!.players.find((candidate) => candidate.key === me.key);
         const viewer = result.room!.players.find((candidate) => candidate.key === viewerKey);
+        const viewerIsSpectator = result.room!.spectators.some((candidate) => candidate.key === viewerKey);
         const sameTeam = result.room!.gameMode === 'relay2v2' && actor?.team && actor.team === viewer?.team;
         return {
           ...delta,
-          feedback: result.room!.gameMode === 'relay' || sameTeam ? visibleGuess(result.feedback) : hiddenGuess(result.feedback),
+          feedback: result.room!.gameMode === 'relay' || sameTeam || viewerIsSpectator
+            ? visibleGuess(result.feedback)
+            : hiddenGuess(result.feedback),
           guessedAt: result.relayGuess!.guessedAt,
           currentTurnKey: result.room!.currentTurnKey,
           teamTurnKeys: result.room!.teamTurnKeys,
