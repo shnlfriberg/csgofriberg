@@ -50,14 +50,15 @@ interface MultiReplayItem {
   id: number;
   mode: string;
   boType: number;
-  gameMode?: 'classic' | 'relay';
+  gameMode?: 'classic' | 'relay' | 'relay2v2';
   totalRounds?: number;
   relaySolvedRounds?: number;
+  teamScores?: { a: number; b: number };
   finishedAt: string;
   result: 'won' | 'lost' | 'draw' | 'cooperative';
   me: { score: number };
   opponent: { displayId: string; score: number } | null;
-  participants?: Array<{ displayId: string; score: number; isWinner: boolean }>;
+  participants?: Array<{ displayId: string; score: number; isWinner: boolean; team?: 'a' | 'b' | null }>;
 }
 
 interface ReplayPage<T> {
@@ -272,7 +273,9 @@ export default function Stats() {
   const multiColumns: Column<MultiReplayItem>[] = [
     { key: 'mode', title: t('stats.mode'), render: (game) => game.gameMode === 'relay'
       ? `${difficultyLabel(t, game.mode)} · ${t('multi.relayMode')}`
-      : `${difficultyLabel(t, game.mode)} · BO${game.boType}` },
+      : game.gameMode === 'relay2v2'
+        ? `${difficultyLabel(t, game.mode)} · ${t('multi.relay2v2Mode')} · BO${game.boType}`
+        : `${difficultyLabel(t, game.mode)} · BO${game.boType}` },
     { key: 'result', title: t('stats.result'), render: (game) => game.result === 'cooperative'
       ? <Badge text={t('multi.relayProgress', { solved: game.relaySolvedRounds ?? 0, total: game.totalRounds ?? 0 })} color="green" />
       : game.result === 'won'
@@ -280,10 +283,14 @@ export default function Stats() {
       : game.result === 'draw'
         ? <Badge text={t('common.draw')} color="gray" />
         : <Badge text={t('common.loss')} color="gray" /> },
-    { key: 'opponent', title: t('stats.matchup'), render: (game) => game.participants?.length
+    { key: 'opponent', title: t('stats.matchup'), render: (game) => game.gameMode === 'relay2v2'
+      ? `${t('multi.blueTeam')} / ${t('multi.redTeam')}`
+      : game.participants?.length
       ? `${t('common.me')} / ${game.participants.map((participant) => participant.displayId).join(' / ')}`
       : `${t('common.me')} / ${game.opponent?.displayId ?? t('stats.unknownOpponent')}` },
-    { key: 'score', title: t('stats.score'), render: (game) => game.participants?.length
+    { key: 'score', title: t('stats.score'), render: (game) => game.gameMode === 'relay2v2'
+      ? `${game.teamScores?.a ?? 0}:${game.teamScores?.b ?? 0}`
+      : game.participants?.length
       ? [game.me.score, ...game.participants.map((participant) => participant.score)].join(':')
       : `${game.me.score}:${game.opponent?.score ?? 0}` },
     { key: 'finishedAt', title: t('stats.time'), render: (game) => new Date(game.finishedAt).toLocaleString(currentLocale()) },
@@ -398,7 +405,9 @@ export default function Stats() {
                     ? difficultyLabel(t, item.mode)
                     : item.gameMode === 'relay'
                       ? `${difficultyLabel(t, item.mode)} · ${t('multi.relayMode')}`
-                      : `${difficultyLabel(t, item.mode)} · BO${item.boType}`}</strong>
+                      : item.gameMode === 'relay2v2'
+                        ? `${difficultyLabel(t, item.mode)} · ${t('multi.relay2v2Mode')} · BO${item.boType}`
+                        : `${difficultyLabel(t, item.mode)} · BO${item.boType}`}</strong>
                   <Badge
                     text={result === 'cooperative' && item.type === 'multi'
                       ? t('multi.relayProgress', { solved: item.relaySolvedRounds ?? 0, total: item.totalRounds ?? 0 })
@@ -414,10 +423,14 @@ export default function Stats() {
                     </>
                   ) : (
                     <>
-                      <span>{t('stats.matchup')} <strong>{item.participants?.length
+                      <span>{t('stats.matchup')} <strong>{item.gameMode === 'relay2v2'
+                        ? `${t('multi.blueTeam')} / ${t('multi.redTeam')}`
+                        : item.participants?.length
                         ? `${t('common.me')} / ${item.participants.map((participant) => participant.displayId).join(' / ')}`
                         : `${t('common.me')} / ${item.opponent?.displayId ?? t('stats.unknownOpponent')}`}</strong></span>
-                      <span>{t('stats.score')} <strong>{item.participants?.length
+                      <span>{t('stats.score')} <strong>{item.gameMode === 'relay2v2'
+                        ? `${item.teamScores?.a ?? 0}:${item.teamScores?.b ?? 0}`
+                        : item.participants?.length
                         ? [item.me.score, ...item.participants.map((participant) => participant.score)].join(':')
                         : `${item.me.score}:${item.opponent?.score ?? 0}`}</strong></span>
                     </>

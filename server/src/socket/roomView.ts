@@ -105,6 +105,7 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
     isWinner: room.gameMode === 'relay2v2'
       ? winnerKeys.includes(player.key)
       : player.key === room.matchResult?.winnerKey,
+    team: player.team,
     eliminated: player.eliminated,
     eliminationReason: player.eliminationReason,
   }));
@@ -117,6 +118,7 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
     totalRounds: room.totalRounds,
     maxPlayers: room.maxPlayers,
     relaySolvedRounds: room.relaySolvedRounds,
+    ...(room.gameMode === 'relay2v2' ? { teamScores: room.teamScores } : {}),
     finishedAt: new Date(room.updatedAt).toISOString(),
     result: room.gameMode === 'relay'
       ? 'cooperative' as const
@@ -147,6 +149,7 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
           : opponent && round.winnerKey === opponent.key
             ? 'opponent' as const
             : null,
+        winnerTeam: round.winnerTeam ?? null,
         winnerParticipantId: round.winnerKey
           ? participantIdByKey.get(round.winnerKey) ?? null
           : null,
@@ -173,6 +176,22 @@ function buildMatchReplay(room: StoredRoom, viewerKey: string) {
             guessTime: guess.guessTime,
           }];
         }) ?? [],
+        ...(room.gameMode === 'relay2v2' ? {
+          teamScores: round.teamScores ?? null,
+          teamGuesses: Object.fromEntries((['a', 'b'] as const).map((team) => [team, (round.teamGuesses?.[team] ?? []).flatMap((guess) => {
+            const player = getPlayer(guess.playerId);
+            if (!player) return [];
+            const actorIdentity = room.players.find((candidate) => candidate.key === guess.actorKey);
+            return [{
+              actor: guess.actorKey === me.key
+                ? 'me' as const
+                : opponent && guess.actorKey === opponent.key ? 'opponent' as const : null,
+              actorDisplayId: actorIdentity ? identityDisplayName(actorIdentity) : null,
+              feedback: visibleGuess(compareGuess(player, target)),
+              guessTime: guess.guessTime,
+            }];
+          })])) as Record<'a' | 'b', unknown[]>,
+        } : {}),
       }];
     }),
   };

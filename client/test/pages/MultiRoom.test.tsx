@@ -159,6 +159,62 @@ describe('MultiRoom replay', () => {
     expect(screen.queryByText('Opponent Round 1')).not.toBeInTheDocument();
   });
 
+  it('replays 2v2 rounds in team boards with actor labels and team scores', async () => {
+    const user = userEvent.setup();
+    const relay2v2Room: RoomState = {
+      ...room,
+      gameMode: 'relay2v2',
+      teamScores: { a: 2, b: 1 },
+      teamTurnKeys: { a: null, b: null },
+      teamExhausted: { a: true, b: true },
+      teamGuesses: { a: [], b: [] },
+      players: [
+        { ...room.players[0], team: 'a' },
+        { ...room.players[1], team: 'a' },
+        { key: 'g:b1', name: 'B1', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [], team: 'b' },
+        { key: 'g:b2', name: 'B2', ready: true, connected: true, score: 0, skipped: false, guessCount: 0, guesses: [], team: 'b' },
+      ],
+      matchResult: { winnerKey: null, winnerTeam: 'a', winnerKeys: ['g:me', 'g:opponent'], reason: 'score', answer: room.matchResult!.answer },
+      matchReplay: {
+        ...room.matchReplay!,
+        gameMode: 'relay2v2',
+        teamScores: { a: 2, b: 1 },
+        participants: [
+          { id: 'p1', displayId: 'Me', score: 0, isMe: true, isWinner: true, team: 'a' },
+          { id: 'p2', displayId: 'A2', score: 0, isWinner: true, team: 'a' },
+          { id: 'p3', displayId: 'B1', score: 0, isWinner: false, team: 'b' },
+          { id: 'p4', displayId: 'B2', score: 0, isWinner: false, team: 'b' },
+        ],
+        rounds: [{
+          ...room.matchReplay!.rounds[0],
+          winner: null,
+          winnerTeam: 'a',
+          teamScores: { a: 1, b: 0 },
+          teamGuesses: {
+            a: [{ actor: null, actorDisplayId: 'A2', feedback: guess(40, 'A replay guess'), guessTime: 800 }],
+            b: [{ actor: null, actorDisplayId: 'B1', feedback: guess(41, 'B replay guess'), guessTime: 1_200 }],
+          },
+        }],
+      },
+    };
+    socket.emit.mockImplementation((event: string, ...args: unknown[]) => {
+      const ack = args.at(-1);
+      if (event === 'room:sync' && typeof ack === 'function') {
+        ack({ room: relay2v2Room, selfKey: 'g:me', serverNow: Date.now() });
+      }
+    });
+
+    renderAtRoute(<MultiRoom />, { route: '/multi/room', path: '/multi/room' });
+    await user.click(await screen.findByRole('button', { name: '查看对局' }));
+
+    expect(screen.getByText('A队 拿下本局')).toBeInTheDocument();
+    expect(screen.getByText('A replay guess')).toBeInTheDocument();
+    expect(screen.getByText('B replay guess')).toBeInTheDocument();
+    expect(screen.getByText('A2')).toBeInTheDocument();
+    expect(screen.getByText('B1')).toBeInTheDocument();
+    expect(screen.getByText('1 : 0')).toBeInTheDocument();
+  });
+
   it('replays each relay round in the shared board after viewing the settlement', async () => {
     const user = userEvent.setup();
     const relayRoom: RoomState = {

@@ -85,6 +85,42 @@ describe('ReplayDialog', () => {
     expect(screen.getByText('Teammate C')).toBeInTheDocument();
   });
 
+  it('groups 2v2 replay guesses and scores by team', () => {
+    const relay2v2Replay: MultiReplay = {
+      ...replay,
+      gameMode: 'relay2v2',
+      teamScores: { a: 2, b: 1 },
+      participants: [
+        { id: 'p1', displayId: 'Me', score: 0, isMe: true, isWinner: true, team: 'a' },
+        { id: 'p2', displayId: 'A2', score: 0, isWinner: true, team: 'a' },
+        { id: 'p3', displayId: 'B1', score: 0, isWinner: false, team: 'b' },
+        { id: 'p4', displayId: 'B2', score: 0, isWinner: false, team: 'b' },
+      ],
+      rounds: [{
+        ...replay.rounds[0],
+        winner: null,
+        winnerTeam: 'a',
+        teamScores: { a: 1, b: 0 },
+        teamGuesses: {
+          a: [{ actor: 'me', actorDisplayId: 'Me', feedback: { ...guess, nickname: 'A Guess' }, guessTime: 800 }],
+          b: [{ actor: null, actorDisplayId: 'B1', feedback: { ...guess, playerId: 3, nickname: 'B Guess' }, guessTime: 1_400 }],
+        },
+      }],
+    };
+
+    render(<ReplayDialog replay={relay2v2Replay} onClose={vi.fn()} showDecisionTimes />);
+
+    expect(screen.getByText('A队 拿下本局')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'A队 1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'B队 0' })).toBeInTheDocument();
+    expect(screen.getByText('A Guess')).toBeInTheDocument();
+    expect(screen.getByText('B Guess')).toBeInTheDocument();
+    expect(screen.getByText('B1')).toBeInTheDocument();
+    expect(screen.getByText('800ms')).toBeInTheDocument();
+    expect(screen.getByText('1.4s')).toBeInTheDocument();
+    expect(screen.queryByText('平局')).not.toBeInTheDocument();
+  });
+
   it('shows compact decision times only when explicitly enabled', () => {
     const timedReplay: MultiReplay = {
       ...replay,

@@ -1196,6 +1196,22 @@ export default function MultiRoom() {
           };
         })
     : [];
+  const displayedTeamScores = replayRound?.teamScores ?? room.teamScores;
+  const displayedTeamGuesses = Object.fromEntries((['a', 'b'] as const).map((team) => [team, replayRound
+    ? (replayRound.teamGuesses?.[team] ?? []).map((guess) => ({
+        feedback: guess.feedback,
+        label: guess.actor === 'me' ? me?.name ?? t('common.me') : guess.actorDisplayId ?? '-',
+        tone: guess.actor === 'me' ? 'self' as const : 'other' as const,
+      }))
+    : (room.teamGuesses?.[team] ?? []).map((guess) => ({
+        feedback: guess.feedback,
+        label: room.players.find((player) => player.key === guess.actorKey)?.name ?? '-',
+        tone: guess.actorKey === myKey ? 'self' as const : 'other' as const,
+      }))])) as Record<'a' | 'b', Array<{
+        feedback: MultiplayerGuessFeedback;
+        label: string;
+        tone: 'self' | 'other';
+      }>>;
 
   return (
     <Page
@@ -1263,7 +1279,7 @@ export default function MultiRoom() {
               ? t('multi.relayWaitingStatus', { database: difficultyLabel(t, room.dbType), total: room.totalRounds ?? 3 })
               : t('multi.relayStatus', { solved: room.relaySolvedRounds, total: room.totalRounds, round: room.round })
             : room.gameMode === 'relay2v2'
-              ? t('multi.teamScore', { a: room.teamScores?.a ?? 0, b: room.teamScores?.b ?? 0 })
+              ? t('multi.teamScore', { a: displayedTeamScores?.a ?? 0, b: displayedTeamScores?.b ?? 0 })
             : room.status === 'waiting'
               ? t('multi.waitingStatus', { database: difficultyLabel(t, room.dbType), wins: room.winsNeeded })
               : t('multi.playingStatus', { round: room.round, wins: room.winsNeeded })}
@@ -1334,7 +1350,7 @@ export default function MultiRoom() {
           {room.gameMode === 'relay'
             ? t('multi.relayProgress', { solved: room.relaySolvedRounds, total: room.totalRounds })
             : room.gameMode === 'relay2v2'
-              ? `${room.teamScores?.a ?? 0} : ${room.teamScores?.b ?? 0}`
+              ? `${displayedTeamScores?.a ?? 0} : ${displayedTeamScores?.b ?? 0}`
             : `${leftPlayer?.score ?? 0} : ${rightPlayer?.score ?? 0}`}
         </span>
         <span className="player-name score-bar-player-right">
@@ -1366,6 +1382,10 @@ export default function MultiRoom() {
             <span className="badge">
               {room.gameMode === 'relay'
                 ? t(replayRound.reason === 'guessed' ? 'multi.relayRoundSolved' : 'multi.relayRoundMissed')
+                : room.gameMode === 'relay2v2'
+                  ? replayRound.winnerTeam
+                    ? t('multi.teamWonRound', { team: replayRound.winnerTeam === 'a' ? t('multi.blueTeam') : t('multi.redTeam') })
+                    : t('multi.relay2v2RoundComplete')
                 : replayRound.winner === 'me'
                   ? t('replay.meWon')
                   : replayRound.winner === 'opponent'
@@ -1529,12 +1549,12 @@ export default function MultiRoom() {
               const nextPlayer = activeIndex >= 0 && members.length > 1
                 ? members[(activeIndex + 1) % members.length]
                 : null;
-              const guesses = room.teamGuesses?.[team] ?? [];
+              const guesses = displayedTeamGuesses[team];
               return (
                 <div className="card player-board" key={team} style={{ margin: 0 }}>
                   <h3>{team === 'a' ? t('multi.blueTeam') : t('multi.redTeam')}
-                    <span className="muted">{room.teamScores?.[team] ?? 0} · {guesses.length}/{room.maxGuesses}</span>
-                    {activeKey ? (
+                    <span className="muted">{displayedTeamScores?.[team] ?? 0} · {guesses.length}/{room.maxGuesses}</span>
+                    {!replayRound && activeKey ? (
                       <>
                         <span className="badge amber">
                           {activeKey === myKey
@@ -1549,14 +1569,21 @@ export default function MultiRoom() {
                           </span>
                         )}
                       </>
-                    ) : <span className="badge amber">
+                    ) : !replayRound ? <span className="badge amber">
                       {room.teamExhausted?.[team]
                         ? t('multi.relay2v2TeamExhausted')
                         : t('multi.relay2v2RoundComplete')}
-                    </span>}
+                    </span> : null}
                   </h3>
                   <p className="muted">{members.map((player) => player.name).join(' / ')}</p>
-                  {guesses.length ? <GuessBoard guesses={guesses.map((guess) => guess.feedback)} /> : <p className="muted">{t('multi.noGuesses')}</p>}
+                  {guesses.length ? <GuessBoard
+                    guesses={guesses.map((guess) => guess.feedback)}
+                    rowAnnotations={guesses.map((guess) => ({
+                      content: guess.label,
+                      title: guess.label,
+                      tone: guess.tone,
+                    }))}
+                  /> : <p className="muted">{t('multi.noGuesses')}</p>}
                 </div>
               );
             })}

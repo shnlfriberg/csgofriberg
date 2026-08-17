@@ -169,12 +169,16 @@ export default function ReplayDialog({
                   : t('replay.multiSummary', {
                     mode: difficultyLabel(t, replay.mode),
                     bo: replay.gameMode === 'relay' ? replay.totalRounds : replay.boType,
-                    opponent: replay.opponent?.displayId ?? t('stats.unknownOpponent'),
+                    opponent: replay.gameMode === 'relay2v2'
+                      ? `${t('multi.blueTeam')} / ${t('multi.redTeam')}`
+                      : replay.opponent?.displayId ?? t('stats.unknownOpponent'),
                     result: replay.result === 'cooperative'
                       ? t('multi.relayProgress', { solved: replay.relaySolvedRounds ?? 0, total: replay.totalRounds ?? 0 })
                       : replay.result === 'won' ? t('common.win') : replay.result === 'lost' ? t('common.loss') : t('common.draw'),
                     score: replay.gameMode === 'relay'
                       ? `${replay.relaySolvedRounds ?? 0}/${replay.totalRounds ?? 0}`
+                      : replay.gameMode === 'relay2v2'
+                        ? `${replay.teamScores?.a ?? 0}:${replay.teamScores?.b ?? 0}`
                       : replay.participants?.length
                         ? replay.participants.map((participant) => `${participant.isMe ? t('common.me') : participant.displayId} ${participant.score}`).join(' · ')
                         : `${replay.me.score}:${replay.opponent?.score ?? 0}`,
@@ -205,12 +209,42 @@ export default function ReplayDialog({
                       <Badge
                         text={replay.gameMode === 'relay'
                           ? activeRound.reason === 'guessed' ? t('multi.relayRoundSolved') : t('multi.relayRoundMissed')
-                          : activeRound.winner === 'me' ? t('replay.meWon') : activeRound.winner === 'opponent' ? t('replay.opponentWon') : t('common.draw')}
-                        color={activeRound.winner === 'me' || (replay.gameMode === 'relay' && activeRound.reason === 'guessed') ? 'green' : 'gray'}
+                          : replay.gameMode === 'relay2v2'
+                            ? activeRound.winnerTeam
+                              ? t('multi.teamWonRound', { team: activeRound.winnerTeam === 'a' ? t('multi.blueTeam') : t('multi.redTeam') })
+                              : t('multi.relay2v2RoundComplete')
+                            : activeRound.winner === 'me' ? t('replay.meWon') : activeRound.winner === 'opponent' ? t('replay.opponentWon') : t('common.draw')}
+                        color={activeRound.winner === 'me' || (replay.gameMode === 'relay' && activeRound.reason === 'guessed') || (replay.gameMode === 'relay2v2' && Boolean(activeRound.winnerTeam)) ? 'green' : 'gray'}
                       />
                     </div>
                     <AnswerSection answer={activeRound.answer} />
-                    {replay.gameMode === 'relay' ? (
+                    {replay.gameMode === 'relay2v2' ? (
+                      <div className="replay-sides">
+                        {(['a', 'b'] as const).map((team) => {
+                          const teamGuesses = activeRound.teamGuesses?.[team] ?? [];
+                          const teamName = team === 'a' ? t('multi.blueTeam') : t('multi.redTeam');
+                          return (
+                            <div className="replay-side" key={team}>
+                              <h4><Swords size={15} />{teamName} <span>{activeRound.teamScores?.[team] ?? replay.teamScores?.[team] ?? 0}</span></h4>
+                              {teamGuesses.length ? <>
+                                <GuessBoard
+                                  guesses={teamGuesses.map((guess) => guess.feedback)}
+                                  rowAnnotations={teamGuesses.map((guess) => {
+                                    const actorLabel = guess.actor === 'me' ? t('common.me') : guess.actorDisplayId ?? '-';
+                                    return {
+                                      content: actorLabel,
+                                      title: actorLabel,
+                                      tone: guess.actor === 'me' ? 'self' as const : 'other' as const,
+                                    };
+                                  })}
+                                />
+                                {showDecisionTimes && <DecisionTimes values={teamGuesses.map((guess) => guess.guessTime)} />}
+                              </> : <p className="muted">{t('replay.noRoundGuesses')}</p>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : replay.gameMode === 'relay' ? (
                       <div className="replay-side">
                         <h4><Swords size={15} />{t('multi.sharedGuesses')}</h4>
                         {activeRound.sharedGuesses?.length ? <>

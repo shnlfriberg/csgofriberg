@@ -271,6 +271,90 @@ describe('stats and replay', () => {
     }
   });
 
+  it('returns relay2v2 history and replay grouped by team', async () => {
+    const stamp = Date.now();
+    const rawKeys = ['a1', 'a2', 'b1', 'b2'].map((name) => `stats-2v2-${name}-${stamp}`);
+    const keys = rawKeys.map((key) => `g:${key}`);
+    const playerRows = await db('players').select('id').limit(2);
+    const target = getPlayer(Number(playerRows[0].id))!;
+    const otherPlayer = getPlayer(Number(playerRows[1].id))!;
+    const recordId = randomUUID();
+    await persistMatchResult({
+      recordId,
+      dbType: 'easy',
+      boType: 3,
+      gameMode: 'relay2v2',
+      totalRounds: 3,
+      relaySolvedRounds: 0,
+      winnerKey: null,
+      winnerTeam: 'a',
+      winnerKeys: [keys[0], keys[1]],
+      reason: 'score',
+      forfeitedKey: null,
+      participants: keys.map((key, index) => ({
+        key,
+        userId: null,
+        name: key,
+        score: 0,
+        team: index < 2 ? 'a' as const : 'b' as const,
+      })),
+      rounds: [{
+        round: 1,
+        targetPlayerId: target.id,
+        winnerKey: null,
+        winnerTeam: 'a',
+        reason: 'guessed',
+        guessesByPlayer: Object.fromEntries(keys.map((key) => [key, []])),
+        guessTimesByPlayer: Object.fromEntries(keys.map((key) => [key, []])),
+        teamScores: { a: 1, b: 0 },
+        teamGuesses: {
+          a: [{ actorKey: keys[0], playerId: target.id, guessedAt: stamp, guessTime: 700 }],
+          b: [{ actorKey: keys[2], playerId: otherPlayer.id, guessedAt: stamp, guessTime: 1_300 }],
+        },
+      }],
+    });
+    const storedMatch = await db('match_records').where({ room_id: recordId }).first('id');
+    const matchId = Number(storedMatch.id);
+
+    try {
+      const list = await request('/api/stats/replays?type=multi&page=1&pageSize=5', guestCookie(rawKeys[0]));
+      expect(list.response.status).toBe(200);
+      expect(list.data.items.find((item: any) => item.id === matchId)).toMatchObject({
+        gameMode: 'relay2v2',
+        result: 'won',
+        teamScores: { a: 1, b: 0 },
+        participants: expect.arrayContaining([
+          expect.objectContaining({ team: 'a', isWinner: true }),
+          expect.objectContaining({ team: 'b', isWinner: false }),
+        ]),
+      });
+
+      const replay = await request(`/api/stats/matches/${matchId}/replay`, guestCookie(rawKeys[0]));
+      expect(replay.response.status).toBe(200);
+      expect(replay.data).toMatchObject({
+        gameMode: 'relay2v2',
+        result: 'won',
+        teamScores: { a: 1, b: 0 },
+      });
+      expect(replay.data.rounds[0]).toMatchObject({
+        winnerTeam: 'a',
+        teamScores: { a: 1, b: 0 },
+      });
+      expect(replay.data.rounds[0].teamGuesses.a[0]).toMatchObject({
+        actor: 'me',
+        feedback: { playerId: target.id, correct: true },
+        guessTime: 700,
+      });
+      expect(replay.data.rounds[0].teamGuesses.b[0]).toMatchObject({
+        actorDisplayId: guestNameFromKey(rawKeys[2]),
+        feedback: { playerId: otherPlayer.id },
+        guessTime: 1_300,
+      });
+    } finally {
+      await db('match_records').where({ id: matchId }).del();
+    }
+  });
+
   it('counts current first guesses and excludes invalid player ids', async () => {
     const stamp = Date.now();
     const ownerKey = `first-guess-owner-${stamp}`;

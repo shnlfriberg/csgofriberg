@@ -112,6 +112,7 @@ export interface MatchReplayRound {
   round: number;
   reason: string;
   winner: 'me' | 'opponent' | null;
+  winnerTeam?: 'a' | 'b' | null;
   answer: PlayerInfo;
   me: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
   opponent: { guesses: GuessFeedback[]; guessTimes?: Array<number | null> };
@@ -127,6 +128,13 @@ export interface MatchReplayRound {
     feedback: GuessFeedback;
     guessTime: number | null;
   }>;
+  teamGuesses?: Record<'a' | 'b', Array<{
+    actor: 'me' | 'opponent' | null;
+    actorDisplayId?: string | null;
+    feedback: GuessFeedback;
+    guessTime: number | null;
+  }>>;
+  teamScores?: { a: number; b: number } | null;
 }
 
 export interface MatchReplay {
@@ -136,6 +144,7 @@ export interface MatchReplay {
   gameMode?: 'classic' | 'relay' | 'relay2v2';
   totalRounds?: number;
   relaySolvedRounds?: number;
+  teamScores?: { a: number; b: number };
   finishedAt: string;
   result: 'won' | 'lost' | 'draw' | 'cooperative';
   me: { score: number };
@@ -146,6 +155,7 @@ export interface MatchReplay {
     score: number;
     isMe?: boolean;
     isWinner: boolean;
+    team?: 'a' | 'b' | null;
     eliminated?: boolean;
     eliminationReason?: 'player_left' | 'disconnect_timeout' | null;
   }>;
