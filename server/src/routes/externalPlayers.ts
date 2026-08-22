@@ -15,6 +15,7 @@ import {
   createPlayerChangeSubmission,
   playerChangeSubmissionSchema,
 } from '../services/playerChangeSubmissions';
+import { exportPlayers } from '../services/playerExport';
 
 const router = Router();
 const idParamsSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -36,6 +37,13 @@ export const externalPlayerAuth = Router();
 externalPlayerAuth.use(externalPreAuthLimit, requireApiToken);
 
 router.use(externalWriteLimit);
+
+router.get(
+  '/players/export',
+  asyncHandler(async (_req, res) => {
+    res.attachment('players.json').json(await exportPlayers());
+  })
+);
 
 router.post(
   '/player-change-submissions',

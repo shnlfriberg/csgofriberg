@@ -149,6 +149,7 @@ Content-Type: application/json
 | 端点 | 当前行为 |
 | --- | --- |
 | `POST /api/external/player-change-submissions` | 为已有选手提交字段级待审核变更；单次 1-100 名，不会立即修改选手数据 |
+| `GET /api/external/players/export` | 导出全部选手及难度成员关系，响应为 `players.json`；仅需 API Token，不需要 PoW |
 | `POST /api/external/players` | 直接新增单个选手，成功返回 `201 { "id": number }` |
 | `PUT /api/external/players/:id` | 按 ID 直接部分更新选手，成功返回 `200 { "ok": true }` |
 | `POST /api/external/players/import` | 按昵称直接批量 upsert；单次 1-1000 名且请求内昵称不可重复，返回 `created`/`updated` 数量 |
@@ -179,7 +180,7 @@ curl -X POST 'https://example.com/api/external/player-change-submissions' \
 
 直接写入端点用于受信任的完整同步任务。新增选手至少需要 `nickname`、`nationality` 和 `age`；批量导入应按完整记录提交。更新已有选手时，导入项省略 `difficulties`、`team_history` 或 `is_enabled` 会保留原值，其他带默认值的字段若省略则可能写入默认值。部分更新接口只修改显式传入的字段。
 
-外部 API 不提供读取或永久删除端点。同步源可将 `is_enabled` 设为 `false`，使选手立即退出目标池与猜测列表，同时保留历史对局。所有错误响应均使用 `{ "code": "..." }` 的机器可读格式。
+外部 API 不提供永久删除端点；导出端点返回完整选手字段及难度成员关系。同步源可将 `is_enabled` 设为 `false`，使选手立即退出目标池与猜测列表，同时保留历史对局。所有错误响应均使用 `{ "code": "..." }` 的机器可读格式。
 
 ## 项目结构
 

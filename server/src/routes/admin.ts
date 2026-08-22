@@ -45,6 +45,7 @@ import { cacheMatchmakingRestriction } from '../services/matchmakingRestriction'
 import { cancelQueue, moveQueuedIdentityToPool } from '../services/roomStore';
 import { redis, redisKey } from '../redis';
 import { normalizeTeamHistory } from '../services/teamHistory';
+import { exportPlayers } from '../services/playerExport';
 import {
   listPlayerChangeItems,
   reviewPlayerChangeItems,
@@ -1038,49 +1039,7 @@ router.get(
   '/players/export',
   adminReadLimit,
   asyncHandler(async (_req, res) => {
-    const [players, memberships] = await Promise.all([
-      db('players')
-        .select(
-          'id',
-          'nickname',
-          'nationality',
-          'region',
-          'team',
-          'team_history',
-          'age',
-          'role',
-          'major_championships',
-          'major_appearances',
-          'is_active',
-          'is_enabled'
-        )
-        .orderBy('nickname'),
-      db('player_difficulties')
-        .orderBy('difficulty_key')
-        .select('player_id', 'difficulty_key'),
-    ]);
-    const difficultiesByPlayer = new Map<number, string[]>();
-    for (const membership of memberships) {
-      const playerId = Number(membership.player_id);
-      const difficulties = difficultiesByPlayer.get(playerId) ?? [];
-      difficulties.push(String(membership.difficulty_key));
-      difficultiesByPlayer.set(playerId, difficulties);
-    }
-    const exportedPlayers = players.map((player) => ({
-      nickname: String(player.nickname),
-      nationality: String(player.nationality),
-      region: String(player.region),
-      team: String(player.team),
-      team_history: normalizeTeamHistory(player.team_history),
-      age: Number(player.age),
-      role: String(player.role),
-      major_championships: Number(player.major_championships),
-      major_appearances: Number(player.major_appearances),
-      difficulties: difficultiesByPlayer.get(Number(player.id)) ?? [],
-      is_active: Boolean(player.is_active),
-      is_enabled: Boolean(player.is_enabled),
-    }));
-    res.attachment('players.json').json(exportedPlayers);
+    res.attachment('players.json').json(await exportPlayers());
   })
 );
 

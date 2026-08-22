@@ -6,6 +6,7 @@ import { db } from '../../src/db/knex';
 import { initDb } from '../../src/db/init';
 import { errorHandler } from '../../src/middleware/common';
 import { signToken, userNameFromUsername } from '../../src/middleware/auth';
+import { requirePow } from '../../src/middleware/pow';
 import { initRedis } from '../../src/redis';
 import { getPlayer, initPlayerCache } from '../../src/services/playerCache';
 import adminRoutes from '../../src/routes/admin';
@@ -35,6 +36,7 @@ describe('external player API tokens', () => {
     app.use(express.json());
     app.use('/api/admin', adminRoutes);
     app.use('/api/external', externalPlayerRoutes);
+    app.use('/api', requirePow);
     app.use(errorHandler);
     server = http.createServer(app);
     await new Promise<void>((resolve) => server.listen(0, resolve));
@@ -82,6 +84,10 @@ describe('external player API tokens', () => {
       });
       expect(missingToken.response.status).toBe(401);
       expect(missingToken.data.code).toBe('API_TOKEN_REQUIRED');
+
+      const missingExportToken = await request('/api/external/players/export');
+      expect(missingExportToken.response.status).toBe(401);
+      expect(missingExportToken.data.code).toBe('API_TOKEN_REQUIRED');
 
       const authorization = { Authorization: `Bearer ${createdToken.data.token}` };
       const createdPlayer = await request('/api/external/players', {
@@ -150,6 +156,27 @@ describe('external player API tokens', () => {
         .where({ player_id: importedPlayerId.id })
         .orderBy('difficulty_key')
         .pluck('difficulty_key')).toEqual(['easy', 'normal']);
+
+      const exported = await request('/api/external/players/export', {
+        headers: authorization,
+      });
+      expect(exported.response.status).toBe(200);
+      expect(exported.response.headers.get('content-disposition')).toContain('players.json');
+      expect(exported.data.find((player: { nickname: string }) => player.nickname === nickA)).toEqual({
+        nickname: nickA,
+        nationality: 'Denmark',
+        region: 'Europe',
+        team: 'Bulk Updated',
+        team_history: [],
+        age: 26,
+        role: 'Rifler',
+        major_championships: 0,
+        major_appearances: 3,
+        difficulties: ['easy', 'normal'],
+        is_active: true,
+        is_enabled: true,
+      });
+
       const revoked = await request(`/api/admin/api-tokens/${createdToken.data.id}`, {
         method: 'DELETE',
         headers: { Cookie: cookie },
