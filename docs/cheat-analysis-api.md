@@ -120,6 +120,8 @@ The external service should compare the bearer token using a timing-safe equalit
 
 The request excludes account usernames, emails, multiplayer display names, raw user/guest identity keys, report descriptions, admin notes, IP addresses, cookies, and authentication tokens. `subject.opaqueId` is generated independently for every request. Every multiplayer participant receives a per-request opaque ID, and the subject keeps the same opaque ID across `subject`, participants, winners, forfeits, guesses, and timings.
 
+`reports` is included as audit context for the administrator view. It must not affect `decision.score` or any behavior channel; the decision score is derived entirely from the gameplay snapshot.
+
 ## Response Body
 
 The service must return JSON matching this presentation envelope:

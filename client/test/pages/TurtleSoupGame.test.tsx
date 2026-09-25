@@ -142,11 +142,13 @@ describe('Turtle Soup interactions', () => {
 
   it('unlocks guessing from server feedback and locks again after a wrong guess', async () => {
     renderGame(); await ready();
+    expect(screen.getByRole('button', { name: '猜选手' })).toBeDisabled();
     expect(screen.getByPlaceholderText('输入选手昵称...')).toBeDisabled();
     state = { ...base, version: 1, remainingQuestions: 17, questionCount: 1, guessUnlocked: true,
       events: [{ type: 'question', field: 'age', value: 25, level: 'close', requestId: 'q', elapsedMs: 1 }] };
     await ask();
     await waitFor(() => expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled());
+    expect(screen.getByText('现在可以猜一次，也可以继续提问。')).toBeInTheDocument();
     expect(screen.getByText('是也不是')).toBeInTheDocument();
     expect(post).toHaveBeenLastCalledWith('/game/soup1/question', { field: 'age', value: 25, version: 0, requestId: expect.any(String) });
     state = { ...state, version: 2, guessCount: 1, guessUnlocked: false };
@@ -192,7 +194,7 @@ describe('Turtle Soup interactions', () => {
     renderGame();
     await waitFor(() => expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled());
     expect(screen.getByLabelText('年龄')).toBeDisabled();
-    expect(screen.getByText('提问已用完，还有最后一次免费猜名机会。')).toBeInTheDocument();
+    expect(screen.getByText('提问已用完，还有最后一次猜名机会。')).toBeInTheDocument();
     state = { ...state, version: 19, status: 'lost', answer, guessCount: 1, guessUnlocked: false };
     await guess();
     expect(await screen.findByRole('heading', { name: '本局结束' })).toBeInTheDocument();
@@ -302,10 +304,10 @@ describe('Turtle Soup interactions', () => {
 
   it('gives up at zero questions only after confirmation, and shows unrecorded results', async () => {
     renderGame(); await ready();
-    await userEvent.click(screen.getByRole('button', { name: '认输看答案' }));
+    await userEvent.click(screen.getByRole('button', { name: '查看答案' }));
     expect(post).toHaveBeenCalledTimes(1);
     state = { ...base, status: 'lost', version: 1, answer, recorded: false };
-    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '认输看答案' }));
+    await userEvent.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: '查看答案' }));
     expect(await screen.findByText('使用 0 次提问 · 0 次猜名')).toBeInTheDocument();
     expect(screen.getByText(/未计入战绩/)).toBeInTheDocument();
   });

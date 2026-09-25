@@ -19,3 +19,4 @@ AGENTS.md
 .local-data/
 .local-logs/
 .local-scripts/
+client/tsconfig.tsbuildinfo
