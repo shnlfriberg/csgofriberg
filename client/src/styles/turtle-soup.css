@@ -14,7 +14,8 @@
 .soup-event { display: grid; grid-template-columns: 1.7rem minmax(0, 1fr) auto; gap: .7rem; padding: 1rem 0; border-bottom: 1px solid var(--border); align-items: start; }
 .soup-event p { margin: 0; overflow-wrap: anywhere; }
 .soup-event-number { color: var(--text-light); font: .8rem ui-monospace, monospace; padding-top: .2rem; }
-.soup-feedback { border: 1px solid currentColor; border-radius: var(--radius-sm); padding: .15rem .45rem; font-size: .8rem; max-width: 8rem; }
+.soup-feedback { display: inline-flex; align-items: center; gap: .25rem; border: 1px solid currentColor; border-radius: var(--radius-sm); padding: .15rem .45rem; font-size: .8rem; max-width: 8rem; }
+.soup-feedback > span { display: inline-flex; }
 .soup-correct .soup-feedback { color: var(--success); }
 .soup-close .soup-feedback { color: var(--warning); }
 .soup-wrong .soup-feedback { color: var(--text-sec); }

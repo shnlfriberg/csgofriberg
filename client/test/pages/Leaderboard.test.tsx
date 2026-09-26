@@ -22,10 +22,10 @@ describe('Leaderboard filters', () => {
     await waitFor(() => expect(apiGet).toHaveBeenCalledWith('/leaderboard', {
       params: { mode: 'turtle-soup', difficulty: 'beginner' },
     }));
-    expect(await screen.findByRole('columnheader', { name: '平均获胜提问数' })).toBeInTheDocument();
+    expect(await screen.findByRole('columnheader', { name: '平均获胜猜测次数' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: '海龟汤' })).toHaveAttribute('aria-selected', 'true');
     await userEvent.click(screen.getByRole('tab', { name: '海龟汤' }));
-    expect(screen.getByRole('columnheader', { name: '平均获胜提问数' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: '平均获胜猜测次数' })).toBeInTheDocument();
     expect(apiGet).toHaveBeenCalledTimes(1);
   });
   it('retries a failed board without changing the selected variant', async () => {

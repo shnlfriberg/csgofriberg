@@ -3,7 +3,7 @@ import type { Player, AttributeFeedback } from '../types';
 import { HttpError } from '../middleware/common';
 import { compareQuestion } from './gameService';
 
-export const MAX_QUESTIONS = 18;
+export const MAX_ATTEMPTS = 24;
 export const soupMutationSchema = z.object({
   requestId: z.string().uuid(),
   version: z.number().int().nonnegative(),
@@ -26,7 +26,7 @@ export type SoupEvent = {
   requestId: string;
   elapsedMs: number;
 } & (
-  | { type: 'question'; field: SoupQuestion['field']; value: string | number | boolean; level: AttributeFeedback['level'] }
+  | { type: 'question'; field: SoupQuestion['field']; value: string | number | boolean; level: AttributeFeedback['level']; hint?: AttributeFeedback['hint'] }
   | { type: 'guess'; playerId: number; nickname: string; correct: boolean }
   | { type: 'giveup' }
 );
@@ -36,7 +36,6 @@ export interface SoupState {
   events: SoupEvent[];
   questionCount: number;
   guessCount: number;
-  guessUnlocked: boolean;
   version: number;
   status: 'playing' | 'won' | 'lost';
   requests: Record<string, string>;
@@ -54,7 +53,7 @@ export function createSoup(target: Player, players: readonly Player[]): SoupStat
       teams: [...new Set(players.flatMap((p) => [p.team, ...p.team_history]))].sort(),
       countries: [...countries].map(([nationality, region]) => ({ nationality, region })),
     },
-    events: [], questionCount: 0, guessCount: 0, guessUnlocked: false,
+    events: [], questionCount: 0, guessCount: 0,
     version: 0, status: 'playing', requests: {},
   };
 }
@@ -72,9 +71,11 @@ export function soupView(game: { id: string; mode: string; soup?: SoupState }) {
   const soup = game.soup!;
   return {
     gameId: game.id, mode: game.mode, variant: 'turtle-soup' as const,
-    maxQuestions: MAX_QUESTIONS, remainingQuestions: MAX_QUESTIONS - soup.questionCount,
+    // Preserve the API field names; both actions now spend the shared budget.
+    maxQuestions: MAX_ATTEMPTS, remainingQuestions: Math.max(0, MAX_ATTEMPTS - soup.questionCount - soup.guessCount),
     questionCount: soup.questionCount, guessCount: soup.guessCount,
-    guessUnlocked: soup.guessUnlocked, version: soup.version, status: soup.status,
+    guessUnlocked: soup.status === 'playing' && soup.questionCount + soup.guessCount < MAX_ATTEMPTS,
+    version: soup.version, status: soup.status,
     events: soup.events, recorded: soup.recorded,
     ...(soup.status === 'playing' ? {} : { answer: soupAnswer(soup.target) }),
   };
@@ -93,26 +94,30 @@ export function soupReplay(game: {
 }
 
 export function askSoup(soup: SoupState, question: SoupQuestion, elapsedMs: number): void {
-  if (soup.questionCount >= MAX_QUESTIONS) throw new HttpError(400, 'SOUP_QUESTION_LIMIT');
+  requireAttempt(soup);
   if (question.field === 'team' && !soup.options.teams.includes(question.value)) {
     throw new HttpError(400, 'SOUP_INVALID_OPTION');
   }
   const country = question.field === 'nationality'
     ? soup.options.countries.find((c) => c.nationality === question.value) : undefined;
   if (question.field === 'nationality' && !country) throw new HttpError(400, 'SOUP_INVALID_OPTION');
-  const level = compareQuestion(soup.target, question.field, question.value, country?.region);
+  const { level, hint } = compareQuestion(soup.target, question.field, question.value, country?.region);
   soup.events.push({ type: 'question', requestId: question.requestId, elapsedMs,
-    field: question.field, value: question.value, level });
+    field: question.field, value: question.value, level, ...(hint ? { hint } : {}) });
   soup.questionCount += 1;
-  soup.guessUnlocked = true;
+  if (soup.questionCount + soup.guessCount >= MAX_ATTEMPTS) soup.status = 'lost';
+}
+
+function requireAttempt(soup: SoupState): void {
+  if (soup.status !== 'playing') throw new HttpError(400, 'GAME_FINISHED');
+  if (soup.questionCount + soup.guessCount >= MAX_ATTEMPTS) throw new HttpError(400, 'SOUP_ATTEMPT_LIMIT');
 }
 
 export function guessSoup(soup: SoupState, player: Player, requestId: string, elapsedMs: number): void {
-  if (!soup.guessUnlocked) throw new HttpError(400, 'SOUP_GUESS_LOCKED');
+  requireAttempt(soup);
   const correct = player.id === soup.target.id;
   soup.events.push({ type: 'guess', playerId: player.id, nickname: player.nickname, correct, requestId, elapsedMs });
   soup.guessCount += 1;
-  soup.guessUnlocked = false;
   if (correct) soup.status = 'won';
-  else if (soup.questionCount === MAX_QUESTIONS) soup.status = 'lost';
+  else if (soup.questionCount + soup.guessCount >= MAX_ATTEMPTS) soup.status = 'lost';
 }

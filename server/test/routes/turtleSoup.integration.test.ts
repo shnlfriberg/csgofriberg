@@ -76,7 +76,7 @@ describe('turtle soup API, persistence and isolation', () => {
     expect(soup.gameId).not.toBe(classic.gameId);
     expect(await start(cookie)).toEqual(soup);
     expect(await start(cookie, 'classic')).toEqual(classic);
-    expect(soup).toMatchObject({ remainingQuestions: 18, guessUnlocked: false, events: [], version: 0 });
+    expect(soup).toMatchObject({ maxQuestions: 24, remainingQuestions: 24, guessUnlocked: true, events: [], version: 0 });
     expect(soup).not.toHaveProperty('target'); expect(soup).not.toHaveProperty('answer');
     const options = await request(`/game/${soup.gameId}/question-options`, cookie);
     expect(options.status).toBe(200); expect(options.data.teams.length).toBeGreaterThan(0);
@@ -85,9 +85,8 @@ describe('turtle soup API, persistence and isolation', () => {
     expect((await request(`/game/${classic.gameId}/question`, cookie, mutation(0, { field: 'age', value: 25 }))).status).toBe(400);
   });
 
-  it('does not spend credit on invalid requests, and gates guesses entirely on the server', async () => {
+  it('does not spend attempts on invalid requests, and allows consecutive guesses', async () => {
     const { cookie } = guest(); const game = await start(cookie); const stored = await state(game.gameId);
-    expect((await request(`/game/${game.gameId}/guess`, cookie, mutation(0, { playerId: stored.targetPlayerId }))).data.code).toBe('SOUP_GUESS_LOCKED');
     for (const question of [{ field: 'age', value: 1.5 }, { field: 'team', value: 'not-a-real-team' }, { field: 'nationality', value: 'not-a-country' }]) {
       expect((await request(`/game/${game.gameId}/question`, cookie, mutation(0, question))).status).toBe(400);
     }
@@ -98,8 +97,8 @@ describe('turtle soup API, persistence and isolation', () => {
     expect((await request(`/game/${game.gameId}/guess`, cookie, { playerId: stored.targetPlayerId })).data.code).toBe('VALIDATION_FAILED');
     const otherId = getEnabledPlayers().find((p) => p.id !== stored.targetPlayerId)!.id;
     const wrong = await request(`/game/${game.gameId}/guess`, cookie, mutation(1, { playerId: otherId }));
-    expect(wrong.data).toMatchObject({ status: 'playing', guessUnlocked: false, remainingQuestions: 17 });
-    expect((await request(`/game/${game.gameId}/guess`, cookie, mutation(2, { playerId: stored.targetPlayerId }))).data.code).toBe('SOUP_GUESS_LOCKED');
+    expect(wrong.data).toMatchObject({ status: 'playing', guessUnlocked: true, remainingQuestions: 22, questionCount: 1, guessCount: 1 });
+    expect((await request(`/game/${game.gameId}/guess`, cookie, mutation(2, { playerId: stored.targetPlayerId }))).data).toMatchObject({ status: 'won', questionCount: 1, guessCount: 2, remainingQuestions: 21 });
   });
 
   it('serializes simultaneous actions and safely replays duplicate request IDs', async () => {
@@ -107,32 +106,62 @@ describe('turtle soup API, persistence and isolation', () => {
     const first = mutation(0, { field: 'age', value: 25 });
     const results = await Promise.all([request(`/game/${game.gameId}/question`, cookie, first), request(`/game/${game.gameId}/question`, cookie, first)]);
     expect(results.map((r) => r.status)).toEqual([200, 200]);
-    expect(results[0].data.remainingQuestions).toBe(17);
-    expect(results[1].data.remainingQuestions).toBe(17);
+    expect(results[0].data.remainingQuestions).toBe(23);
+    expect(results[1].data.remainingQuestions).toBe(23);
     const conflict = await request(`/game/${game.gameId}/question`, cookie, { ...first, value: 26 });
     expect(conflict.status).toBe(409);
     const competing = await Promise.all([24, 30].map((value) => request(`/game/${game.gameId}/question`, cookie, mutation(1, { field: 'age', value }))));
     expect(competing.map((r) => r.status).sort()).toEqual([200, 409]);
-    expect((await request(`/game/${game.gameId}/state`, cookie)).data).toMatchObject({ remainingQuestions: 16, version: 2 });
+    expect((await request(`/game/${game.gameId}/state`, cookie)).data).toMatchObject({ remainingQuestions: 22, version: 2 });
   });
 
-  it.each([true, false])('leaves the 18th guess playable and settles a final correct=%s exactly once', async (correct) => {
+  it('allows a first-action win and counts it as one attempt in statistics', async () => {
     const { cookie } = guest(); const game = await start(cookie); const stored = await state(game.gameId);
-    for (let version = 0; version < 18; version++) {
+    const body = mutation(0, { playerId: stored.targetPlayerId });
+    const result = await request(`/game/${game.gameId}/guess`, cookie, body);
+    expect(result.data).toMatchObject({ status: 'won', questionCount: 0, guessCount: 1, remainingQuestions: 23 });
+    expect((await request(`/game/${game.gameId}/guess`, cookie, body)).data).toEqual(result.data);
+    const stats = await request('/stats/me?variant=turtle-soup', cookie);
+    expect(stats.data.countMetric).toBe('attempts');
+    expect(stats.data.personal).toMatchObject({ wins: 1, avgGuesses: 1, bestGuesses: 1 });
+  });
+
+  it('deduplicates consecutive guesses and settles when the last attempt is a question', async () => {
+    const { cookie } = guest(); const game = await start(cookie); const stored = await state(game.gameId);
+    const playerId = getEnabledPlayers().find((p) => p.id !== stored.targetPlayerId)!.id;
+    const first = mutation(0, { playerId });
+    const results = await Promise.all([request(`/game/${game.gameId}/guess`, cookie, first), request(`/game/${game.gameId}/guess`, cookie, first)]);
+    for (const result of results) expect(result.data).toMatchObject({ guessCount: 1, questionCount: 0, remainingQuestions: 23 });
+    for (let version = 1; version < 23; version++) {
+      const result = await request(`/game/${game.gameId}/guess`, cookie, mutation(version, { playerId }));
+      expect(result.status).toBe(200);
+      expect(result.data.status).toBe('playing');
+    }
+    const finalQuestion = mutation(23, { field: 'age', value: stored.soup.target.age });
+    const final = await request(`/game/${game.gameId}/question`, cookie, finalQuestion);
+    expect(final.data).toMatchObject({ status: 'lost', questionCount: 1, guessCount: 23, remainingQuestions: 0, recorded: true });
+    expect(final.data.answer.id).toBe(stored.targetPlayerId);
+    expect((await request(`/game/${game.gameId}/question`, cookie, finalQuestion)).data).toEqual(final.data);
+    expect((await request(`/game/${game.gameId}/guess`, cookie, mutation(24, { playerId: stored.targetPlayerId }))).data.code).toBe('GAME_FINISHED');
+    expect(await db('games').where({ session_id: game.gameId })).toHaveLength(1);
+  });
+
+  it.each([true, false])('leaves the 24th attempt playable and settles a final correct=%s exactly once', async (correct) => {
+    const { cookie } = guest(); const game = await start(cookie); const stored = await state(game.gameId);
+    for (let version = 0; version < 23; version++) {
       const result = await request(`/game/${game.gameId}/question`, cookie, mutation(version, { field: 'age', value: 25 }));
       expect(result.status).toBe(200); expect(result.data.status).toBe('playing');
     }
-    expect((await request(`/game/${game.gameId}/question`, cookie, mutation(18, { field: 'age', value: 25 }))).data.code).toBe('SOUP_QUESTION_LIMIT');
     const playerId = correct ? stored.targetPlayerId : getEnabledPlayers().find((p) => p.id !== stored.targetPlayerId)!.id;
-    const body = mutation(18, { playerId });
+    const body = mutation(23, { playerId });
     const final = await request(`/game/${game.gameId}/guess`, cookie, body);
-    expect(final.data).toMatchObject({ status: correct ? 'won' : 'lost', remainingQuestions: 0, questionCount: 18, guessCount: 1, recorded: true });
+    expect(final.data).toMatchObject({ status: correct ? 'won' : 'lost', remainingQuestions: 0, questionCount: 23, guessCount: 1, recorded: true });
     expect(final.data.answer.nickname).toBe(stored.soup.target.nickname);
     expect((await request(`/game/${game.gameId}/guess`, cookie, body)).data).toEqual(final.data);
     expect((await request(`/game/${game.gameId}/state`, cookie)).data).toEqual(final.data);
     expect((await request(`/game/${game.gameId}/guess`, guest().cookie, body)).status).toBe(404);
     const rows = await db('games').where({ session_id: game.gameId });
-    expect(rows).toHaveLength(1); expect(rows[0].question_count).toBe(18); expect(rows[0].guess_count).toBe(1);
+    expect(rows).toHaveLength(1); expect(rows[0].question_count).toBe(23); expect(rows[0].guess_count).toBe(1);
     expect(await redis()!.get(redisKey(`single:game:${game.gameId}`))).toBeNull();
   });
 
@@ -142,8 +171,8 @@ describe('turtle soup API, persistence and isolation', () => {
     const originalAge = player.age;
     try {
       player.age += 40;
-      const asked = await request(`/game/${game.gameId}/question`, cookie, mutation(0, { field: 'age', value: originalAge }));
-      expect(asked.data.events[0].level).toBe('correct');
+      const asked = await request(`/game/${game.gameId}/question`, cookie, mutation(0, { field: 'age', value: originalAge - 1 }));
+      expect(asked.data.events[0]).toMatchObject({ level: 'close', hint: 'higher' });
       const win = await request(`/game/${game.gameId}/guess`, cookie, mutation(1, { playerId: player.id }));
       expect(win.data.answer.age).toBe(originalAge);
       const row = await db('games').where({ session_id: game.gameId }).first();
@@ -152,7 +181,7 @@ describe('turtle soup API, persistence and isolation', () => {
       expect(replay.data.events).toEqual(win.data.events);
       expect((await request(`/stats/games/${row.id}/replay`, guest().cookie)).status).toBe(404);
       const stats = await request('/stats/me?variant=turtle-soup&difficulties=beginner', cookie);
-      expect(stats.data.personal).toMatchObject({ totalGames: 1, wins: 1, avgGuesses: 1, bestGuesses: 1 });
+      expect(stats.data.personal).toMatchObject({ totalGames: 1, wins: 1, avgGuesses: 2, bestGuesses: 2 });
       const classicStats = await request('/stats/me?difficulties=beginner', cookie);
       expect(classicStats.data.personal.totalGames).toBe(0);
       expect((await getPlayerPerformance({ key: `g:${key}`, userId: null })).single.games).toBe(0);
@@ -189,7 +218,7 @@ describe('turtle soup API, persistence and isolation', () => {
     await request(`/game/${game.gameId}/guess`, cookie, mutation(2, { playerId: stored.targetPlayerId }));
     expect((await request('/auth/claim', authCookie, {})).data.claimed).toBe(1);
     const board = await request('/leaderboard?mode=turtle-soup&difficulty=beginner', authCookie);
-    expect(board.data.items.find((entry: { id: number }) => entry.id === Number(user.id))).toMatchObject({ wins: 1, total: 1, avgGuesses: 2 });
+    expect(board.data.items.find((entry: { id: number }) => entry.id === Number(user.id))).toMatchObject({ wins: 1, total: 1, avgGuesses: 3 });
     expect((await request('/leaderboard?mode=single&difficulty=beginner', authCookie)).data.items.find((entry: { id: number }) => entry.id === Number(user.id))).toBeUndefined();
     const row = await db('games').where({ session_id: game.gameId }).first();
     expect(row.guest_key).toBeNull(); expect(row.user_id).toBe(Number(user.id));
@@ -231,7 +260,7 @@ describe('turtle soup API, persistence and isolation', () => {
     expect(board.status).toBe(200);
     const own = board.data.items.filter((entry: { id: number }) => userIds.includes(entry.id));
     expect(own.map((entry: { id: number }) => entry.id)).toEqual([userIds[1], userIds[2], userIds[0]]);
-    expect(own[2]).toMatchObject({ avgGuesses: 7, wins: 1, total: 2, winRate: 0.5 });
-    expect(board.data.countMetric).toBe('questions');
+    expect(own[2]).toMatchObject({ avgGuesses: 8, wins: 1, total: 2, winRate: 0.5 });
+    expect(board.data.countMetric).toBe('attempts');
   });
 });

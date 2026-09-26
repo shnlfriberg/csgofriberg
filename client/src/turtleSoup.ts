@@ -1,9 +1,10 @@
-import type { FeedbackLevel, PlayerInfo } from './types';
+import type { AttributeFeedback, FeedbackLevel, PlayerInfo } from './types';
 
+export const SOUP_MAX_ATTEMPTS = 24;
 export const SOUP_FIELDS = ['team', 'nationality', 'role', 'isActive', 'age', 'majorChampionships', 'majorAppearances'] as const;
 export type SoupField = typeof SOUP_FIELDS[number];
 export type SoupEvent = { requestId: string; elapsedMs: number } & (
-  | { type: 'question'; field: SoupField; value: string | number | boolean; level: FeedbackLevel }
+  | { type: 'question'; field: SoupField; value: string | number | boolean; level: FeedbackLevel; hint?: AttributeFeedback['hint'] }
   | { type: 'guess'; playerId: number; nickname: string; correct: boolean }
   | { type: 'giveup' }
 );

@@ -67,14 +67,14 @@ function singleSummary(row: any) {
 }
 
 function singleAggregate(query: ReturnType<typeof db>, variant: SingleGameVariant) {
-  const countColumn = variant === 'turtle-soup' ? 'question_count' : 'guess_count';
+  const count = variant === 'turtle-soup' ? db.raw('coalesce(??, 0) + ??', ['question_count', 'guess_count']) : db.ref('guess_count');
   return query
     .whereNot('status', 'playing')
     .first()
     .count({ totalGames: 'id' })
     .sum({ wins: db.raw("case when status = 'won' then 1 else 0 end") })
-    .avg({ avgGuesses: db.raw("case when status = 'won' then ?? else null end", [countColumn]) })
-    .min({ bestGuesses: db.raw("case when status = 'won' then ?? else null end", [countColumn]) });
+    .avg({ avgGuesses: db.raw("case when status = 'won' then ? else null end", [count]) })
+    .min({ bestGuesses: db.raw("case when status = 'won' then ? else null end", [count]) });
 }
 
 function multiAvgWinningGuesses(row: any): number | null {
@@ -247,7 +247,7 @@ router.get(
       globalStats(difficulties, variant),
     ]);
 
-    res.json({ variant, countMetric: variant === 'turtle-soup' ? 'questions' : 'guesses', difficulties, personal, global });
+    res.json({ variant, countMetric: variant === 'turtle-soup' ? 'attempts' : 'guesses', difficulties, personal, global });
   })
 );
 

@@ -11,6 +11,7 @@ import {
   Users,
   X,
 } from 'lucide-react';
+import { SOUP_MAX_ATTEMPTS } from '../turtleSoup';
 import ModalPortal from './ModalPortal';
 import { useTranslation } from 'react-i18next';
 
@@ -99,7 +100,7 @@ export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turt
                   <h2 id={titleId}>{t(soupOnly ? 'soup.rules' : 'rules.title')}</h2>
                   <p>{t(soupOnly ? 'soup.description' : 'rules.description')}</p>
                 </div>
-                <strong className="guess-limit">{soupOnly ? t('soup.questionBudget', { count: 18 }) : <><span>{t('rules.max')}</span> {t('rules.guesses')}</>}</strong>
+                <strong className="guess-limit">{soupOnly ? t('soup.questionBudget', { count: SOUP_MAX_ATTEMPTS }) : <><span>{t('rules.max')}</span> {t('rules.guesses')}</>}</strong>
                 <button
                   ref={closeRef}
                   className="confirm-close"

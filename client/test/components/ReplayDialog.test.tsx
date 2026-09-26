@@ -64,9 +64,9 @@ const stats: PlayerPerformanceStats = {
 
 describe('ReplayDialog', () => {
   it.each([
-    ['zh', '海龟汤回放', '是也不是'],
-    ['en', 'Turtle Soup replay', 'Yes and no'],
-    ['ja', 'ウミガメのスープのリプレイ', 'はい、でもいいえ'],
+    ['zh', '海龟汤回放', '接近'],
+    ['en', 'Turtle Soup replay', 'Close'],
+    ['ja', 'ウミガメのスープのリプレイ', '近い'],
   ])('renders ordered snapshot events in %s without a classic board', async (language, title, close) => {
     await i18n.changeLanguage(language);
     render(<ReplayDialog onClose={() => {}} replay={{
@@ -74,7 +74,7 @@ describe('ReplayDialog', () => {
       questionCount: 2, guessCount: 1, createdAt: '', finishedAt: '', guesses: [],
       answer: { ...replay.rounds[0].answer, nickname: 'Snapshot Answer' },
       events: [
-        { type: 'question', field: 'age', value: 25, level: 'close', requestId: '1', elapsedMs: 100 },
+        { type: 'question', field: 'age', value: 25, level: 'close', hint: 'higher', requestId: '1', elapsedMs: 100 },
         { type: 'question', field: 'isActive', value: false, level: 'wrong', requestId: '2', elapsedMs: 200 },
         { type: 'guess', playerId: 1, nickname: 'Snapshot Name', correct: true, requestId: '3', elapsedMs: 300 },
       ],
@@ -84,6 +84,7 @@ describe('ReplayDialog', () => {
     expect(events).toHaveLength(3);
     expect(events[0]).toHaveTextContent('25');
     expect(events[0]).toHaveTextContent(close);
+    expect(within(events[0]).getByRole('img', { name: i18n.t('soup.higher') })).toBeInTheDocument();
     expect(events[2]).toHaveTextContent('Snapshot Name');
     expect(document.querySelector('.guess-board')).toBeNull();
     expect(document.body.textContent).not.toContain('soup.');

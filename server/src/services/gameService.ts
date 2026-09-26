@@ -89,20 +89,20 @@ export function refreshGuessFeedback(
 
 export const MAX_GUESSES = 8;
 
-/** The soup variant shares classic thresholds, but never exposes directional hints. */
+/** The soup variant shares classic thresholds and directional hints. */
 export function compareQuestion(
   target: Player,
   field: 'team' | 'nationality' | 'role' | 'isActive' | 'age' | 'majorChampionships' | 'majorAppearances',
   value: string | number | boolean,
   region = ''
-): AttributeFeedback['level'] {
+): AttributeFeedback {
   switch (field) {
-    case 'team': return teamAttr({ team: String(value) }, target).level;
-    case 'nationality': return nationalityAttr({ nationality: String(value), region }, target).level;
-    case 'role': return textAttr(String(value), target.role).level;
-    case 'isActive': return Boolean(target.is_active) === value ? 'correct' : 'wrong';
-    case 'age': return numberAttr(Number(value), target.age, AGE_CLOSE_RANGE).level;
-    case 'majorChampionships': return numberAttr(Number(value), target.major_championships, MAJOR_CHAMPIONSHIPS_CLOSE_RANGE).level;
-    case 'majorAppearances': return numberAttr(Number(value), target.major_appearances, MAJOR_APPEARANCES_CLOSE_RANGE).level;
+    case 'team': return teamAttr({ team: String(value) }, target);
+    case 'nationality': return nationalityAttr({ nationality: String(value), region }, target);
+    case 'role': return textAttr(String(value), target.role);
+    case 'isActive': return { value, level: Boolean(target.is_active) === value ? 'correct' : 'wrong' };
+    case 'age': return numberAttr(Number(value), target.age, AGE_CLOSE_RANGE);
+    case 'majorChampionships': return numberAttr(Number(value), target.major_championships, MAJOR_CHAMPIONSHIPS_CLOSE_RANGE);
+    case 'majorAppearances': return numberAttr(Number(value), target.major_appearances, MAJOR_APPEARANCES_CLOSE_RANGE);
   }
 }

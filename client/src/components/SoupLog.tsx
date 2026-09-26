@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import type { SoupEvent } from '../turtleSoup';
 import { countryLabel } from '../utils/playerGeography';
 import { playerRoleLabel } from '../utils/playerRoles';
@@ -21,7 +22,11 @@ export default function SoupLog({ events, newestFirst = false }: { events: SoupE
       return <li key={event.requestId} className={`soup-event soup-${level}`}>
         <span className="soup-event-number">{String(newestFirst ? events.length - index : index + 1).padStart(2, '0')}</span>
         <div><p>{question}</p><small className="muted">{t('soup.elapsed', { seconds: (event.elapsedMs / 1000).toFixed(1) })}</small></div>
-        {event.type !== 'giveup' && <strong className="soup-feedback">{t(event.type === 'guess' && event.correct ? 'soup.guessed' : `soup.${level}`)}</strong>}
+        {event.type !== 'giveup' && <strong className="soup-feedback">{t(`soup.${level}`)}
+          {event.type === 'question' && event.level !== 'correct' && event.hint && <span role="img" aria-label={t(`soup.${event.hint}`)} title={t(`soup.${event.hint}`)}>
+            {event.hint === 'higher' ? <ArrowUp size={13} aria-hidden="true" /> : <ArrowDown size={13} aria-hidden="true" />}
+          </span>}
+        </strong>}
       </li>;
     })}
   </ol>;

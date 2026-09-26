@@ -152,7 +152,6 @@ async function mutateSoup(game: SingleGameState, action: 'question' | 'guess' | 
   } else {
     soup.events.push({ type: 'giveup', requestId: input.requestId, elapsedMs });
     soup.status = 'lost';
-    soup.guessUnlocked = false;
   }
   soup.version += 1;
   soup.requests[input.requestId] = fingerprint;

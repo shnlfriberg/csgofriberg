@@ -69,6 +69,7 @@ async function main() {
   console.log('PASS real PoW, secure identity cookies, trusted proxy fingerprint and origin rejection');
   const start=await request('/api/game/start',{mode:'beginner',variant:'turtle-soup'}); assert.equal(start.status,200);
   let view=await start.json(); const id=view.gameId; assert.equal(view.questionCount,0);
+  assert.equal(view.maxQuestions,24); assert.equal(view.remainingQuestions,24); assert.equal(view.guessUnlocked,true);
   const redis=createClient({url:process.env.REDIS_URL}); await redis.connect();
   try {
     const saved=JSON.parse(await redis.get(`${process.env.REDIS_PREFIX}single:game:${id}`));
@@ -80,12 +81,13 @@ async function main() {
     assert.equal(second.status,200); assert.equal((await second.json()).questionCount,2);
     const guess=await request(`/api/game/${id}/guess`,{requestId:randomUUID(),version:2,playerId:saved.targetPlayerId});
     assert.equal(guess.status,200); const won=await guess.json(); assert.equal(won.status,'won');
+    assert.equal(won.remainingQuestions,21); assert.equal(won.guessCount,1);
     const record=await db('games').where({session_id:id}).first();
     await db('players').where({id:saved.targetPlayerId}).update({nickname:`qa-renamed-${saved.targetPlayerId}`,age:99});
     const replay=await request(`/api/stats/games/${record.id}/replay`); assert.equal(replay.status,200);
     const replayData=await replay.json(); assert.deepEqual(replayData.answer,won.answer); assert.deepEqual(replayData.events,won.events);
     const summary=await request('/api/stats/me?variant=turtle-soup'); const stats=await summary.json();
-    assert.equal(summary.status,200); assert.equal(stats.personal.totalGames,1); assert.equal(stats.personal.avgGuesses,2);
+    assert.equal(summary.status,200); assert.equal(stats.personal.totalGames,1); assert.equal(stats.personal.avgGuesses,3);
     console.log('PASS PostgreSQL soup settlement, request deduplication, 409 and immutable snapshot replay');
     const username='release-qa-user'; const password=randomUUID();
     const [user]=await db('users').insert({username,password_hash:requireServer('bcryptjs').hashSync(password,8)}).returning('id');
@@ -93,7 +95,7 @@ async function main() {
     assert(cookies.has('csgofriberg_session')); assert(cookies.has('csgofriberg_refresh'));
     const auth=await request('/api/auth/me'); assert.equal((await auth.json()).user.id,user.id);
     const claim=await request('/api/auth/claim',{}); assert.equal(claim.status,200); assert.equal((await claim.json()).claimed,1);
-    const claimed=await request('/api/stats/me?variant=turtle-soup'); assert.equal((await claimed.json()).personal.avgGuesses,2);
+    const claimed=await request('/api/stats/me?variant=turtle-soup'); assert.equal((await claimed.json()).personal.avgGuesses,3);
     const oldSession=cookies.get('csgofriberg_session');
     assert.equal((await request('/api/auth/logout',{})).status,200);
     assert.equal((await request('/api/auth/me',undefined,{Cookie:`csgofriberg_session=${oldSession}; csgofriberg_pow=${cookies.get('csgofriberg_pow')}`})).status,401);

@@ -1,3 +1,4 @@
+import { SOUP_MAX_ATTEMPTS } from '../turtleSoup';
 import GameRules from '../components/GameRules';
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +17,7 @@ export default function TurtleSoupLobby() {
     catch { return 'beginner'; }
   });
   return <Page title={t('soup.title')} icon={<Soup size={18} />} className="soup-lobby">
-    <div className="soup-intro"><span className="hero-kicker">18 {t('soup.questionCount')} / CS MAJOR</span><h1>{t('soup.subtitle')}</h1><p className="muted">{t('soup.description')}</p></div>
+    <div className="soup-intro"><span className="hero-kicker">{t('soup.questionBudget', { count: SOUP_MAX_ATTEMPTS })} / CS MAJOR</span><h1>{t('soup.subtitle')}</h1><p className="muted">{t('soup.description')}</p></div>
     <div className="single-difficulty-grid">{AVAILABLE_DIFFICULTIES.map((difficulty) => {
       const Icon = difficultyIcon(difficulty.key);
       return <button key={difficulty.key} className={`single-difficulty-option${selected === difficulty.key ? ' active' : ''}`}

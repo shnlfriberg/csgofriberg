@@ -18,7 +18,7 @@ vi.mock('../../src/api/playerList', () => ({
 }));
 const key = 'csgofriberg_soup_session_guest_beginner';
 const base: SoupGame = { gameId: 'soup1', mode: 'beginner', variant: 'turtle-soup', version: 0,
-  status: 'playing', maxQuestions: 18, remainingQuestions: 18, questionCount: 0, guessCount: 0, guessUnlocked: false, events: [] };
+  status: 'playing', maxQuestions: 24, remainingQuestions: 24, questionCount: 0, guessCount: 0, guessUnlocked: true, events: [] };
 const answer = { id: 2, nickname: 'Snapshot Answer', team: 'Team', nationality: 'CN', region: 'Asia', age: 25, role: 'Rifler', isActive: true, majorChampionships: 1, majorAppearances: 5 };
 const options = { teams: ['Team', 'Team Two', 'Other', ''], countries: [
   { nationality: '中国', region: '亚洲' }, { nationality: '丹麦', region: '欧洲' },
@@ -140,21 +140,25 @@ describe('Turtle Soup interactions', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
-  it('unlocks guessing from server feedback and locks again after a wrong guess', async () => {
+  it('allows guessing immediately and consecutively while spending the shared budget', async () => {
     renderGame(); await ready();
-    expect(screen.getByRole('button', { name: '猜选手' })).toBeDisabled();
-    expect(screen.getByPlaceholderText('输入选手昵称...')).toBeDisabled();
-    state = { ...base, version: 1, remainingQuestions: 17, questionCount: 1, guessUnlocked: true,
+    expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled();
+    state = { ...base, version: 1, remainingQuestions: 23, questionCount: 1, guessUnlocked: true,
       events: [{ type: 'question', field: 'age', value: 25, level: 'close', requestId: 'q', elapsedMs: 1 }] };
     await ask();
     await waitFor(() => expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled());
-    expect(screen.getByText('现在可以猜一次，也可以继续提问。')).toBeInTheDocument();
-    expect(screen.getByText('是也不是')).toBeInTheDocument();
+    expect(screen.getByText('接近')).toBeInTheDocument();
     expect(post).toHaveBeenLastCalledWith('/game/soup1/question', { field: 'age', value: 25, version: 0, requestId: expect.any(String) });
-    state = { ...state, version: 2, guessCount: 1, guessUnlocked: false };
+    state = { ...state, version: 2, guessCount: 1, remainingQuestions: 22, guessUnlocked: true };
     await guess();
-    await waitFor(() => expect(screen.getByPlaceholderText('输入选手昵称...')).toBeDisabled());
+    await ready();
+    expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled();
     expect(post).toHaveBeenLastCalledWith('/game/soup1/guess', { playerId: 1, version: 1, requestId: expect.any(String) });
+    expect(document.querySelector('.soup-counter')).toHaveTextContent('22 / 24');
+    state = { ...state, version: 3, guessCount: 2, remainingQuestions: 21 };
+    await guess(); await ready();
+    expect(post).toHaveBeenLastCalledWith('/game/soup1/guess', { playerId: 1, version: 2, requestId: expect.any(String) });
+    expect(document.querySelector('.soup-counter')).toHaveTextContent('21 / 24');
   });
 
   it('prepends new feedback with its original number and scrolls only the history window', async () => {
@@ -162,7 +166,7 @@ describe('Turtle Soup interactions', () => {
       { type: 'question', field: 'age', value: 25, level: 'close', requestId: 'q1', elapsedMs: 1 },
       { type: 'guess', playerId: 1, nickname: 'Earlier Guess', correct: false, requestId: 'g1', elapsedMs: 2 },
     ];
-    state = { ...base, version: 2, questionCount: 1, remainingQuestions: 17, guessCount: 1, events: savedEvents };
+    state = { ...base, version: 2, questionCount: 1, remainingQuestions: 22, guessCount: 1, events: savedEvents };
     renderGame(); await ready();
     const history = screen.getByRole('region', { name: '推理记录' });
     let items = within(history).getAllByRole('listitem');
@@ -174,13 +178,13 @@ describe('Turtle Soup interactions', () => {
     scrollPage.mockClear();
     fireEvent.change(screen.getByLabelText('年龄'), { target: { value: '26' } });
     expect(history.scrollTop).toBe(200);
-    state = { ...state, version: 3, questionCount: 2, remainingQuestions: 16, guessUnlocked: true,
+    state = { ...state, version: 3, questionCount: 2, remainingQuestions: 21, guessUnlocked: true,
       events: [...savedEvents, { type: 'question', field: 'age', value: 26, level: 'correct', requestId: 'q2', elapsedMs: 3 }] };
     fireEvent.submit(screen.getByLabelText('年龄').closest('form')!);
     await waitFor(() => expect(within(history).getAllByRole('listitem')).toHaveLength(3));
     items = within(history).getAllByRole('listitem');
     expect(items[0]).toHaveTextContent('26');
-    expect(items[0]).toHaveTextContent('是');
+    expect(items[0]).toHaveTextContent('准确');
     expect(items[0].querySelector('.soup-event-number')).toHaveTextContent('03');
     expect(items[2].querySelector('.soup-event-number')).toHaveTextContent('01');
     expect(history.scrollTop).toBe(0);
@@ -189,16 +193,16 @@ describe('Turtle Soup interactions', () => {
     scrollPage.mockRestore();
   });
 
-  it('keeps the final guess after question 18, then shows the losing receipt', async () => {
-    state = { ...base, version: 18, questionCount: 18, remainingQuestions: 0, guessUnlocked: true };
+  it('allows a guess with one attempt left, then shows the losing receipt', async () => {
+    state = { ...base, version: 23, questionCount: 23, remainingQuestions: 1, guessUnlocked: true };
     renderGame();
     await waitFor(() => expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled());
-    expect(screen.getByLabelText('年龄')).toBeDisabled();
-    expect(screen.getByText('提问已用完，还有最后一次猜名机会。')).toBeInTheDocument();
-    state = { ...state, version: 19, status: 'lost', answer, guessCount: 1, guessUnlocked: false };
+    expect(screen.getByLabelText('年龄')).toBeEnabled();
+    expect(screen.getByText('提问和猜选手共用 24 次机会，可连续猜选手。')).toBeInTheDocument();
+    state = { ...state, version: 24, status: 'lost', answer, guessCount: 1, remainingQuestions: 0, guessUnlocked: false };
     await guess();
     expect(await screen.findByRole('heading', { name: '本局结束' })).toBeInTheDocument();
-    expect(screen.getByText('使用 18 次提问 · 1 次猜名')).toBeInTheDocument();
+    expect(screen.getByText('使用 23 次提问 · 1 次猜名')).toBeInTheDocument();
   });
 
   it.each([new Error('offline'), { isAxiosError: true, response: { status: 503 } }])('persists the exact operation for retry and suppresses double submits (%j)', async (failure) => {
@@ -212,7 +216,7 @@ describe('Turtle Soup interactions', () => {
     expect(await screen.findByText('上次操作尚未确认，请重试以同步结果。')).toBeInTheDocument();
     expect(screen.getByLabelText('年龄')).toBeDisabled();
     expect(JSON.parse(sessionStorage.getItem(key)!).pending.body).toEqual(operation[1]);
-    state = { ...base, version: 1, remainingQuestions: 17, questionCount: 1, guessUnlocked: true };
+    state = { ...base, version: 1, remainingQuestions: 23, questionCount: 1, guessUnlocked: true };
     await userEvent.click(screen.getByRole('button', { name: '重试上次操作' }));
     await ready();
     expect(post.mock.calls.at(-1)).toEqual(operation);
@@ -240,7 +244,7 @@ describe('Turtle Soup interactions', () => {
   it('discards stale writes and loads the newer version without re-executing', async () => {
     renderGame(); await ready();
     post.mockRejectedValueOnce({ isAxiosError: true, response: { status: 409, data: { code: 'SOUP_STALE_STATE' } } });
-    state = { ...base, version: 4, questionCount: 3, remainingQuestions: 15 };
+    state = { ...base, version: 4, questionCount: 3, remainingQuestions: 21 };
     await ask();
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('request failed'));
     expect(JSON.parse(sessionStorage.getItem(key)!).pending).toBeUndefined();
@@ -286,7 +290,7 @@ describe('Turtle Soup interactions', () => {
   it('keeps the active game local without focus or storage polling', async () => {
     renderGame(); await ready();
     const reads = get.mock.calls.length;
-    state = { ...base, version: 3, questionCount: 2, remainingQuestions: 16, guessUnlocked: true };
+    state = { ...base, version: 3, questionCount: 2, remainingQuestions: 22, guessUnlocked: true };
     act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'csgofriberg_soup_update', newValue: 'updated' })));
     act(() => window.dispatchEvent(new Event('focus')));
     await new Promise((resolve) => setTimeout(resolve, 20));

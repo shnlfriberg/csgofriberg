@@ -19,40 +19,54 @@ describe('turtle soup rules', () => {
     ['nationality', '瑞典', 'correct'], ['nationality', '丹麦', 'close'],
     ['role', 'Rifler', 'correct'], ['role', 'Coach', 'wrong'],
     ['isActive', true, 'correct'], ['isActive', false, 'wrong'],
-  ] as const)('compares %s=%s with classic thresholds, without hints', (field, value, expected) => {
-    expect(compareQuestion(target, field, value, '欧洲')).toBe(expected);
+  ] as const)('compares %s=%s with classic thresholds', (field, value, expected) => {
+    expect(compareQuestion(target, field, value, '欧洲').level).toBe(expected);
   });
 
   it('does not treat unknown or different regions as close', () => {
-    expect(compareQuestion(target, 'nationality', '美国', '北美洲')).toBe('wrong');
-    expect(compareQuestion({ ...target, region: '' }, 'nationality', '丹麦', '')).toBe('wrong');
+    expect(compareQuestion(target, 'nationality', '美国', '北美洲').level).toBe('wrong');
+    expect(compareQuestion({ ...target, region: '' }, 'nationality', '丹麦', '').level).toBe('wrong');
   });
 
   it('uses the same team and age feedback as classic comparison', () => {
     const guess = { ...target, id: 2, team: 'Former', age: 28 };
     const classic = compareGuess(guess, target);
-    expect(compareQuestion(target, 'team', guess.team)).toBe(classic.attributes.team.level);
-    expect(compareQuestion(target, 'age', guess.age)).toBe(classic.attributes.age.level);
+    expect(compareQuestion(target, 'team', guess.team)).toEqual(classic.attributes.team);
+    expect(compareQuestion(target, 'age', guess.age)).toEqual(classic.attributes.age);
   });
 
-  it('allows the final guess after 18 questions and never accumulates guess credits', () => {
+  it.each([true, false])('spends a shared budget and settles the 24th guess (correct=%s)', (correct) => {
     const soup = createSoup(target, [target]);
-    expect(() => guessSoup(soup, target, randomUUID(), 0)).toThrow('SOUP_GUESS_LOCKED');
-    for (let index = 0; index < 18; index++) {
-      askSoup(soup, { requestId: randomUUID(), version: index, field: 'age', value: 25 }, index * 1000);
+    for (let index = 0; index < 23; index++) {
+      if (index % 2) askSoup(soup, { requestId: randomUUID(), version: index, field: 'age', value: 25 }, index * 1000);
+      else guessSoup(soup, { ...target, id: 2 }, randomUUID(), index * 1000);
     }
     expect(soup.status).toBe('playing');
-    expect(soup.guessUnlocked).toBe(true);
-    expect(() => askSoup(soup, { requestId: randomUUID(), version: 18, field: 'age', value: 25 }, 20000)).toThrow('SOUP_QUESTION_LIMIT');
-    const winning = structuredClone(soup);
-    guessSoup(winning, target, randomUUID(), 21000);
-    expect(winning.status).toBe('won');
-    guessSoup(soup, { ...target, id: 2 }, randomUUID(), 21000);
-    expect(soup.status).toBe('lost');
-    expect(soup.guessUnlocked).toBe(false);
+    expect(soupView({ id: 'test', mode: 'easy', soup }).remainingQuestions).toBe(1);
+    guessSoup(soup, { ...target, id: correct ? target.id : 2 }, randomUUID(), 24000);
+    expect(soup.status).toBe(correct ? 'won' : 'lost');
+    expect(soup.questionCount + soup.guessCount).toBe(24);
+    expect(soupView({ id: 'test', mode: 'easy', soup }).remainingQuestions).toBe(0);
+    expect(() => guessSoup(soup, target, randomUUID(), 25000)).toThrow('GAME_FINISHED');
   });
 
-  it('locks guessing after a wrong name and snapshots data independently', () => {
+  it('allows 24 consecutive guesses without any questions', () => {
+    const soup = createSoup(target, [target]);
+    for (let index = 0; index < 24; index++) guessSoup(soup, { ...target, id: 2 }, randomUUID(), index);
+    expect(soup).toMatchObject({ questionCount: 0, guessCount: 24, status: 'lost' });
+  });
+
+  it('settles a loss when the final attempt is an attribute question', () => {
+    const soup = createSoup(target, [target]);
+    for (let index = 0; index < 24; index++) {
+      askSoup(soup, { requestId: randomUUID(), version: index, field: 'age', value: 25 }, index);
+    }
+    expect(soup.status).toBe('lost');
+    expect(() => guessSoup(soup, target, randomUUID(), 25)).toThrow('GAME_FINISHED');
+    expect(() => askSoup(soup, { requestId: randomUUID(), version: 24, field: 'age', value: 25 }, 25)).toThrow('GAME_FINISHED');
+  });
+
+  it('allows consecutive guesses and snapshots data independently', () => {
     const original = structuredClone(target);
     const soup = createSoup(original, [original]);
     original.age = 99;
@@ -62,9 +76,20 @@ describe('turtle soup rules', () => {
     expect(soup.events[0]).toMatchObject({ level: 'correct' });
     expect(soup.options.teams).not.toContain('New');
     guessSoup(soup, { ...target, id: 2 }, randomUUID(), 1);
-    expect(() => guessSoup(soup, target, randomUUID(), 2)).toThrow('SOUP_GUESS_LOCKED');
     expect(soupView({ id: 'test', mode: 'easy', soup })).not.toHaveProperty('answer');
     expect(JSON.stringify(soupView({ id: 'test', mode: 'easy', soup }))).not.toContain('team_history');
+    guessSoup(soup, target, randomUUID(), 2);
+    expect(soup.status).toBe('won');
+  });
+
+  it.each([
+    ['age', 22, 'higher'], ['age', 29, 'lower'],
+    ['majorChampionships', 1, 'higher'], ['majorChampionships', 4, 'lower'],
+    ['majorAppearances', 8, 'higher'], ['majorAppearances', 11, 'lower'],
+  ] as const)('persists the direction for %s=%s', (field, value, hint) => {
+    const soup = createSoup(target, [target]);
+    askSoup(soup, { requestId: randomUUID(), version: 0, field, value }, 0);
+    expect(soup.events[0]).toMatchObject({ field, value, hint });
   });
 
   it.each([

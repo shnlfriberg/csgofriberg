@@ -15,7 +15,7 @@ import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
 import { difficultyLabel } from '../utils/difficulty';
 import { countryLabel, geographySearchText, regionLabel } from '../utils/playerGeography';
 import { playerRoleLabel } from '../utils/playerRoles';
-import { SOUP_FIELDS, type SoupField } from '../turtleSoup';
+import { SOUP_FIELDS, SOUP_MAX_ATTEMPTS, type SoupField } from '../turtleSoup';
 
 export default function TurtleSoupGame() {
   const { mode = 'beginner' } = useParams();
@@ -59,7 +59,7 @@ function SoupGamePage({ mode }: { mode: string }) {
   };
   const disabled = busy || expired || Boolean(error) || Boolean(pending) || game?.status !== 'playing';
   const questionDisabled = disabled || !options || !game?.remainingQuestions;
-  const hint = !game?.guessUnlocked ? t('soup.locked') : game.remainingQuestions === 0 ? t('soup.lastGuess') : t('soup.unlocked');
+  const hint = t('soup.guessHint');
   const teamOptions = useMemo(() => options?.teams.map((team) => ({ value: team, label: team || t('soup.noTeam') })) ?? [], [options, t]);
   const countryOptions = useMemo(() => options?.countries.map((country) => ({
     value: country.nationality,
@@ -80,14 +80,14 @@ function SoupGamePage({ mode }: { mode: string }) {
       <button className="btn btn-ghost btn-sm" disabled={busy || Boolean(pending)} onClick={() => void leaveOrRestart(true)} aria-label={t('game.restart')}><RotateCcw size={15} /><span className="btn-text">{t('game.restart')}</span></button>
       <button className="btn btn-ghost btn-sm" disabled={busy || Boolean(pending)} onClick={() => void leaveOrRestart(false)} aria-label={t('common.home')}><Home size={15} /><span className="btn-text">{t('common.home')}</span></button>
     </>}
-    statusBar={<><span>{t('soup.remaining')}</span><strong className="soup-counter" aria-live="polite">{game?.remainingQuestions ?? 18}<small> / 18</small></strong><span className="muted">{t('soup.description')}</span></>}
-    dock={game?.status === 'playing' && <GuessInputBar key={game.gameId} disabled={disabled || !game.guessUnlocked}
+    statusBar={<><span>{t('soup.remaining')}</span><strong className="soup-counter" aria-live="polite">{game?.remainingQuestions ?? SOUP_MAX_ATTEMPTS}<small> / {game?.maxQuestions ?? SOUP_MAX_ATTEMPTS}</small></strong><span className="muted">{t('soup.description')}</span></>}
+    dock={game?.status === 'playing' && <GuessInputBar key={game.gameId} disabled={disabled || game.remainingQuestions <= 0}
       onPick={(player) => submit('guess', { playerId: player.id })} buttonText={t('soup.guess')} statusText={hint} />}>
     {error && !pending && <div className="card" role="alert"><p>{expired ? t('soup.expired') : error}</p><button className="btn" onClick={() => void load()} disabled={busy}>{t(expired ? 'game.restart' : 'common.retry')}</button></div>}
     {pending && !busy && <div className="card soup-pending" role="alert"><p>{t('soup.pending')}</p><button className="btn" disabled={busy} onClick={() => void load()}>{t('soup.retry')}</button></div>}
     {!game && busy && <p role="status">{t('common.loading')}</p>}
     {game && <div className="soup-layout">
-      <section className="card soup-history"><div className="soup-section-heading"><h2 id="soup-history-heading">{t('soup.log')}</h2><span className="muted">{game.questionCount} / 18</span></div>
+      <section className="card soup-history"><div className="soup-section-heading"><h2 id="soup-history-heading">{t('soup.log')}</h2><span className="muted">{game.questionCount + game.guessCount} / {game.maxQuestions}</span></div>
         <div className="soup-history-scroll" ref={historyRef} role="region" aria-labelledby="soup-history-heading" tabIndex={0}>
         {game.answer && <section className={`soup-result soup-${game.status === 'won' ? 'correct' : 'wrong'}`} aria-live="polite">
           <h2>{t(game.status === 'won' ? 'soup.win' : 'soup.loss')}</h2><h3>{game.answer.nickname}</h3>

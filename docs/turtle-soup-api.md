@@ -21,11 +21,11 @@ interface SoupGameView {
   gameId: string;
   mode: string;
   variant: 'turtle-soup';
-  maxQuestions: 18;
-  remainingQuestions: number;
-  questionCount: number;
-  guessCount: number;
-  guessUnlocked: boolean;
+  maxQuestions: 24; // 兼容字段名，表示提问与猜选手共用的总次数
+  remainingQuestions: number; // max(0, 24 - questionCount - guessCount)
+  questionCount: number; // 属性提问次数
+  guessCount: number; // 猜选手次数
+  guessUnlocked: boolean; // 兼容字段：对局进行中且仍有剩余次数即为 true
   version: number; // 从 0 开始，每个新接受的操作 +1
   status: 'playing' | 'won' | 'lost';
   events: SoupEvent[];
@@ -97,7 +97,7 @@ interface SoupGameView {
 
 国家／地区候选在本地完成筛选，支持当前语言名称、服务端规范值、中文拼音全拼和拼音首字母；选项仍来自本局 `question-options` 快照，不会为搜索发送请求。鼠标点击或按 Enter/Tab 选中候选后直接提交一次提问。
 
-每个新接受的问题消耗一次额度，解锁一次猜名；不会累计猜名额度。猜名不消耗提问额度，猜错锁定。第 18 问后仍为 playing，保留一次猜名，猜错才为 lost。
+每局共 24 次机会，每个新接受的属性提问或猜选手操作均消耗 1 次。可以直接猜选手，也可连续猜选手，有效的重复操作仍扣次数。猜中立即 won（包括第 24 次）；用完次数仍未猜中则 lost，最后一次为属性提问时也立即结算失败，不另赠猜名机会。questionCount 和 guessCount 分别保留原始计数，二者之和为总消耗。
 
 ## 事件和错误码
 
@@ -107,20 +107,19 @@ type SoupEvent = {
   elapsedMs: number; // 距开局时间，毫秒
 } & (
   | { type: 'question'; field: string; value: string | number | boolean;
-      level: 'correct' | 'close' | 'wrong' }
+      level: 'correct' | 'close' | 'wrong'; hint?: 'higher' | 'lower' }
   | { type: 'guess'; playerId: number; nickname: string; correct: boolean }
   | { type: 'giveup' }
 );
 ```
 
-显示为“是 / 是也不是 / 不是”，没有 higher/lower。显示问题时翻译字段名和规范值，不将用户输入拼接进 HTML。
+显示为绿色“准确”／黄色“接近”／灰色“错误”。年龄、Major 冠军数及参赛次数复用主游戏判定，数值不同时返回 hint：higher 显示 ↑（目标更大），lower 显示 ↓（目标更小）；完全一致或非数值属性不显示箭头。hint 随事件保存，回放直接使用快照；旧回放缺少 hint 时不补算。显示问题时翻译字段名和规范值，不将用户输入拼接进 HTML。
 
 | 状态 | code | 客户端行为 |
 | --- | --- | --- |
 | 400 | VALIDATION_FAILED | 格式或范围不合法；不扣次数 |
 | 400 | SOUP_INVALID_OPTION | 选项不在本局列表；不扣次数 |
-| 400 | SOUP_GUESS_LOCKED | 先提问再猜名 |
-| 400 | SOUP_QUESTION_LIMIT | 只允许最后猜名或认输 |
+| 400 | SOUP_ATTEMPT_LIMIT | 次数耗尽；同步 state |
 | 400 | GAME_FINISHED | 同步 state 展示结果 |
 | 400 | GAME_VARIANT_UNAVAILABLE | 当前接口不支持该局玩法 |
 | 409 | SOUP_STALE_STATE | 同步 state 后显示最新局面 |
@@ -132,12 +131,12 @@ type SoupEvent = {
 ## 统计、排行榜与回放
 
 - `GET /stats/me?variant=turtle-soup&difficulties=beginner,easy`
-  - 与原统计结构一致，新增顶层 `variant` 和 `countMetric: 'questions'`。
+  - 与原统计结构一致，新增顶层 `variant` 和 `countMetric: 'attempts'`。
   - `personal/global.totalGames/wins/winRate` 为海龟汤数据。
-  - 为兼容现有统计组件，`avgGuesses` / `bestGuesses` 在海龟汤下分别表示获胜局平均提问数 / 最少提问数，请正确标注。
+  - 为兼容现有统计组件，`avgGuesses` / `bestGuesses` 在海龟汤下分别表示获胜局平均猜测次数 / 最少猜测次数，按 `question_count + guess_count` 计算，包含猜中选手的最后一次。历史记录也按两项之和汇总。
   - 兼容字段 `multiGames` 等仍描述原多人模式，海龟汤页面不要展示这些无关字段。
 - `GET /leaderboard?mode=turtle-soup&difficulty=beginner`
-  - 沿用 items/currentUser 结构，`countMetric: 'questions'`，`avgGuesses` 表示平均获胜提问数。
+  - 沿用 items/currentUser 结构，`countMetric: 'attempts'`，`avgGuesses` 表示平均获胜猜测次数（提问与猜选手之和）。
   - 不传新 mode 的旧请求仍只统计普通模式；功能开关 SHOW_LEADERBOARD 继续生效。
 - `GET /stats/replays?type=single&variant=turtle-soup&page=1&pageSize=15`
   - 单人列表按玩法隔离，items 保持 `type: 'single'`，增加 `questionCount`，`guessCount` 仍为猜名次数。

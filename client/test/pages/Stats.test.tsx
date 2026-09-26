@@ -105,7 +105,7 @@ describe('Stats difficulty filter', () => {
     expect(apiGet).toHaveBeenCalledWith('/stats/replays', {
       params: { type: 'single', variant: 'turtle-soup', page: 1, pageSize: 15 },
     });
-    expect(await screen.findAllByText('平均获胜提问数')).toHaveLength(2);
+    expect(await screen.findAllByText('平均获胜猜测次数')).toHaveLength(2);
     expect(screen.queryByText('多人胜场平均猜测次数')).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: '多人对战' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('tab', { name: '普通模式' }));

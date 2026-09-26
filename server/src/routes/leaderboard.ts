@@ -51,7 +51,7 @@ router.get(
           .count({ total: 'g.id' })
           .sum({ wins: db.raw("case when g.status = 'won' then 1 else 0 end") })
           .avg({
-            avgGuesses: db.raw("case when g.status = 'won' then ?? else null end", [mode === 'turtle-soup' ? 'g.question_count' : 'g.guess_count']),
+            avgGuesses: db.raw("case when g.status = 'won' then ? else null end", [mode === 'turtle-soup' ? db.raw('coalesce(??, 0) + ??', ['g.question_count', 'g.guess_count']) : db.ref('g.guess_count')]),
           });
 
       return (rows as any[])
@@ -72,7 +72,7 @@ router.get(
     res.json({
       mode,
       difficulty,
-      countMetric: mode === 'turtle-soup' ? 'questions' : 'guesses',
+      countMetric: mode === 'turtle-soup' ? 'attempts' : 'guesses',
       items: board.slice(0, 50),
       currentUser: req.user
         ? {
