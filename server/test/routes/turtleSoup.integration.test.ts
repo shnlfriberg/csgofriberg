@@ -90,6 +90,7 @@ describe('turtle soup API, persistence and isolation', () => {
     for (const question of [{ field: 'age', value: 1.5 }, { field: 'team', value: 'not-a-real-team' }, { field: 'nationality', value: 'not-a-country' }]) {
       expect((await request(`/game/${game.gameId}/question`, cookie, mutation(0, question))).status).toBe(400);
     }
+    expect((await request(`/game/${game.gameId}/giveup`, cookie, {})).data.code).toBe('VALIDATION_FAILED');
     expect((await request(`/game/${game.gameId}/state`, cookie)).data.version).toBe(0);
     const asked = await request(`/game/${game.gameId}/question`, cookie, mutation(0, { field: 'age', value: stored.soup.target.age }));
     expect(asked.data.events[0]).toMatchObject({ level: 'correct', type: 'question' });
