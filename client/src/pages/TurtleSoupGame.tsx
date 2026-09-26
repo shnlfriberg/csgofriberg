@@ -59,7 +59,6 @@ function SoupGamePage({ mode }: { mode: string }) {
   };
   const disabled = busy || expired || Boolean(error) || Boolean(pending) || game?.status !== 'playing';
   const questionDisabled = disabled || !options || !game?.remainingQuestions;
-  const hint = t('soup.guessHint');
   const teamOptions = useMemo(() => options?.teams.map((team) => ({ value: team, label: team || t('soup.noTeam') })) ?? [], [options, t]);
   const countryOptions = useMemo(() => options?.countries.map((country) => ({
     value: country.nationality,
@@ -82,7 +81,7 @@ function SoupGamePage({ mode }: { mode: string }) {
     </>}
     statusBar={<><span>{t('soup.remaining')}</span><strong className="soup-counter" aria-live="polite">{game?.remainingQuestions ?? SOUP_MAX_ATTEMPTS}<small> / {game?.maxQuestions ?? SOUP_MAX_ATTEMPTS}</small></strong><span className="muted">{t('soup.description')}</span></>}
     dock={game?.status === 'playing' && <GuessInputBar key={game.gameId} disabled={disabled || game.remainingQuestions <= 0}
-      onPick={(player) => submit('guess', { playerId: player.id })} buttonText={t('soup.guess')} statusText={hint} />}>
+      onPick={(player) => submit('guess', { playerId: player.id })} buttonText={t('soup.guess')} />}>
     {error && !pending && <div className="card" role="alert"><p>{expired ? t('soup.expired') : error}</p><button className="btn" onClick={() => void load()} disabled={busy}>{t(expired ? 'game.restart' : 'common.retry')}</button></div>}
     {pending && !busy && <div className="card soup-pending" role="alert"><p>{t('soup.pending')}</p><button className="btn" disabled={busy} onClick={() => void load()}>{t('soup.retry')}</button></div>}
     {!game && busy && <p role="status">{t('common.loading')}</p>}

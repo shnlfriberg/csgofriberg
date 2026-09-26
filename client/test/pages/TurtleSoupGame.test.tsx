@@ -198,7 +198,7 @@ describe('Turtle Soup interactions', () => {
     renderGame();
     await waitFor(() => expect(screen.getByPlaceholderText('输入选手昵称...')).toBeEnabled());
     expect(screen.getByLabelText('年龄')).toBeEnabled();
-    expect(screen.getByText('提问和猜选手共用 24 次机会，可连续猜选手。')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '猜选手' })).toBeInTheDocument();
     state = { ...state, version: 24, status: 'lost', answer, guessCount: 1, remainingQuestions: 0, guessUnlocked: false };
     await guess();
     expect(await screen.findByRole('heading', { name: '本局结束' })).toBeInTheDocument();
