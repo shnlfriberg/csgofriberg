@@ -1,6 +1,11 @@
 packages:
   - server
   - client
+  - packages/*
 allowBuilds:
   better-sqlite3: true
   esbuild: true
+  sharp: true
+overrides:
+  # concurrently 9 pins an older release; 1.11 fixes command quoting injection.
+  shell-quote: 1.11.0

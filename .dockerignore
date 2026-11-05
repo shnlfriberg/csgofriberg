@@ -5,9 +5,13 @@
 .vscode
 .idea
 node_modules
+.tools
+data/location-assets
+server/test
 **/node_modules
 dist
 **/dist
+**/dist-cjs
 .pnpm-store
 .docker-runtime-test
 .local-*
@@ -24,3 +28,6 @@ coverage
 **/*.test.ts
 **/*.tsbuildinfo
 README.md
+external-scraper/
+integration/
+release-data/

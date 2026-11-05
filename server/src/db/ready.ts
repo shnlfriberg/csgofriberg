@@ -1,11 +1,18 @@
+import { CARD_REQUIRED_COLUMNS } from '../card-link/schema';
 import { Knex } from 'knex';
 import { db } from './knex';
+import { EXTERNAL_REQUIRED_COLUMNS } from './externalSubmissionSchema';
+import { LOCATION_REQUIRED_COLUMNS } from '../location/schema';
 
 const REQUIRED_COLUMNS: Record<string, string[]> = {
+  ...LOCATION_REQUIRED_COLUMNS,
+  ...CARD_REQUIRED_COLUMNS,
+  ...EXTERNAL_REQUIRED_COLUMNS,
   users: ['id', 'username', 'password_hash', 'role', 'token_version', 'leaderboard_hidden', 'matchmaking_restricted', 'email', 'email_verified_at', 'banned_at'],
   email_verifications: ['id', 'user_id', 'email', 'token_hash', 'expires_at'],
+  password_resets: ['user_id', 'email', 'token_hash', 'token_version', 'attempts', 'expires_at'],
   guest_accounts: ['id', 'guest_key', 'guest_key_hash', 'display_id', 'banned_at'],
-  api_tokens: ['id', 'name', 'token_hash', 'prefix', 'created_by_user_id', 'expires_at'],
+  api_tokens: ['scopes', 'id', 'name', 'token_hash', 'prefix', 'created_by_user_id', 'expires_at'],
   players: [
     'id',
     'nickname',
@@ -24,7 +31,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'player_id',
     'player_nickname',
     'field',
-    'old_value',
+    'old_value', 'observed_value',
     'new_value',
     'status',
     'handled_by_user_id',

@@ -2,10 +2,13 @@ import type { NextFunction, Request, Response } from 'express';
 import { db } from '../db/knex';
 import { hashApiToken, isApiTokenFormat } from '../services/apiTokens';
 
+import { readTokenScopes, type ApiTokenScope } from '../services/apiTokenScopes';
+
 declare global {
   namespace Express {
     interface Request {
       apiToken?: {
+        scopes: ApiTokenScope[];
         id: number;
         name: string;
         createdByUserId: number;
@@ -34,12 +37,13 @@ export async function requireApiToken(req: Request, res: Response, next: NextFun
         'token.id',
         'token.name',
         'token.created_by_user_id',
-        'token.expires_at'
+        'token.expires_at', 'token.scopes'
       );
     if (!row || expiresAtMs(row.expires_at) <= Date.now()) {
       return res.status(401).json({ code: 'API_TOKEN_INVALID' });
     }
     req.apiToken = {
+      scopes: readTokenScopes(row.scopes),
       id: Number(row.id),
       name: String(row.name),
       createdByUserId: Number(row.created_by_user_id),
@@ -48,4 +52,11 @@ export async function requireApiToken(req: Request, res: Response, next: NextFun
   } catch (err) {
     next(err);
   }
+}
+
+export function requireApiScope(scope: ApiTokenScope) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.apiToken?.scopes.includes(scope)) return res.status(403).json({ code: 'API_TOKEN_SCOPE_REQUIRED' });
+    next();
+  };
 }

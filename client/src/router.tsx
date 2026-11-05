@@ -1,21 +1,30 @@
-import TurtleSoupLobby from './pages/TurtleSoupLobby';
-import TurtleSoupGame from './pages/TurtleSoupGame';
+import { lazy, Suspense } from 'react';
+const CardLink = lazy(() => import('./pages/CardLink'));
+const TurtleSoupLobby = lazy(() => import('./pages/TurtleSoupLobby'));
+import Entertainment from './pages/Entertainment';
+import LocationMenu from './pages/LocationMenu';
+const LocationGame = lazy(() => import('./pages/LocationGame'));
+const LocationMulti = lazy(() => import('./pages/LocationMulti'));
+const LocationHistory = lazy(() => import('./pages/LocationHistory'));
+const LocationSubmission = lazy(() => import('./pages/LocationSubmission'));
+const TurtleSoupGame = lazy(() => import('./pages/TurtleSoupGame'));
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
 import { useAuth } from './store/auth';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import EmailVerify from './pages/EmailVerify';
-import Search from './pages/Search';
-import SingleGame from './pages/SingleGame';
+import PasswordReset from './pages/PasswordReset';
+const Search = lazy(() => import('./pages/Search'));
+const SingleGame = lazy(() => import('./pages/SingleGame'));
 import SingleLobby from './pages/SingleLobby';
 import MultiLobby from './pages/MultiLobby';
-import MultiRoom from './pages/MultiRoom';
-import Stats from './pages/Stats';
-import Leaderboard from './pages/Leaderboard';
+const MultiRoom = lazy(() => import('./pages/MultiRoom'));
+const Stats = lazy(() => import('./pages/Stats'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 import Announcements from './pages/Announcements';
 import DailyLobby from './pages/DailyLobby';
-import DailyChallenge from './pages/DailyChallenge';
-import Admin from './pages/Admin';
+const DailyChallenge = lazy(() => import('./pages/DailyChallenge'));
+const Admin = lazy(() => import('./pages/Admin'));
 import NotFound from './pages/NotFound';
 import RouteError from './components/RouteError';
 import Page from './components/Page';
@@ -41,12 +50,22 @@ function RequireAdmin() {
 export const router = createBrowserRouter([
   {
     errorElement: <RouteError />,
+    element: <Suspense fallback={<div className="page-loading" role="status"><div className="spinner" /></div>}><Outlet /></Suspense>,
     children: [
       { path: '/', element: <Home /> },
       { path: '/login', element: <Login /> },
       { path: '/email-verify', element: <EmailVerify /> },
+      { path: '/password-reset', element: <PasswordReset /> },
       { path: '/search', element: <Search /> },
       { path: '/single', element: <SingleLobby /> },
+      { path: '/entertainment', element: <Entertainment /> },
+      { path: '/entertainment/location', element: <LocationMenu /> },
+      { path: '/entertainment/card-link', element: <CardLink /> },
+      { path: '/entertainment/location/submit', element: <LocationSubmission /> },
+      { path: '/entertainment/location/random', element: <LocationGame mode="random" /> },
+      { path: '/entertainment/location/daily', element: <LocationGame mode="daily" /> },
+      { path: '/entertainment/location/multi', element: <LocationMulti /> },
+      { path: '/entertainment/location/history', element: <LocationHistory /> },
       { path: '/turtle-soup', element: <TurtleSoupLobby /> },
       { path: '/turtle-soup/:mode', element: <TurtleSoupGame /> },
       { path: '/single/:mode', element: <SingleGame /> },

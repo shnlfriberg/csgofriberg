@@ -7,6 +7,7 @@ import { useConfirm } from '../ConfirmDialog';
 import { toast } from '../Toast';
 
 interface ApiTokenItem {
+  scopes?: string[];
   id: number;
   name: string;
   prefix: string;
@@ -22,6 +23,7 @@ export default function AdminApiTokens() {
   const { t } = useTranslation();
   const confirm = useConfirm();
   const [tokens, setTokens] = useState<ApiTokenItem[]>([]);
+  const [directWrite, setDirectWrite] = useState(false);
   const [name, setName] = useState('');
   const [expiresInDays, setExpiresInDays] = useState('90');
   const [created, setCreated] = useState<CreatedApiToken | null>(null);
@@ -53,9 +55,11 @@ export default function AdminApiTokens() {
       const response = await api.post<CreatedApiToken>('/admin/api-tokens', {
         name: name.trim(),
         expiresInDays: days,
+        scopes: ['players:read', 'changes:submit', ...(directWrite ? ['players:write'] : [])],
       });
       setCreated(response.data);
       setName('');
+      setDirectWrite(false);
       setCopied(false);
       toast.success(t('admin.apiTokenCreated'));
       await load();
@@ -133,6 +137,8 @@ export default function AdminApiTokens() {
             onChange={(event) => setExpiresInDays(event.target.value)}
           />
         </label>
+        <label><input type="checkbox" checked={directWrite} onChange={e => setDirectWrite(e.target.checked)} /> {t('location.tokenDirectWrite')}</label>
+        <p className="muted">{t('location.tokenDefaultScopes')}</p>
         <button className="btn btn-green" type="button" disabled={!canCreate} onClick={() => void create()}>
           <Plus size={17} />
           {submitting ? t('admin.creatingApiToken') : t('admin.createApiToken')}
@@ -165,6 +171,7 @@ export default function AdminApiTokens() {
             <div className="admin-api-token-identity">
               <strong>{token.name}</strong>
               <code>{token.prefix}</code>
+              <span>{t(token.scopes?.includes('players:write') ? 'location.tokenDirectWrite' : 'location.tokenDefaultScopes')}</span>
             </div>
             <div className="admin-api-token-dates">
               <span>{t('admin.apiTokenCreatedAt', {

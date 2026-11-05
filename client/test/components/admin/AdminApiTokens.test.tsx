@@ -50,6 +50,7 @@ describe('AdminApiTokens', () => {
     expect(api.post).toHaveBeenCalledWith('/admin/api-tokens', {
       name: '选手同步',
       expiresInDays: 90,
+      scopes: ['players:read', 'changes:submit'],
     });
     expect(await screen.findByDisplayValue(secret)).toBeInTheDocument();
     expect(screen.getByText('明文仅显示这一次，请妥善保管。')).toBeInTheDocument();

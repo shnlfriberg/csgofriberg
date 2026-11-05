@@ -8,6 +8,7 @@ import { useAuth } from '../store/auth';
 import { useTranslation } from 'react-i18next';
 import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
 import { difficultyLabel } from '../utils/difficulty';
+import ContributorLeaderboard from '../location/ContributorLeaderboard';
 
 interface BoardRow {
   id: number;
@@ -18,7 +19,7 @@ interface BoardRow {
   avgGuesses: number | null;
 }
 
-type LeaderboardMode = 'single' | 'multi' | 'turtle-soup';
+type LeaderboardMode = 'single' | 'multi' | 'turtle-soup' | 'location-contributions';
 
 interface LeaderboardResponse {
   mode: LeaderboardMode;
@@ -31,7 +32,7 @@ export default function Leaderboard() {
   const { t } = useTranslation();
   const difficulties = AVAILABLE_DIFFICULTIES;
   const [searchParams, setSearchParams] = useSearchParams();
-  const mode: LeaderboardMode = searchParams.get('mode') === 'turtle-soup' ? 'turtle-soup' : searchParams.get('mode') === 'multi' ? 'multi' : 'single';
+  const mode: LeaderboardMode = searchParams.get('mode') === 'location-contributions' ? 'location-contributions' : searchParams.get('mode') === 'turtle-soup' ? 'turtle-soup' : searchParams.get('mode') === 'multi' ? 'multi' : 'single';
   const [difficulty, setDifficulty] = useState(AVAILABLE_DIFFICULTIES[0]?.key ?? 'beginner');
   const [rows, setRows] = useState<BoardRow[]>([]);
   const [currentUser, setCurrentUser] = useState<LeaderboardResponse['currentUser']>(null);
@@ -53,6 +54,7 @@ export default function Leaderboard() {
     setError(null);
     setRows([]);
     setCurrentUser(null);
+    if (mode === 'location-contributions') { setLoading(false); return; }
     api
       .get<LeaderboardResponse>('/leaderboard', { params: { mode, difficulty } })
       .then((res) => {
@@ -116,7 +118,7 @@ export default function Leaderboard() {
 
   return (
     <Page title={t('leaderboard.title')} icon={<Trophy size={17} />}>
-      {currentUserId != null && (
+      {mode !== 'location-contributions' && currentUserId != null && (
         <div
           className="leaderboard-self-summary"
           aria-label={t('leaderboard.myRank')}
@@ -138,7 +140,7 @@ export default function Leaderboard() {
       <div className="leaderboard-controls">
         {error && <div role="alert"><p>{error}</p><button className="btn" disabled={loading} onClick={() => setRetry((value) => value + 1)}>{t('common.retry')}</button></div>}
         <div className="leaderboard-mode-tabs" role="tablist" aria-label={t('leaderboard.modeLabel')}>
-          {(['single', 'multi', 'turtle-soup'] as const).map((option) => (
+          {(['single', 'multi', 'turtle-soup', 'location-contributions'] as const).map((option) => (
             <button
               type="button"
               role="tab"
@@ -147,11 +149,11 @@ export default function Leaderboard() {
               key={option}
               onClick={() => chooseMode(option)}
             >
-              {t(option === 'turtle-soup' ? 'soup.shortTitle' : `leaderboard.${option}`)}
+              {t(option === 'location-contributions' ? 'location.contributorBoard' : option === 'turtle-soup' ? 'soup.shortTitle' : `leaderboard.${option}`)}
             </button>
           ))}
         </div>
-        <label className="leaderboard-difficulty-select">
+        {mode !== 'location-contributions' && <label className="leaderboard-difficulty-select">
           <span>{t('leaderboard.difficultyLabel')}</span>
           <select
             className="input"
@@ -164,9 +166,9 @@ export default function Leaderboard() {
               </option>
             ))}
           </select>
-        </label>
+        </label>}
       </div>
-      <div className={`card leaderboard-card leaderboard-card-${mode}`}>
+      {mode === 'location-contributions' ? <ContributorLeaderboard /> : <div className={`card leaderboard-card leaderboard-card-${mode}`}>
         <DataTable
           columns={columns}
           rows={rows}
@@ -174,7 +176,7 @@ export default function Leaderboard() {
           loading={loading}
           empty={t('leaderboard.empty', { type: selectionLabel })}
         />
-      </div>
+      </div>}
     </Page>
   );
 }

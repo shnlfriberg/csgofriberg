@@ -81,6 +81,14 @@ describe('proof of work gateway', () => {
     expect(setCookies(result.response).join(';')).not.toContain('csgofriberg_guest=');
   });
 
+  it('protects both password recovery endpoints with the existing PoW gateway', async () => {
+    for (const path of ['/api/auth/password/request', '/api/auth/password/reset']) {
+      const result = await request(path, { method: 'POST', body: '{}' });
+      expect(result.response.status).toBe(428);
+      expect(result.data.code).toBe('POW_REQUIRED');
+    }
+  });
+
   it('issues a short-lived pass and consumes the challenge once', async () => {
     const challengeResult = await request('/api/pow/challenge', { method: 'POST', body: '{}' });
     expect(challengeResult.response.status).toBe(200);

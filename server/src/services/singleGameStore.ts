@@ -3,6 +3,7 @@ import { evalCommandScript, redis, redisKey } from '../redis';
 import { GuessFeedback } from '../types';
 import { isSingleGameVariant, type SingleGameVariant } from './gameModes';
 import type { SoupState } from './turtleSoup';
+import { singlePresenceCategory, singlePresenceKey } from './singleGamePresence';
 
 export type SingleGameMode = string;
 export type SingleGameKind = 'single' | 'daily';
@@ -153,6 +154,7 @@ export async function saveSingleGame(game: SingleGameState): Promise<void> {
   const ttlSeconds = Math.max(1, Math.ceil((expiresAt - Date.now()) / 1000));
   const transaction = client.multi()
     .set(gameKey(game.id), JSON.stringify(game), { EX: ttlSeconds })
+    .set(singlePresenceKey(game.id), singlePresenceCategory(game), { EX: ttlSeconds })
     .set(activeKey(game.identityKey, game.mode, game.variant), game.id, { EX: ttlSeconds });
   if (game.variant === 'classic') transaction.del(legacyActiveKey(game.identityKey, game.mode));
   await transaction
@@ -164,8 +166,9 @@ export async function deleteSingleGame(game: SingleGameState): Promise<void> {
   const active = activeKey(game.identityKey, game.mode, game.variant);
   const legacy = legacyActiveKey(game.identityKey, game.mode);
   await evalCommandScript(
-    'single-game-delete-v2',
+    'single-game-delete-v3',
     `redis.call('ZREM', KEYS[4], ARGV[1])
+     redis.call('DEL', KEYS[5])
      if redis.call('get', KEYS[1]) == ARGV[1] then
        redis.call('del', KEYS[1], KEYS[2])
      end
@@ -173,7 +176,7 @@ export async function deleteSingleGame(game: SingleGameState): Promise<void> {
        redis.call('del', KEYS[3])
      end
      return redis.call('del', KEYS[2])`,
-    [active, gameKey(game.id), legacy, redisKey('presence:single')],
+    [active, gameKey(game.id), legacy, redisKey('presence:single'), singlePresenceKey(game.id)],
     [game.id]
   );
 }

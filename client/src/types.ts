@@ -260,5 +260,11 @@ export interface PresenceStats {
   onlineUsers: number;
   multiplayerRooms: number;
   singleGames: number;
+  modes?: {
+    classicSingle: number; classicDaily: number; turtleSoup: number;
+    classicRooms: number; relayRooms: number; relay2v2Rooms: number;
+    locationDaily: number; locationRandom: number; locationRooms: number;
+    cardSingle: number; cardDaily: number; cardFriend: number; cardRanked: number;
+  };
   updatedAt: number;
 }

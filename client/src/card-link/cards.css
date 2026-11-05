@@ -1,0 +1,269 @@
+/* Poker proportions, a top-left corner mark and a clear handle at the center. */
+[data-cl-draggable] { touch-action: none; cursor: grab; }
+.cl-card.cl-dragging { opacity: .55; cursor: grabbing; }
+.cl-drop-target > .cl-slot, .cl-card.cl-drop-target { outline: 2px solid #70d5be; outline-offset: 2px; }
+.cl-card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  position: relative;
+  flex: 0 0 142px;
+  width: 142px;
+  min-height: 214px;
+  padding: 12px 10px 38px;
+  gap: 8px;
+  overflow: hidden;
+  border: 1px solid #dbd2c1;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #fffdf6, #f1eadc);
+  color: #24323a;
+  box-shadow:
+    0 2px 1px #fff6 inset,
+    0 5px 13px #0003;
+  transform-origin: center;
+  user-select: none;
+}
+.cl-card::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid #34495524;
+  border-radius: 6px;
+  pointer-events: none;
+}
+.cl-card-fixed {
+  border-color: #d6b96f;
+  background: linear-gradient(145deg, #fff9e7, #e9dec1);
+}
+.cl-card-corner {
+  display: flex;
+  flex-direction: column;
+  align-self: flex-start;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 100%;
+  line-height: 1;
+}
+.cl-card-corner > span {
+  font-size: 18px;
+}
+.cl-card-corner small {
+  font-size: 10px;
+  opacity: 1;
+  line-height: 1.25;
+  text-align: left;
+}
+.cl-card-identity {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 112px;
+  width: 100%;
+}
+.cl-card-identity > small {
+  letter-spacing: 0.2em;
+  font-size: 9px;
+  opacity: 0.55;
+}
+.cl-card-identity strong {
+  overflow-wrap: anywhere;
+  text-align: center;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.04em;
+}
+.cl-card-suit {
+  font-size: 34px;
+  line-height: 1;
+  color: #325a5e;
+  opacity: 0.78;
+}
+.cl-card-age {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+/* Local card descendants keep the Easter egg on detached drag/motion clones. */
+.cl-card-corner[data-cl-hearts] > span,
+.cl-card-suit.cl-card-hearts { color: #bd263a; opacity: 1; }
+.cl-card:has(> .cl-card-corner[data-cl-champion]) {
+  border-color: #bb841e;
+  box-shadow: 0 0 0 1px #e8bd58 inset, 0 0 0 1px #e8bd58, 0 5px 13px #0003;
+}
+.cl-card:has(> .cl-card-corner[data-cl-champion])::before {
+  border-color: #c69435;
+  box-shadow: 0 0 0 1px #fff3c780;
+}
+.cl-card .btn {
+  min-height: 26px;
+  padding: 3px 12px;
+  font-size: 11px;
+  background: #244f51;
+  color: #fffdf6;
+  border: 1px solid #244f51;
+}
+.cl-card .btn-ghost {
+  color: #244f51;
+  background: transparent;
+}
+.cl-card-actions {
+  position: relative;
+  z-index: 1;
+}
+.cl-hand-actions { display: flex; justify-content: center; gap: 4px; width: 100%; }
+.cl-hand-actions .btn { padding-inline: 5px; min-width: 0; white-space: nowrap; }
+.cl-card .cl-card-actions button {
+  color: #24323a;
+  border-color: #24323a55;
+  min-width: 30px;
+  min-height: 28px;
+}
+.cl-card-ghost {
+  contain: layout paint;
+}
+.cl-card-drag-preview {
+  contain: layout paint;
+  animation: none !important;
+  transition: none !important;
+}
+.cl-connection-tooltip {
+  position: fixed;
+  z-index: 1000;
+  width: min(320px, calc(100vw - 24px));
+  box-sizing: border-box;
+  max-height: min(400px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid #689d8c;
+  border-radius: 12px;
+  background: #172b29;
+  color: #f5f4eb;
+  box-shadow: 0 8px 24px #0006;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.cl-connection-tooltip > strong { display: block; font-size: 15px; }
+.cl-connection-tooltip p { margin: 8px 0; color: #9adfc9; }
+.cl-connection-tooltip ul { list-style: none; margin: 0 0 10px; padding: 0; }
+.cl-connection-tooltip li { padding: 8px 0; border-top: 1px solid #ffffff26; }
+.cl-connection-tooltip li b, .cl-connection-tooltip li span { display: block; }
+.cl-connection-tooltip li span { font-variant-numeric: tabular-nums; margin-top: 3px; }
+.cl-connection-tooltip small { color: #c4d2ce; font-size: 11px; }
+.cl-solution-route { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.cl-solution-route > span { overflow-wrap: anywhere; min-width: 0; }
+.cl-solution-arrow {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; min-width: 28px; min-height: 28px; padding: 2px 5px;
+  border: 1px solid transparent; border-radius: 6px;
+  background: transparent; color: inherit; font: inherit; cursor: help;
+}
+.cl-solution-arrow:hover, .cl-solution-arrow:focus-visible {
+  border-color: currentColor; background: #80808020;
+}
+.cl-solution-arrow:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.cl-hand {
+  padding: 16px 4px 20px;
+}
+/* Keep fixed tooltips in the modal's top layer without a transformed containing block. */
+.replay-dialog.cl-replay-dialog { animation: none; transform: none; }
+.cl-board.cl-replay-board { min-height: 260px; gap: 0; }
+.cl-replay-board .cl-card { cursor: default; }
+.cl-replay-board .cl-slot { flex-shrink: 0; }
+.cl-replay-gap { flex: 0 0 48px; text-align: center; }
+.cl-replay-dialog .cl-toolbar label { display: flex; align-items: center; gap: 8px; }
+.cl-board {
+  min-height: 280px;
+}
+.cl-admin table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.cl-admin td,
+.cl-admin th {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid #8883;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .cl-card {
+    flex-basis: 122px;
+    width: 122px;
+    min-height: 196px;
+  }
+  .cl-card-identity {
+    min-height: 96px;
+  }
+  .cl-card-identity strong {
+    font-size: 17px;
+  }
+  .cl-card-corner small {
+    font-size: 9px;
+  }
+}
+
+/* Also match detached drag/motion clones via their own class: their size must
+   not depend on being inside .cl-game-page once appended to document.body. */
+@media (min-width: 900px) {
+  .cl-game-page .cl-card,
+  .cl-card-drag-preview,
+  .cl-card-ghost {
+    --cl-live-height: clamp(156px, calc((100dvh - 350px) / 2), 224px);
+    flex-basis: calc(var(--cl-live-height) * 0.66);
+    width: calc(var(--cl-live-height) * 0.66);
+    height: var(--cl-live-height);
+    min-height: var(--cl-live-height);
+    padding: 8px;
+    gap: 3px;
+  }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-identity {
+    min-height: 0;
+    gap: 3px;
+  }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-identity strong { font-size: clamp(14px, 2dvh, 19px); }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-suit { font-size: clamp(18px, 3dvh, 30px); }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-corner { flex-direction: row; align-items: center; gap: 4px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-corner > span { font-size: 14px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-actions { gap: 3px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-actions button { min-width: 24px; padding-inline: 5px; }
+  .cl-game-page .cl-board { min-height: 0; padding: 8px 10px; border-radius: 14px; }
+  .cl-game-page .cl-hand { padding: 8px 4px; }
+}
+
+.cl-result-dialog.overlay-card {
+  width: min(940px, calc(100vw - 32px));
+  max-width: 940px;
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  padding: 20px 24px;
+  color: var(--text);
+  animation: none;
+  transform: none;
+}
+.cl-result-dialog::backdrop { background: #10201ed9; backdrop-filter: blur(5px); }
+.cl-result-heading, .cl-result-heading > div { display: flex; align-items: center; gap: 12px; }
+.cl-result-heading { justify-content: space-between; }
+.cl-result-heading h2 { margin: 0; }
+.cl-result-score { display: flex; align-items: baseline; justify-content: center; gap: 24px; padding: 12px 0; }
+.cl-result-score > strong { font-size: 38px; color: var(--correct); line-height: 1.2; }
+.cl-result-score small { margin-left: 8px; font-size: 14px; }
+.cl-result-score b { font-size: 22px; font-variant-numeric: tabular-nums; }
+.cl-result-dialog .cl-result-board { min-height: 0; padding: 12px; justify-content: safe center; }
+.cl-result-board .cl-card { flex-basis: 112px; width: 112px; min-height: 170px; padding: 9px; gap: 4px; }
+.cl-result-board .cl-card-identity { min-height: 90px; gap: 4px; }
+.cl-result-board .cl-card-identity strong { font-size: 16px; }
+.cl-result-board .cl-card-suit { font-size: 24px; }
+.cl-result-hint { font-size: 12px; }
+.cl-result-dialog .btns { margin-top: 12px; }
+@media (max-width: 700px) {
+  .cl-result-dialog.overlay-card { padding: 16px; }
+  .cl-result-score { gap: 12px; flex-wrap: wrap; }
+}

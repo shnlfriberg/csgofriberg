@@ -68,7 +68,7 @@ describe('external player API tokens', () => {
       const createdToken = await request('/api/admin/api-tokens', {
         method: 'POST',
         headers: { Cookie: cookie },
-        body: JSON.stringify({ name: 'sync job', expiresInDays: 30 }),
+        body: JSON.stringify({ name: 'sync job', expiresInDays: 30, scopes: ['players:read', 'changes:submit', 'players:write'] }),
       });
       expect(createdToken.response.status).toBe(201);
       expect(createdToken.data.token).toMatch(/^csgf_[A-Za-z0-9_-]{43}$/);
@@ -169,6 +169,8 @@ describe('external player API tokens', () => {
         region: 'Europe',
         team: 'Bulk Updated',
         team_history: [],
+        career: null,
+        career_revision: 0,
         age: 26,
         role: 'Rifler',
         major_championships: 0,

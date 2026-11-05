@@ -18,7 +18,7 @@ export const useAuth = create<AuthState>((set, get) => ({
       try {
         for (let i = sessionStorage.length - 1; i >= 0; i--) {
           const key = sessionStorage.key(i);
-          if (key?.startsWith('csgofriberg_soup_session_')) sessionStorage.removeItem(key);
+          if ((key?.startsWith('csgofriberg_soup_session_') || key?.startsWith('card-pending:'))) sessionStorage.removeItem(key);
         }
       } catch { /* Storage may be disabled. */ }
     }

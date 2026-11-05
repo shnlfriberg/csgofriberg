@@ -12,6 +12,9 @@ import {
   X,
 } from 'lucide-react';
 import { SOUP_MAX_ATTEMPTS } from '../turtleSoup';
+import { RULES as CARD_RULES } from '@friberg/card-link-core';
+import CardLinkIcon from './CardLinkIcon';
+import DifficultyRules from '../card-link/DifficultyRules';
 import ModalPortal from './ModalPortal';
 import { useTranslation } from 'react-i18next';
 
@@ -28,9 +31,46 @@ function SoupRulesContent() {
   </article>;
 }
 
-export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turtle-soup' }) {
+function LocationRulesContent() {
+  const { t } = useTranslation();
+  return <article className="rule-panel rule-panel-main rule-panel-location" aria-label={t('location.rulesTitle')}>
+    <div className="rule-panel-title">
+      <span aria-hidden="true"><MapPinned size={20} /></span>
+      <div><small>05</small><h3>{t('location.rulesTitle')}</h3></div>
+    </div>
+    <p>{t('location.rulesObjective')}</p>
+    <div className="rule-field-grid">
+      <div><strong>{t('location.rulesFlowTitle')}</strong><span>{t('location.rulesFlow')}</span></div>
+      <div><strong>{t('location.rulesScoreTitle')}</strong><span>{t('location.rulesScore')}</span></div>
+      <div><strong>{t('location.rulesModesTitle')}</strong><span>{t('location.rulesModes')}</span></div>
+      <div><strong>{t('location.rulesDifficultyTitle')}</strong><span>{t('location.rulesDifficulty')}</span></div>
+    </div>
+  </article>;
+}
+
+function CardLinkRulesContent() {
+  const { t } = useTranslation();
+  return <article className="rule-panel rule-panel-main" aria-label={t('card.title')}>
+    <div className="rule-panel-title">
+      <span aria-hidden="true"><CardLinkIcon size={20} /></span>
+      <div><small>06</small><h3>{t('card.title')}</h3></div>
+    </div>
+    <p>{t('card.homeRules.objective')}</p>
+    <div className="rule-field-grid rule-card-grid">
+      {['unlimited', 'limited', 'credits', 'teammates', 'recovery', 'scoring'].map(key => <div key={key}>
+        <strong>{t(`card.homeRules.${key}Title`)}</strong>
+        <span>{t(`card.homeRules.${key}`, { handSize: CARD_RULES.handSize, maxTokens: CARD_RULES.maxTokens })}</span>
+      </div>)}
+    </div>
+    <DifficultyRules />
+    <p>{t('card.dailySettings')} {t('card.dailyRankingRules')}</p>
+  </article>;
+}
+
+export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turtle-soup' | 'location' }) {
   const { t } = useTranslation();
   const soupOnly = variant === 'turtle-soup';
+  const locationOnly = variant === 'location';
   const [open, setOpen] = useState(false);
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -71,10 +111,10 @@ export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turt
         type="button"
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
-        data-umami-event={soupOnly ? 'soup-rules-open' : 'home-rules-open'}
+        data-umami-event={soupOnly ? 'soup-rules-open' : locationOnly ? 'location-rules-open' : 'home-rules-open'}
       >
         <BookOpen size={14} aria-hidden="true" />
-        {t(soupOnly ? 'soup.rules' : 'rules.trigger')}
+        {t(soupOnly ? 'soup.rules' : locationOnly ? 'location.rulesTrigger' : 'rules.trigger')}
       </button>
 
       {open && (
@@ -97,24 +137,24 @@ export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turt
                 </span>
                 <div className="game-rules-heading-copy">
                   <span className="game-rules-kicker">HOW TO PLAY</span>
-                  <h2 id={titleId}>{t(soupOnly ? 'soup.rules' : 'rules.title')}</h2>
-                  <p>{t(soupOnly ? 'soup.description' : 'rules.description')}</p>
+              <h2 id={titleId}>{t(soupOnly ? 'soup.rules' : locationOnly ? 'location.rulesTitle' : 'rules.title')}</h2>
+                  <p>{t(soupOnly ? 'soup.description' : locationOnly ? 'location.rulesDescription' : 'rules.description')}</p>
                 </div>
-                <strong className="guess-limit">{soupOnly ? t('soup.questionBudget', { count: SOUP_MAX_ATTEMPTS }) : <><span>{t('rules.max')}</span> {t('rules.guesses')}</>}</strong>
+                <strong className="guess-limit">{soupOnly ? t('soup.questionBudget', { count: SOUP_MAX_ATTEMPTS }) : locationOnly ? t('location.rulesLimit') : <><span>{t('rules.max')}</span> {t('rules.guesses')}</>}</strong>
                 <button
                   ref={closeRef}
                   className="confirm-close"
                   type="button"
                   aria-label={t('rules.close')}
                   onClick={closeRules}
-                  data-umami-event={soupOnly ? 'soup-rules-close' : 'home-rules-close'}
+                  data-umami-event={soupOnly ? 'soup-rules-close' : locationOnly ? 'location-rules-close' : 'home-rules-close'}
                 >
                   <X size={18} />
                 </button>
               </header>
 
               <div className="game-rules-dialog-body">
-                {soupOnly ? <SoupRulesContent /> : <>
+                {soupOnly ? <SoupRulesContent /> : locationOnly ? <LocationRulesContent /> : <>
                 <div className="rule-quick-guide" aria-label={t('rules.feedbackLabel')}>
                   <div className="rule-feedback rule-feedback-correct">
                     <span className="rule-color-swatch" aria-hidden="true" />
@@ -197,6 +237,8 @@ export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turt
                     </div>
                   </article>
                   <SoupRulesContent />
+                  <LocationRulesContent />
+                  <CardLinkRulesContent />
                 </div>
                 </>}
               </div>

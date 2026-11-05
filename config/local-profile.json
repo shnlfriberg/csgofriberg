@@ -1,0 +1,9 @@
+{
+  "database": "server/data/csgofriberg.sqlite3",
+  "assets": "data/location-assets",
+  "apiPort": 3002,
+  "webPort": 5175,
+  "redisPort": 16380,
+  "redisUrl": "redis://127.0.0.1:16380",
+  "redisPrefix": "friberg-integrated:"
+}

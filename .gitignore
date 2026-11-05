@@ -1,4 +1,6 @@
 node_modules/
+.tools/
+data/location-assets/
 dist/
 pow-wasm/target/
 *.sqlite3
@@ -6,6 +8,7 @@ pow-wasm/target/
 .env
 .DS_Store
 target/
+**/dist-cjs/
 *.tsbuildinfo
 origin/
 data/pgdata/
@@ -15,8 +18,19 @@ compose.override.yaml
 .claude/
 rule.txt
 AGENTS.md
+!/AGENTS.md
 .local-tools/
 .local-data/
 .local-logs/
 .local-scripts/
 client/tsconfig.tsbuildinfo
+# Private scraper checkout and its optional local workspace integration.
+external-scraper/
+compose.scraper.yaml
+scripts/run-local-scraper.ps1
+scripts/run-scraper-review.ps1
+scripts/scraper-python.ps1
+server/scripts/connect-local-scraper.ts
+爬取并提交审核.cmd
+爬虫预览.cmd
+integration/source-archives/

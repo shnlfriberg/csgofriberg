@@ -547,6 +547,7 @@
 }
 .rule-field-grid > div:nth-child(n + 2) { border-left-color: var(--close); }
 .rule-field-grid strong { font-size: 0.82rem; }
+.rule-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-bottom: 14px; }
 .rule-field-grid span { color: var(--text-light); font-size: var(--fs-xs); line-height: 1.5; }
 .rule-result-notes {
   display: grid;
@@ -630,6 +631,41 @@
 .multi-lobby-create-card { grid-area: create; }
 .multi-lobby-match-card { grid-area: match; }
 .multi-lobby-join-card { grid-area: join; }
+.admin-presence-strip {
+  flex: 0 0 auto;
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-soft);
+  scrollbar-width: thin;
+}
+.admin-presence-strip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.admin-presence-items {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  width: max-content;
+  min-width: 100%;
+  margin: 0;
+  padding: 13px 0;
+}
+.admin-presence-items > div {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 0 auto;
+  gap: 7px;
+  padding: 0 10px;
+  white-space: nowrap;
+  border-right: 1px solid var(--border);
+}
+.admin-presence-items > div:last-child { border-right: 0; }
+.admin-presence-items dt { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-sec); }
+.admin-presence-items dd { margin: 0; color: var(--text); font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-presence-online svg, .admin-presence-online dd { color: var(--primary); }
+
 .presence-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

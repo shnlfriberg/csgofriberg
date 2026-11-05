@@ -1,0 +1,5 @@
+.cl-difficulty-rules table { width: 100%; border-collapse: collapse; font-size: inherit; }
+.cl-difficulty-rules th, .cl-difficulty-rules td {
+  padding: 8px; text-align: left; border-bottom: 1px solid #80808040;
+}
+.cl-difficulty-rules th { white-space: nowrap; }

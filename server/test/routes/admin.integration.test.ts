@@ -718,6 +718,8 @@ describe('admin user management', () => {
         region: 'Asia',
         team: 'Export Test',
         team_history: [],
+        career: null,
+        career_revision: 0,
         age: 24,
         role: 'Rifler',
         major_championships: 0,

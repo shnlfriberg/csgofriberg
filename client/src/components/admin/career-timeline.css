@@ -1,0 +1,50 @@
+.cl-admin, .cl-career { min-width: 0; max-width: 100%; }
+.cl-career-meta { display: flex; flex-wrap: wrap; gap: 16px 28px; padding: 16px; border: 1px solid #8884; border-radius: 10px; }
+.cl-career-meta dt, .cl-career-table small { font-size: 12px; opacity: .75; }
+.cl-career-meta dd { margin: 4px 0 0; overflow-wrap: anywhere; }
+.cl-career-revision { flex-basis: 100%; font-family: monospace; }
+.cl-career-note { font-size: 13px; line-height: 1.7; opacity: .85; }
+.cl-career-scroll { width: 100%; overflow-x: auto; border: 1px solid #8884; border-radius: 10px; }
+.cl-admin .cl-career-table { width: 100%; min-width: 610px; border-collapse: collapse; font-size: 13px; }
+.cl-career-table caption { text-align: left; padding: 12px; font-weight: 600; }
+.cl-admin .cl-career-table th, .cl-admin .cl-career-table td { padding: 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #8883; }
+.cl-career-table thead { background: #8881; }
+.cl-career-table tbody tr:nth-child(even) { background: #8881; }
+.cl-career-table small { display: block; margin-top: 5px; max-width: 190px; }
+.cl-career-table .cl-career-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.cl-career-raw { min-width: 210px; overflow-wrap: anywhere; }
+.cl-career-warning { color: #ffb65c; }
+.cl-career-picker { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.cl-career-picker label { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; min-width: 0; }
+.cl-career-picker input, .cl-career-picker select { width: 100%; min-width: 0; min-height: 42px; padding: 9px 12px; border: 1px solid #8886; border-radius: 6px; font: inherit; }
+.cl-career-editor { margin-top: 18px; }
+.cl-career-editor summary { cursor: pointer; margin-bottom: 12px; }
+.cl-career-workspace { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 24px; margin-top: 20px; align-items: start; }
+.cl-player-browser { border: 1px solid #8884; border-radius: 12px; padding: 14px; min-width: 0; }
+.cl-player-browser input, .cl-player-browser select { display: block; width: 100%; min-width: 0; padding: 10px; font: inherit; color: inherit; background: var(--bg-secondary, #8881); border: 1px solid #8885; border-radius: 6px; margin: 8px 0; }
+.cl-player-browser option { color: #222; background: white; }
+.cl-player-browser label { font-size: 13px; }
+.cl-filter-label { display: block; margin-top: 12px; }
+.cl-player-results { display: grid; gap: 5px; }
+.cl-player-result { display: flex; justify-content: space-between; align-items: center; text-align: left; gap: 10px; border: 1px solid transparent; padding: 10px; border-radius: 7px; color: inherit; background: transparent; cursor: pointer; min-width: 0; }
+.cl-player-result strong { overflow-wrap: anywhere; }
+.cl-player-result small { display: block; font-size: 11px; opacity: .7; }
+.cl-player-result:hover, .cl-admin button[aria-pressed="true"] { background: #8882; border-color: #a1ba5b; }
+.cl-player-result:focus-visible { outline: 2px solid #a1ba5b; }
+.cl-picker-pages { justify-content: space-between; margin-top: 14px; }
+.cl-career-detail { min-width: 0; }
+.cl-career-detail h3 { margin-top: 0; }
+.cl-career-summary { display: flex; flex-wrap: wrap; gap: 10px 20px; padding: 12px 0; font-size: 13px; }
+.cl-career-metadata { margin-bottom: 16px; }
+.cl-career summary { cursor: pointer; font-size: 13px; }
+.cl-tenure-filters { margin: 12px 0 0; }
+.cl-tenure-evidence { margin: 12px 0; min-width: 170px; }
+.cl-tenure-evidence dt { opacity: .65; font-size: 11px; }
+.cl-tenure-evidence dd { margin: 2px 0 8px; overflow-wrap: anywhere; }
+.cl-manual-evidence { border-top: 1px solid #8884; margin-top: 10px; padding-top: 10px; overflow-wrap: anywhere; }
+.cl-manual-evidence p { max-width: 330px; font-size: 12px; }
+.cl-career-empty { padding: 50px 24px; border: 1px dashed #8885; border-radius: 12px; text-align: center; opacity: .7; }
+@media (max-width: 950px) { .cl-career-workspace { grid-template-columns: 1fr; } .cl-player-results { grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); } }
+
+.cl-admin .btn[aria-pressed="true"] { color: inherit; }
+.cl-career-workspace[hidden] { display: none; }

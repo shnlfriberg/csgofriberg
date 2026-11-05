@@ -49,10 +49,15 @@ x-app-environment: &app-environment
   UMAMI_SCRIPT_URL: ${UMAMI_SCRIPT_URL:-https://cloud.umami.is/script.js}
 
 x-app-service: &app-service
-  image: ${IMAGE:-ghcr.io/xinhai-ai/csgofriberg:latest}
+  image: ${IMAGE:-ghcr.io/shnlfriberg/csgofriberg:latest}
   restart: unless-stopped
   init: true
   stop_grace_period: 30s
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
   depends_on:
     migrate:
       condition: service_completed_successfully
@@ -60,9 +65,11 @@ x-app-service: &app-service
       condition: service_healthy
   environment: *app-environment
   read_only: true
+  volumes:
+    - location-assets:/app/location-assets
   tmpfs:
     - /tmp:size=16m,mode=1777
-  mem_limit: 256m
+  mem_limit: 512m
   security_opt:
     - no-new-privileges:true
   healthcheck:
@@ -78,7 +85,7 @@ x-app-service: &app-service
 
 services:
   migrate:
-    image: ${IMAGE:-ghcr.io/xinhai-ai/csgofriberg:latest}
+    image: ${IMAGE:-ghcr.io/shnlfriberg/csgofriberg:latest}
     restart: "no"
     init: true
     depends_on:
@@ -102,6 +109,33 @@ services:
     <<: *app-service
     ports:
       - 127.0.0.1:${APP_PORT_2:-3001}:3000
+
+  location-bank-import:
+    image: ${IMAGE:-ghcr.io/shnlfriberg/csgofriberg:latest}
+    profiles: [location-tools]
+    restart: "no"
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    environment: *app-environment
+    command: ["server/dist/location/importBank.js", "/release/initial-bank.zip"]
+    read_only: true
+    volumes:
+      - location-assets:/app/location-assets
+      - type: bind
+        source: ${LOCATION_BANK_FILE:-./.local-data/location-release/initial-bank.zip}
+        target: /release/initial-bank.zip
+        read_only: true
+        bind:
+          create_host_path: false
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    mem_limit: 512m
+    security_opt:
+      - no-new-privileges:true
 
   postgres:
     image: postgres:17-alpine
@@ -161,3 +195,4 @@ services:
 
 volumes:
   redis-data:
+  location-assets:

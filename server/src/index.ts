@@ -1,3 +1,5 @@
+import cardRoutes, { adminCardRoutes } from './card-link/routes';
+import { setupCardSocket } from './card-link/socket';
 import express from 'express';
 import http from 'http';
 import cors from 'cors';
@@ -40,6 +42,11 @@ import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './middlewa
 import { injectUmamiScript } from './services/umami';
 import runtimeConfigRoutes from './routes/runtimeConfig';
 import dailyChallengeRoutes from './routes/dailyChallenge';
+import locationRoutes, { adminLocationRoutes } from './location/routes';
+import { assetDirectory } from './location/assets';
+import { setupLocationSocket } from './location/rooms';
+import { startLocationDailyScheduler } from './location/dailyScheduler';
+import locationSubmissionRoutes from './location/submissionRoutes';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const CLOUDFLARE_INSIGHTS_SCRIPT_ORIGIN = 'https://static.cloudflareinsights.com';
@@ -192,9 +199,13 @@ async function main() {
   );
   app.use('/api/external', externalPlayerRoutes);
   app.use('/api', requirePow);
-  app.use('/api/admin/players/import', requireAuth, requireAdmin);
+  app.use('/api/admin/location', adminLocationRoutes);
+  // Screenshot bodies must be handled before the generic 64 KiB JSON/body gate.
+  app.use('/api/location/submissions', locationSubmissionRoutes);
+  const adminDataPaths = ['/api/admin/players/import', '/api/admin/card-link/careers'];
+  app.use(adminDataPaths, requireAuth, requireAdmin);
   app.use(
-    '/api/admin/players/import',
+    adminDataPaths,
     rejectOversizedBody(config.adminImportBodyLimitBytes),
     parseJsonOnce(`${config.adminImportBodyLimitBytes}b`)
   );
@@ -204,10 +215,14 @@ async function main() {
   app.use('/api/players', playerRoutes);
   app.use('/api/game', gameRoutes);
   app.use('/api/daily-challenge', dailyChallengeRoutes);
+  app.use('/api/location', locationRoutes);
+  app.use('/api/card-link', cardRoutes);
+  app.use('/api/admin/card-link', adminCardRoutes);
   app.use('/api/stats', statsRoutes);
   app.use('/api/leaderboard', leaderboardRoutes);
   app.use('/api/announcements', announcementRoutes);
   app.use('/api/admin', adminRoutes);
+  app.use('/location-assets', express.static(assetDirectory, { index: false, fallthrough: false, maxAge: '1y', immutable: true }));
 
   // 生产环境托管前端构建产物
   if (rawIndexHtml !== null) {
@@ -247,6 +262,9 @@ async function main() {
     }
   }
   const stopSocket = setupSocket(io);
+  const stopLocationSocket = setupLocationSocket(io);
+  const stopCardSocket = setupCardSocket(io);
+  const stopLocationDailyScheduler = startLocationDailyScheduler();
 
   server.listen(config.port, () => {
     console.log(`[server] 弗一把服务已启动: http://localhost:${config.port}`);
@@ -259,6 +277,10 @@ async function main() {
       shuttingDown = true;
       console.log(`[server] 收到 ${signal},开始优雅退出`);
       stopRuntimeMonitor();
+      await withTimeout(stopLocationDailyScheduler(), SHUTDOWN_TIMEOUT_MS, () => undefined)
+        .catch((err) => console.error('[shutdown:location-daily]', err));
+      await stopLocationSocket();
+      await stopCardSocket();
       const serverClosed = new Promise<void>((resolve) => {
         server.close(() => resolve());
         server.closeIdleConnections?.();

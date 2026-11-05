@@ -4,11 +4,13 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
+  packages: read
 
 concurrency:
   group: docker-${{ github.ref }}
@@ -37,11 +39,21 @@ jobs:
           node-version: 26
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit
       - run: pnpm test
+        env:
+          DB_CLIENT: sqlite
+          DB_URL: /tmp/friberg-verification/ci.sqlite3
+          LOCATION_ASSET_DIR: /tmp/friberg-ci-assets
+          REDIS_PREFIX: 'friberg-ci:'
+          NODE_ENV: test
       - run: pnpm build
 
   docker:
     needs: test
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -72,8 +84,31 @@ jobs:
           context: .
           file: ./Dockerfile
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          load: ${{ github.event_name == 'pull_request' }}
+          push: false
+          load: true
+          tags: friberg-candidate:${{ github.sha }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            OCI_SOURCE=https://github.com/${{ github.repository }}
+            OCI_REVISION=${{ github.sha }}
+            OCI_VERSION=${{ steps.meta.outputs.version }}
+            RESOURCE_VERSION=${{ steps.resource_version.outputs.value }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          sbom: false
+      - name: Verify isolated PostgreSQL migrations and production runtime
+        run: bash scripts/verify-production.sh "friberg-candidate:${{ github.sha }}"
+      # Same checkout and build arguments reuse the verified runtime layers;
+      # registry output additionally retains provenance and SBOM attestations.
+      - name: Publish verified build inputs with attestations
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
@@ -83,12 +118,5 @@ jobs:
             RESOURCE_VERSION=${{ steps.resource_version.outputs.value }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          # The PR image is loaded into the runner's possibly classic image
-          # store; release pushes retain provenance and SBOM attestations.
-          provenance: ${{ github.event_name != 'pull_request' && 'mode=max' || 'false' }}
-          sbom: ${{ github.event_name != 'pull_request' }}
-      - name: Verify isolated PostgreSQL migrations and production runtime
-        if: github.event_name == 'pull_request'
-        env:
-          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
-        run: bash scripts/verify-production.sh "${IMAGE_TAGS%%$'\n'*}"
+          provenance: mode=max
+          sbom: true

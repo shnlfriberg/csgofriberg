@@ -19,6 +19,31 @@ function createInstance() {
 }
 
 describe('database schema initialization', () => {
+  it('adds recovery storage idempotently while preserving accounts and binding codes', async () => {
+    const instance = createInstance(); await ensureSchema(instance);
+    await instance.schema.dropTable('password_resets');
+    const [user] = await instance('users').insert({ username: 'recovery-legacy', password_hash: 'keep', email: 'keep@example.com' }).returning('*');
+    await instance('email_verifications').insert({ user_id: user.id, email: user.email, token_hash: 'keep-binding-code', expires_at: '2099-01-01' });
+    await ensureSchema(instance); await ensureSchema(instance);
+    expect(await instance('users').where({ id: user.id }).first()).toEqual(user);
+    expect((await instance('email_verifications').first()).token_hash).toBe('keep-binding-code');
+    expect(await instance.schema.hasColumn('password_resets', 'attempts')).toBe(true);
+  });
+  it('adds durable submission receipts and scopes without changing existing tokens or review values', async () => {
+    const instance = createInstance();
+    await ensureSchema(instance);
+    await instance.schema.dropTable('external_submission_requests');
+    await instance.schema.alterTable('api_tokens', t => t.dropColumn('scopes'));
+    await instance.schema.alterTable('player_change_items', t => t.dropColumn('observed_value'));
+    const [user] = await instance('users').insert({ username: 'scope-legacy', role: 'admin', password_hash: 'keep' }).returning('id');
+    const [token] = await instance('api_tokens').insert({ name: 'keep-token', token_hash: 'unchanged-hash', prefix: 'keep', created_by_user_id: user.id, expires_at: '2099-01-01' }).returning('id');
+    const before = await instance('api_tokens').where({ id: token.id }).first();
+    await ensureSchema(instance); await ensureSchema(instance);
+    expect(await instance('api_tokens').where({ id: token.id }).first()).toEqual({ ...before, scopes: null });
+    expect(await instance.schema.hasColumn('player_change_items', 'observed_value')).toBe(true);
+    expect(await instance('external_submission_requests').count({ count: '*' }).first()).toMatchObject({ count: 0 });
+  });
+
   it('upgrades legacy games without altering their results', async () => {
     const instance = createInstance();
     await ensureSchema(instance);

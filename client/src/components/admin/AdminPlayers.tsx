@@ -151,6 +151,7 @@ export default function AdminPlayers() {
       const res = await api.post('/admin/players/import', { players: list });
       clearPlayerListCache();
       toast.success(t('admin.importDone', { created: res.data.created, updated: res.data.updated }));
+      if (res.data.careerReviews) toast.success(t('card.careerView.importReviews', { count: res.data.careerReviews }));
       setImportText('');
       if (page !== 1) setPage(1);
       else await load();
@@ -313,6 +314,7 @@ export default function AdminPlayers() {
       </div>
       <div className="card admin-import-card">
         <h3>{t('admin.importTitle')}</h3>
+        <p>{t('card.careerView.exportNote')}</p>
         <p className="muted">
           {t('admin.importDescription')}
         </p>

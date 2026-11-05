@@ -1,0 +1,1088 @@
+{
+  "schemaVersion": 1,
+  "reviewedDate": "2026-11-06",
+  "repository": "https://github.com/shnlfriberg/csgofriberg.git",
+  "branch": "main",
+  "commit": "99f2e471474cfefd38de13033608bdc816a24242",
+  "normalization": "CRLF to LF, all other bytes retained",
+  "ignoredGenerated": [
+    "client/tsconfig.tsbuildinfo"
+  ],
+  "files": {
+    ".dockerignore": {
+      "upstreamSha256": "a5ebcf4a42c2c38bcc95c59d3df97bdf67a47cac3e99a5ac271f41ba5c4134dd",
+      "localSha256": "75586bfeb44c54ca385c2d659d72cf1755390767656f1d76f6e1c486045b45a2",
+      "reason": "Exclude local artifacts, generated package output and separately distributed release-data archives from the Docker build context."
+    },
+    ".env.example": {
+      "upstreamSha256": "53af9051872c3f312344a829c3a67ac1437bc87a3110b44d4e316adc3589284a"
+    },
+    ".github/ISSUE_TEMPLATE/bug-report.yml": {
+      "upstreamSha256": "c56c782a4596ef1d1a71f135627f4e53f35511aa89f559b86e9974543c5f2733"
+    },
+    ".github/ISSUE_TEMPLATE/config.yml": {
+      "upstreamSha256": "35311b1f990b1e7fe7f9ef0a8cb20dae762ad43cdf03ff29962f0c7dd1c2b666"
+    },
+    ".github/ISSUE_TEMPLATE/feature-request.yml": {
+      "upstreamSha256": "31c0f2d4fb1be3aa68a60681203a2b12c213942c5718957170d02a46cb121526"
+    },
+    ".github/workflows/docker.yml": {
+      "upstreamSha256": "ccb3706a18e93e5d55835a776e3ad3dbef3020c1f73b5b16387a2ff90ae4de08",
+      "localSha256": "f457ec4961b0d30c263a513c99c4d30f966659a1ccc30795a64c22455fff7964",
+      "reason": "Retain game dependency audit, isolated tests and image acceptance; scraper tests/build are owned by the independent private repository."
+    },
+    ".gitignore": {
+      "upstreamSha256": "1520dcc5996385000e1b420826c678350bb903b4b22f3f1e8dcc78b341cbd9c8",
+      "localSha256": "b81639dd640cfeea56913543cec73094b0ae745dc3e4923f740d65ec76ad1dbc",
+      "reason": "Exclude the private scraper checkout and dedicated workspace integration from public source control."
+    },
+    ".node-version": {
+      "upstreamSha256": "068a0a6e1f02416d0c46e50a46a679eff53f1b748c8c3e559a2c64ef950cc781"
+    },
+    "Dockerfile": {
+      "upstreamSha256": "109e3162c0a0ac73dbbb1de0c9331eeb9b9ac31f9ffe95a9b57afbf23a7ddbbb",
+      "localSha256": "ac1e6387bfdf6977749431be0db22592fd181ae0b45e689a229858317aeab554",
+      "reason": "Build and deploy the shared location-core workspace package alongside the location extension. Reviewed 2026-10-24: Add card-link-core workspace manifest to the frozen container dependency build."
+    },
+    "LICENSE": {
+      "upstreamSha256": "8486a10c4393cee1c25392769ddd3b2d6c242d6ec7928e1414efff7dfb2f07ef"
+    },
+    "README.md": {
+      "upstreamSha256": "a1ecb7e68badbded8e81baf40169acb5c998597b5099aa83f593402e9e3a94ea",
+      "localSha256": "a95712393aa18d34a02a13677dce65bacd6defe0e3c55110319f0de91b50cf05",
+      "reason": "Document public game/private scraper boundary and retain public content snapshot import instructions."
+    },
+    "client/index.html": {
+      "upstreamSha256": "bcd9cb20baed8f99f1bc9c0a5ff18eacfded8865de95e148e3118d4be5e3e489"
+    },
+    "client/package.json": {
+      "upstreamSha256": "6eddbb641b118ef78ad1af093bcfa34075f472ece6443a4a314e22a606602751",
+      "localSha256": "bf5539d1484a6b2d57d1d1895ba6fd06eced184f45a8e1abe5356cce04f57ea0",
+      "reason": "Retain shared game packages; update Axios, React Router, Vite and Vitest for audited security fixes, verified by build and 331 client tests."
+    },
+    "client/public/pow/csgofriberg_pow.wasm": {
+      "upstreamSha256": "a7acd6720ffbb5d8cae64702fdffcfe01fb1c0169d36bdecd8c8d95ac693ae5e"
+    },
+    "client/public/pow/source.sha256": {
+      "upstreamSha256": "6148bad52e34e1da8bd5201d9372850107d67f7f9196beb24d23dc22e9f13701"
+    },
+    "client/src/api/authSession.ts": {
+      "upstreamSha256": "6dcb2a6ed8ec1b3ca7f42451bf6b45cc1efcb0fa37d89cb2e960531d8714240a"
+    },
+    "client/src/api/client.ts": {
+      "upstreamSha256": "eac362ad38e0c078d6f148bbc21792ee9a484654055ebad55840ce763c4c8cd9"
+    },
+    "client/src/api/geetest.ts": {
+      "upstreamSha256": "b38e539d549fcfe7aaaee72dfbe990dbeb412a40d40e6100439d220e4c2e5854"
+    },
+    "client/src/api/playerList.ts": {
+      "upstreamSha256": "7a92a1c38d6572082e66c7f50e645061732e50e716456ff9d5c87e8b44ca5901"
+    },
+    "client/src/api/pow.fallback.worker.ts": {
+      "upstreamSha256": "ebc9b4d528e3d24e2038d1e9997564ebff7609678ef6c5c367463e96255c9796"
+    },
+    "client/src/api/pow.ts": {
+      "upstreamSha256": "c2e3a96c89dd3a033a678376e7e6016da94e721c78ae4cac7c88c552fd91818d"
+    },
+    "client/src/api/pow.worker.ts": {
+      "upstreamSha256": "a6f24a4465d7331d9d19a1adc91183f4d2429d5c5e5770da2257468d3ab1d390"
+    },
+    "client/src/api/powJs.ts": {
+      "upstreamSha256": "b95aa1a4ff10694a836ae1f2a72c0aa90accb8ff32d52bd12ef36fe453777adf"
+    },
+    "client/src/api/session.ts": {
+      "upstreamSha256": "c1dda737d31fc74421bebdea95233abdecdbb41db9f2e1d257396280b5f65eda"
+    },
+    "client/src/api/socket.ts": {
+      "upstreamSha256": "975b6e74c0fb4fa4eda1c0d429c79b34e623dbfa783560d43a85f3ae42863bba"
+    },
+    "client/src/assets/OuseTonae.jpg": {
+      "upstreamSha256": "76b19bedeb6a696b7c2316db7512e8fb2ed86f23e01102787f997c024e0f8d2b"
+    },
+    "client/src/assets/wjq.jpg": {
+      "upstreamSha256": "e9b29e1ba4efc55e62b2d0189d74a37a76a76a1b13528c29a5b3990be1d00f16"
+    },
+    "client/src/components/AnnouncementDialog.tsx": {
+      "upstreamSha256": "b09a3c2ef01bfcb3c0f3c75466de081638406a5079370331c7d0e5ecc609d96f"
+    },
+    "client/src/components/AnswerOverlay.tsx": {
+      "upstreamSha256": "6a0e6ea405c1ac095ce8b4532c6735d890e3fe3893d491d17084add41247f9c2"
+    },
+    "client/src/components/Badge.module.css": {
+      "upstreamSha256": "99a57950eceb2f3c9c593bf513f9106e68bfa13e62fa51b63997134416f7b479"
+    },
+    "client/src/components/Badge.tsx": {
+      "upstreamSha256": "e23119fc66fe490446fcdc97392613cfb3a5eb7cff43babab8f008a2ae3d0a2b"
+    },
+    "client/src/components/ConfirmDialog.tsx": {
+      "upstreamSha256": "4885daee07343d772b61edc3751d96f78dd0e05ed8108a133dc6c0c8c2345039"
+    },
+    "client/src/components/DataTable.module.css": {
+      "upstreamSha256": "3bcdd6dc88fa41cafd0e0259a5b7c832d791bf5733cd203b53769eb6bd6e04d3"
+    },
+    "client/src/components/DataTable.tsx": {
+      "upstreamSha256": "8a010cfc19f17acac559391333904fecc8f825443121f498ae566839284be70c"
+    },
+    "client/src/components/GameRules.tsx": {
+      "upstreamSha256": "e63a4bb1de766ab1bac360ab802d064500f54d3baba1f782e6f7134b90859790",
+      "localSha256": "b8dc33ad64a3c419590f5d217f8d3b675610044fca2478f10bd76332a5fae6ac",
+      "reason": "2026-10-24: Add home card-link rules for unlimited/limited hands using shared hand-size and credit limits; preserve existing rule variants. 2026-10-25: Include the shared difficulty table requested by the user (2 / 3 / 4-5 shortest links)."
+    },
+    "client/src/components/GuessBoard.tsx": {
+      "upstreamSha256": "3dd5cda61c236d365537191461fc887bd39b8a74bf64605ae4915129ec039114"
+    },
+    "client/src/components/GuessInputBar.tsx": {
+      "upstreamSha256": "2910e578db112368f975f66e62b2876634beb67c6d9dcd0bc1bdfcd5b860848f"
+    },
+    "client/src/components/HomeFriendLinks.tsx": {
+      "upstreamSha256": "3d2c5c4212fd893c3380e6007779caab8e5bc18a46394c7ec8194aaf55f4347c"
+    },
+    "client/src/components/HomeSpecialThanks.tsx": {
+      "upstreamSha256": "161881b7d0f428f5046c4d3a76243d9dfddd2505a0247448fa3069bf50dcf4bc"
+    },
+    "client/src/components/LanguageSelect.tsx": {
+      "upstreamSha256": "f4de5dd921d3fbab3453ce696d1f4b92be3b2c27c180048e393afd5f79981e6a"
+    },
+    "client/src/components/MenuCard.tsx": {
+      "upstreamSha256": "0bf1ec3030063ed6e171e129dc2cf1b2111aa71f5d97d264b3d6d90a0b2be4ca"
+    },
+    "client/src/components/ModalPortal.tsx": {
+      "upstreamSha256": "65a2702b255c51c846bace0c857c5ec206df4d887ace5d470b28b40987a1c053"
+    },
+    "client/src/components/Page.tsx": {
+      "upstreamSha256": "091b674b64b1717bef65fb170710b60d34c805e59cce0f7ae2b7e52c884b1a5d"
+    },
+    "client/src/components/PersonalSettings.tsx": {
+      "upstreamSha256": "ffcd5d1ba021beec1e23bca0ba96bdd14b559d62f360342ef11b6463c7489b56"
+    },
+    "client/src/components/PlayerStatsDialog.tsx": {
+      "upstreamSha256": "5b55a7b1909e4fefd2b0b28c3b05de49633c319ebb4c7b7f84f1e6bb6ac570ac"
+    },
+    "client/src/components/PlayerStatsSummary.tsx": {
+      "upstreamSha256": "beda4563a5a328d78f9f871263dafc389830ad791dd1d0506e4c12e190ebdbd0"
+    },
+    "client/src/components/ReplayDialog.tsx": {
+      "upstreamSha256": "02e33f86d278f165cd067b66707415b7d7c22b8ab42582cd1958e9e521daa9f6"
+    },
+    "client/src/components/ResourceUpdateDialog.tsx": {
+      "upstreamSha256": "881c5e52b30070a76b5d48ff7ea2fc2d7f6cb07cd0146f57144a32f28d3782f2"
+    },
+    "client/src/components/RouteError.tsx": {
+      "upstreamSha256": "156f2fc6a0be0f66d4da77f5d08069ebbb8715bb3506e4c5c8a5751de9157335"
+    },
+    "client/src/components/SoupLog.tsx": {
+      "upstreamSha256": "c152712d318774974618e43a28fd9d5a72ebc3ee342327b6b565792ddbf1fa43"
+    },
+    "client/src/components/SoupOptionInput.tsx": {
+      "upstreamSha256": "4d95fa91a64c1756178afb7abb2b672584a8973aaa7f90c001bfc0d895cd0ff7"
+    },
+    "client/src/components/ThemeToggle.tsx": {
+      "upstreamSha256": "eab4d202d58a726f4a50ba85b1d6a76c1cd21f69b83f77be0415d0d93f96b580"
+    },
+    "client/src/components/Toast.module.css": {
+      "upstreamSha256": "c4247ce480afe6de2195c870255e752b7f94d8fa3828b2fd9250cf149a4d2d7d"
+    },
+    "client/src/components/Toast.tsx": {
+      "upstreamSha256": "653466f7a5176cad0dcae5fb34e6e2492964b6e43812abd3408c0a86a6c4c312"
+    },
+    "client/src/components/admin/AdminAnnouncements.tsx": {
+      "upstreamSha256": "97574ea854b3387709574cca7475265c7b9d375bb9ff21d196c7a4215b3c1ccb"
+    },
+    "client/src/components/admin/AdminApiTokens.tsx": {
+      "upstreamSha256": "6b543333378506f0e2e580275b21c4343660aa70ee7eca79d19ffbb984c8e457",
+      "localSha256": "1000558ab37ab9601e047d55953e0113a4ce279a7ff8a4c884976ca1cda58c87",
+      "reason": "Explicit direct-write scope selection, review-only default and visible grants; reset form privilege after creation."
+    },
+    "client/src/components/admin/AdminPlayerChanges.tsx": {
+      "upstreamSha256": "5fd73316cba2bcbccc724223458ede5866d843ca2b0b596f1938726bd215d09a",
+      "localSha256": "cc774eecc41289508c6cb8aa5846543ba417922359e28b50f51154604c549964",
+      "reason": "Show observed database value beside crawl baseline and proposed value for conflict review."
+    },
+    "client/src/components/admin/AdminPlayers.tsx": {
+      "upstreamSha256": "12a570553719697aeb5af207997ceab772337d25f52148c3bce89429b906338c",
+      "localSha256": "7445b7af57d0efdf92fd1d4c635a9b193569892b4caa5a449825b4febb66ae6e",
+      "reason": " Reviewed 2026-10-24: Explain career-inclusive JSON export and review-queued imports; surface career review count."
+    },
+    "client/src/components/admin/AdminReports.tsx": {
+      "upstreamSha256": "2ba195bed1942da309010b5cfba2c3aa9a85e2a4bb3a5e35e57258d5f6d44258"
+    },
+    "client/src/components/admin/AdminResourceVersion.tsx": {
+      "upstreamSha256": "3f56736da781b088c6263ffa17353b4fdd43992433e1c11d1be1b265b28a6d94"
+    },
+    "client/src/components/admin/AdminUsers.tsx": {
+      "upstreamSha256": "4af0a35c64008f732ced1f3de7751938dd10146318ac91c5ebd662095491b239"
+    },
+    "client/src/components/admin/DifficultyMultiSelect.tsx": {
+      "upstreamSha256": "20f75064e25c5d8cb24c6bce337029e10265641359f3dd6d4cc20ffa2805f0a7"
+    },
+    "client/src/components/admin/ExternalAnalysisPanel.tsx": {
+      "upstreamSha256": "2174d8545a535df2a7c3a53756f788af7612a42846ff265bf80683ed07cfc472"
+    },
+    "client/src/components/admin/PlayerEditForm.tsx": {
+      "upstreamSha256": "cdcd78771471a25a750df1eb85901e787aaa9c311b79110baeb7928ea93c75b6"
+    },
+    "client/src/config/difficulties.ts": {
+      "upstreamSha256": "b697e95f9ce54771ecc1f3b118127b4af628a95f17e70b47339dfce68f5cbb55"
+    },
+    "client/src/config/friendLinks.ts": {
+      "upstreamSha256": "9f40197b86b0cd95222b37697c42663f2e7e4404fdcc892ab8e3ed3a420f37ff"
+    },
+    "client/src/config/specialThanks.ts": {
+      "upstreamSha256": "823c7b20f9acb3861c83c2d76d46f26e260661f8306369e4612826779d116ce7"
+    },
+    "client/src/hooks/useTurtleSoup.ts": {
+      "upstreamSha256": "f56cc11f97cb52e1543e38c32cbc9dfd055307b8fc68ce2f51bd1994c054e72a"
+    },
+    "client/src/i18n/index.ts": {
+      "upstreamSha256": "f8862df39dd7e39d320802403ef3170edbc695f1aff47ea52dcff8e9e6b5a1c7"
+    },
+    "client/src/i18n/messages.ts": {
+      "upstreamSha256": "5579afc97d382a7f63c3edbedd926d4500a14b026f7267e5ce89a19615bde669"
+    },
+    "client/src/i18n/resources.ts": {
+      "upstreamSha256": "276ed4872436a8e522a61bbce528f75fd5efb0a502d8f56069c2332286799f54",
+      "localSha256": "9e4dbcd89280581316147e6d44e7a3ab1ae6cd45439d3dfc5713a6a30f745195",
+      "reason": "Translate scope and idempotency errors in all three supported languages. Reviewed 2026-10-24: Register card-link translations and domain error messages in zh/en/ja. 2026-10-24: Add zh/en/ja admin presence labels for all thirteen mode counters. Reviewed 2026-10-24 password recovery: Add zh/en/ja password recovery messages and generic invalid-code error."
+    },
+    "client/src/i18n/turtleSoup.ts": {
+      "upstreamSha256": "876b29d3193d33917abfc394c31d1affd324845f2e1cbfbbed231c997f7ea8c0"
+    },
+    "client/src/main.tsx": {
+      "upstreamSha256": "35860fc544763a792361d8fb8c48ae59adc31dd16caff5be57b157d75d264970"
+    },
+    "client/src/pages/Admin.tsx": {
+      "upstreamSha256": "4eec3f4804f0b6699c7e5f219a985e730af8923abb141d5208e4d30be9a319d0",
+      "localSha256": "db59b5c628e5c34572b2624d7612abaa463c0d7ce2c9274dea82370de4b22edf",
+      "reason": "Retain the visited location workspace and pass visibility across top-level tabs so unsaved image queues survive. Reviewed 2026-10-24: Add lazy career review tab and preserve its unsaved draft while switching tabs. 2026-10-24: Replace coarse presence cards with a single-row detailed presence component; keep existing admin subscriptions and panels. 2026-10-28: Restore validated per-account admin navigation from sessionStorage and mount restored visited workspaces."
+    },
+    "client/src/pages/Announcements.tsx": {
+      "upstreamSha256": "941de93fb5320da662aee27cce00edfa6e97eb3add2d4cddc15c533217d8a21d"
+    },
+    "client/src/pages/DailyChallenge.tsx": {
+      "upstreamSha256": "430a68d9b79c0ad8db6bdd5151e4cfa83168b462afd0a74af3091ee8ed3693ae"
+    },
+    "client/src/pages/DailyLobby.tsx": {
+      "upstreamSha256": "47f0d2077a31c49ee91d3117091f32a741faa8538a72a1083b027d00d987a884"
+    },
+    "client/src/pages/EmailVerify.tsx": {
+      "upstreamSha256": "f888fb7ba25663ba9b55d538688ffea8cc02333f64d2e6521816dfab42d4977b"
+    },
+    "client/src/pages/Home.tsx": {
+      "upstreamSha256": "3b2b315272514f12644aed88ea3af85872a9d6574cc5e972334f507d28d07037",
+      "localSha256": "acd268bc87a556cb4ef4f70a41ebd13d8107d7b51a5167c6fc42cdf2f6c71c54",
+      "reason": "Route entertainment to location and turtle-soup mini-games; use a custom unfilled duck icon matching the existing Lucide menu style."
+    },
+    "client/src/pages/Leaderboard.tsx": {
+      "upstreamSha256": "ee6f7fe9e3341d506743ac00f29459b1c47da1153ea596c05ff661caaf2e83ff",
+      "localSha256": "86fcabf39117da8d73eee5c1320203557b8d8de70607425c9ad1bf50f76b1d36",
+      "reason": "Add the location contribution leaderboard."
+    },
+    "client/src/pages/Login.tsx": {
+      "upstreamSha256": "ad2eb9c41d0518695c2ce1590e9193d8cbded110bd5c988d92fb4bc983a1f09b",
+      "localSha256": "bd02c35ecc29b24a446703ec6c0fe2cbc9dffb3005e248c6abd5cd6a6a4102f2",
+      "reason": " Reviewed 2026-10-24 password recovery: Add the forgot-password entry using the existing login page."
+    },
+    "client/src/pages/MultiLobby.tsx": {
+      "upstreamSha256": "858fefeb517ea8be8c8be4a39aebf59b92eacc728d6e9049389650176831283a"
+    },
+    "client/src/pages/MultiRoom.tsx": {
+      "upstreamSha256": "181218d912083903428fd63cdbf510b3a3754e981f61f8e62402d9b8ab8e6a30"
+    },
+    "client/src/pages/NotFound.tsx": {
+      "upstreamSha256": "aa159d76de0b05bb7330853d0436d3f7f4500c242c652df326dccd4402ed749d"
+    },
+    "client/src/pages/Search.tsx": {
+      "upstreamSha256": "a58de7140a69d2abaccdf9c9c225bc527f3e88fcce606d8128b868ebb92f8e34"
+    },
+    "client/src/pages/SingleGame.tsx": {
+      "upstreamSha256": "15ea369de5a4aba3ec3d8c00f0641b85899f28ac54f63b53ea940cbb288b6994"
+    },
+    "client/src/pages/SingleLobby.tsx": {
+      "upstreamSha256": "d81c2e25ada83c2dc8aa00e490ba190256c06f1dca22632d6a4766a7a929cb0b"
+    },
+    "client/src/pages/Stats.tsx": {
+      "upstreamSha256": "b3210bc2e03a1f6ce65b746e1a6df1a6e989c765b0ae241159239512a917a193",
+      "localSha256": "800c8c37c695d8d6f8d043d18c53d4ca7616228a687018e8b16cbba44c774e4b",
+      "reason": "Add location statistics and shared mode tabs; classic and soup APIs are preserved. Reviewed 2026-10-24: Route the card-link career tab to its own statistics component, keyed by current identity."
+    },
+    "client/src/pages/TurtleSoupGame.tsx": {
+      "upstreamSha256": "00837b6ef33f34c9816bdfb95bca10e7a54fff6d088a19b767c121d39e50784c"
+    },
+    "client/src/pages/TurtleSoupLobby.tsx": {
+      "upstreamSha256": "69718d6153cd92698c7b5f9fb47ff2b8bd45ac9e062aa7790c28a195ee431afc"
+    },
+    "client/src/resourceVersion.ts": {
+      "upstreamSha256": "14aff9669f608e9f50ded4060e2a37d8f68d30809ca236dbded6805edeeaf9f4"
+    },
+    "client/src/router.tsx": {
+      "upstreamSha256": "eae56a266a95e4a22bb74050d637fd60d79bc982b7123958df9414020227d9d0",
+      "localSha256": "0f35afcd98f9f5c6939cffdb376d5d4ea481070ec12e19c7d93492d812dc11fc",
+      "reason": "Preserve local location routes and lazy-load heavy game/admin routes to reduce the initial bundle. Reviewed 2026-10-24: Register the card-link entertainment route after importing React lazy. Reviewed 2026-10-24: Add the location mode-selection route while preserving existing game routes. Reviewed 2026-10-24 password recovery: Register the public password recovery page; keep existing routes and authentication boundaries."
+    },
+    "client/src/store/auth.ts": {
+      "upstreamSha256": "83fba873b851a8a9ad831af3a1c0da8db2504d0614ec0860f8ef6c5bb26a5adb",
+      "localSha256": "af8ea4dd96c134eaccfc209468e2f1dc9e510ec005b0572fd169242b4f658080",
+      "reason": " Reviewed 2026-10-24: Clear pending card commands on actual identity switches."
+    },
+    "client/src/store/dailyDifficulty.ts": {
+      "upstreamSha256": "678134b222fe16edfeec04b6bc3c251f4838f3a2a276a3c768883e0dded9e7a7"
+    },
+    "client/src/store/guest.ts": {
+      "upstreamSha256": "c8967dbe2a2d452da62833e71a932fc810c2948894849123edac63939889d778"
+    },
+    "client/src/store/motion.ts": {
+      "upstreamSha256": "197f71c64b3d49fd5f7d00be556e7cc25478b3946e28240e974ab3114672618f"
+    },
+    "client/src/store/multiLobbyPreferences.ts": {
+      "upstreamSha256": "0ab786fb7201a6b12a5d05ec66bfa64223736c25e0a5a6e34175f1ee2de81e5f"
+    },
+    "client/src/store/singleDifficulty.ts": {
+      "upstreamSha256": "e915c9e9b0e067ba627719c66681bcbf0a164d9003b4fd64d27c231be814fd17"
+    },
+    "client/src/store/theme.ts": {
+      "upstreamSha256": "890da371752884d2081f5986527ce388de893206e550ce9b41686f0b4cf620a8"
+    },
+    "client/src/styles/controls.css": {
+      "upstreamSha256": "f6409bf2f28d6cf5e35ef1093578e4ffe0320f76f2d895394288cdca91b1a4ec"
+    },
+    "client/src/styles/daily.css": {
+      "upstreamSha256": "93830c44566e9fa2b06a2bd3bea3e8b9a0d4ed896f198fda0fd87a30e4d91ddb"
+    },
+    "client/src/styles/data-admin.css": {
+      "upstreamSha256": "b9dabfcd01b8e644d9cf8b5dfb84f1165e9ecc14fd690924720a920632574b2b"
+    },
+    "client/src/styles/game.css": {
+      "upstreamSha256": "a07fb324df57a7af32e21a8cc2f5d761cda0ffbed8716e988528f138b8fb658a"
+    },
+    "client/src/styles/home-multiplayer.css": {
+      "upstreamSha256": "80c8236b87e9467994dc1393cc9d2b72e9f742574aac2691972ba52ba2497276",
+      "localSha256": "66e2fd2028602a4cc56d3d3ec481cf6dde052201b18a8ae439ef5d73e0a23d41",
+      "reason": "2026-10-24: Add a two-column card-link rule grid that follows existing mobile breakpoints; preserve the reviewed admin presence strip."
+    },
+    "client/src/styles/index.css": {
+      "upstreamSha256": "e38fff7fc52c525507f4ace2474d696804ec2af5d293355d506daecc8d0e6ceb"
+    },
+    "client/src/styles/responsive.css": {
+      "upstreamSha256": "f5869d79301fd14fa9992dc88f84bc746cb2f11fa2a8e7711b90a7dba4c6e59c"
+    },
+    "client/src/styles/shell.css": {
+      "upstreamSha256": "781c920e0a43f89778cc7ccccefae6ec2bc23e58a8ec1370e323dda701c6223b"
+    },
+    "client/src/styles/themes/blast-foundation.css": {
+      "upstreamSha256": "80c6f8c75d3dcda9776d75ef2b88e8be8e7ac9e7682fc5c07bdfd581f0f38a0e"
+    },
+    "client/src/styles/themes/blast-pages.css": {
+      "upstreamSha256": "86876ec0d6e98a86eeed43fe0135bd1bbe1299db643307d8e23a882df24c313c"
+    },
+    "client/src/styles/themes/blast-responsive.css": {
+      "upstreamSha256": "745a3100f95abc2fe5af8b30ce5a03cb2ce1286b5176f8e62a83082fcacd97a5"
+    },
+    "client/src/styles/themes/light.css": {
+      "upstreamSha256": "106151304b526f722773cdc757a3bc85fb0f17f1c4b3e512c10e00d40defdbb7"
+    },
+    "client/src/styles/tokens.css": {
+      "upstreamSha256": "63a6735f1a4fbe64fb54ca5ddd94bd2af6246a840334fc153744415b806c29cb"
+    },
+    "client/src/styles/turtle-soup.css": {
+      "upstreamSha256": "0e95c2c86da2b46f6f9bf4e09f6fa348e1688d4b5667ebc02c037fecf557978a"
+    },
+    "client/src/turtleSoup.ts": {
+      "upstreamSha256": "7056c7e5bb8f34b11cd04b8f82aaf2dc7420363cec5d6a381be355688cf39c81"
+    },
+    "client/src/types.ts": {
+      "upstreamSha256": "f86bfd2f24fb857d28f1cb162a206d27682cac3e5163d9030989028b2ecd0819",
+      "localSha256": "646d16d6b84aaed1f93eab8d1bb603e4461910bfd7d2060fe92b92c84856354b",
+      "reason": "2026-10-24: Add optional detailed presence mode counts for compatibility with older server events."
+    },
+    "client/src/utils/difficulty.ts": {
+      "upstreamSha256": "fa2c65efb02d4fa094d5976b747e233d1d9ec665460d89e17916dd8acaa5e705"
+    },
+    "client/src/utils/playerGeography.ts": {
+      "upstreamSha256": "6faf9b9adc19ff5e7d8af87d8f527978e7518e0d2003cb6b10874fc69aea0b58"
+    },
+    "client/src/utils/playerRoles.ts": {
+      "upstreamSha256": "4cc381e7bab3d4ba8d315f04856eb4f709fe5cd09fa133150c33fc3efac49510"
+    },
+    "client/src/vite-env.d.ts": {
+      "upstreamSha256": "ce6118b8bf26ae7ca35422e718b5215fb1d67d640ddb8329901d6ee0fc85845d"
+    },
+    "client/test/api/playerList.test.ts": {
+      "upstreamSha256": "94a7568583969915b472f0f3908569e9c0d42935ba50e074580726959a1d4c6a"
+    },
+    "client/test/api/pow.test.ts": {
+      "upstreamSha256": "5e146308767636424c47aff4f54e22f8e3a92e3a4e5bbe4613aace0d7ed059be"
+    },
+    "client/test/api/powJs.test.ts": {
+      "upstreamSha256": "b6fb5daa2bcd042b9e8a9397292a06cff7f1accfd2e0e9cabc20626fa819a805"
+    },
+    "client/test/components/AnnouncementDialog.test.tsx": {
+      "upstreamSha256": "39ff69a1624abadde1f713136a4627aa9dddf27a23f8b982ab1e3fe77568ab2a"
+    },
+    "client/test/components/AnswerOverlay.test.tsx": {
+      "upstreamSha256": "24a30045bfc8d9c9ed93db21acc3f854f0b2a9e7c8d6056bc8ac0fa59cbf5739"
+    },
+    "client/test/components/GameRules.test.tsx": {
+      "upstreamSha256": "691863ab71f43706036900b80a40e33c35f6b9bb758d860f9e06dc10d3796da4",
+      "localSha256": "deba93379a797b1e20c9ea3affb68cb9e6a1963447b3e5dbb2b876ea43bfbe04",
+      "reason": "2026-10-24: Verify both card-link rule modes, two-credit cap, active-player requirements, automatic rescue and daily best; preserve location-only isolation."
+    },
+    "client/test/components/GuessInputBar.test.tsx": {
+      "upstreamSha256": "5c0f5dd794106fcc0d1305b0db63902a92c58b38cf810ce4f16764108c694b64"
+    },
+    "client/test/components/HomeFriendLinks.test.tsx": {
+      "upstreamSha256": "4f3faa9e6d1a312144053588033fa6f53714f5985bde1b498d247a07c6a9866a"
+    },
+    "client/test/components/HomeSpecialThanks.test.tsx": {
+      "upstreamSha256": "256fa2d470cc91dfc78e1795ac0af18ea383590c7b39ce61345e6bdc07d25e34"
+    },
+    "client/test/components/PersonalSettings.test.tsx": {
+      "upstreamSha256": "37d98b81370cc5d5dbb70b8b25014c4ac078f29feaf1b1f5ea3ee104782ff7e3"
+    },
+    "client/test/components/ReplayDialog.test.tsx": {
+      "upstreamSha256": "b269e5e92b463878e0d6d20d86ac937c7590b8ce45946fccac6d6b31ded5a552"
+    },
+    "client/test/components/admin/AdminApiTokens.test.tsx": {
+      "upstreamSha256": "39d5b8bdd28e1fbace88148ece0259cea29453fc8fa44b9906167ebcf5ec2b64",
+      "localSha256": "7b99a85838621684bb0f6c9209b13e4fa298a7b3c82db93252cb66ab6ea099ae",
+      "reason": "Assert safe default read/submit scopes in token creation request."
+    },
+    "client/test/components/admin/AdminPlayerChanges.test.tsx": {
+      "upstreamSha256": "a07a3d8a6bd2ef8171efdc62752027a9e8f568389e9a2af86fdcff86f4a627de"
+    },
+    "client/test/components/admin/AdminPlayers.test.tsx": {
+      "upstreamSha256": "785c2a55f863567f27797ee2cdd0a1caaed2dee32a08defc99a0cf799a958d32"
+    },
+    "client/test/components/admin/AdminReports.test.tsx": {
+      "upstreamSha256": "5308b872d5a1d7d69146ac261700d8e85065e1a29dc7d455b6d60b0d5f26e7ad"
+    },
+    "client/test/components/admin/AdminUsers.test.tsx": {
+      "upstreamSha256": "7a746267af987015f6df19751875fa5cef18ccd753d310bf42f363820a610b6e"
+    },
+    "client/test/config/difficulties.test.ts": {
+      "upstreamSha256": "c2097dc020757ed70b23e6b6d5fcdb7692508c4d6f5f02a92c170854f9186551"
+    },
+    "client/test/pages/DailyChallenge.test.tsx": {
+      "upstreamSha256": "33b4d8322e7b4996372674d2d4ee2954cf9e0a76c925715647f26cb168a8df0f"
+    },
+    "client/test/pages/DailyLobby.test.tsx": {
+      "upstreamSha256": "43bd52792bc323201d25ad43a6252831eb44a16aa7dc372962fa972c58512201"
+    },
+    "client/test/pages/Home.test.tsx": {
+      "upstreamSha256": "b8576f491115b7142cf8f34b56387df1d5861badb7a93f6a6937d44a17dd72f6",
+      "localSha256": "a5ab035055af86c2221b5c08d54218566ffd137a3eb0efa548f77a5c81c40bb7",
+      "reason": "Extend upstream tests with entertainment entry assertions."
+    },
+    "client/test/pages/Leaderboard.test.tsx": {
+      "upstreamSha256": "fae06ea3947c0c1b70ee02867048bdebbf50384ef871f3ec3efef9f28fc7c9f9"
+    },
+    "client/test/pages/Login.test.tsx": {
+      "upstreamSha256": "7689ce319a0b33a322fec8bfa76e6de02bda94513c274f3b014d512d9e5e5c15"
+    },
+    "client/test/pages/MultiLobby.test.tsx": {
+      "upstreamSha256": "7ae577e8da3666426db5390c965cf6003cfc7b41e64edfb2b00ad0c055abecc1"
+    },
+    "client/test/pages/MultiRoom.test.tsx": {
+      "upstreamSha256": "633e5b56a7915b640bfdbfa29e96e394d6018a38734ed82cd9d40740e0492d4d"
+    },
+    "client/test/pages/SingleGame.test.tsx": {
+      "upstreamSha256": "96875fe87870b14cc8359ebbcc2be7a97a3bfbcb32bfe556d713cd550ec44d72"
+    },
+    "client/test/pages/SingleLobby.test.tsx": {
+      "upstreamSha256": "a25298093bf42a4f041ab687d3e1c8a3cbe55b8b2a3fe556b4126e3c7702a122"
+    },
+    "client/test/pages/Stats.test.tsx": {
+      "upstreamSha256": "f2e5c7509c179fe4fef39eb6bcdcda63b7a8d8dc2b251efdb7f24d2abcf04f66"
+    },
+    "client/test/pages/TurtleSoupGame.test.tsx": {
+      "upstreamSha256": "1302c11f4f565f20d4b7ee1f97ea3db4d5845bbb6f9568a4e24fdf82087bc95e"
+    },
+    "client/test/pages/TurtleSoupLobby.test.tsx": {
+      "upstreamSha256": "6ecca93140cba5038a43795452484d0178f16113033bb69196c5e844fbc6051c"
+    },
+    "client/test/render.tsx": {
+      "upstreamSha256": "9cc5e2f90910bc035456aebf1e645830ccbe305c4bc044b78b9b88d98c18bcad"
+    },
+    "client/test/setup.ts": {
+      "upstreamSha256": "e3161b0733d97c1fc0b3900a390f80e22e8dc7d91a2ac2a9db45c226cddf4900"
+    },
+    "client/test/styles/responsive-ux.test.ts": {
+      "upstreamSha256": "9731fd806743d9a158afcdffc3d913f9bc1dbf40128ebbf8951aaffda44b9a47"
+    },
+    "client/test/utils/difficulty.test.ts": {
+      "upstreamSha256": "f166bc97e0a5424de317c2893e24ce7804c6f948fe4c4b71391e81dbfc70906b"
+    },
+    "client/test/utils/playerGeography.test.ts": {
+      "upstreamSha256": "c36c98e3b5a9f9b9896eeab3d5a588186db79e9b31921b105fa3d891d0319ba7"
+    },
+    "client/tsconfig.json": {
+      "upstreamSha256": "fdbb36d02877766aff490532036a3469acac1c48c57a137b0aaebe32b0cfe0b8"
+    },
+    "client/vite.config.ts": {
+      "upstreamSha256": "21155e363166d3839ecc1fca4c58bb776faf22adeec3dd866d31b9cf2c9e905e",
+      "localSha256": "af8844c87eea8ccfdccbfdf9f0b5d6e69432c6dc745371b0d087b835deb0bb74",
+      "reason": "Document lazy route loading while retaining stable React-safe vendor grouping."
+    },
+    "compose.yaml": {
+      "upstreamSha256": "d079563fc9b263358585ca34f467f3fc759381f7b25aabfb4df95963d4015533",
+      "localSha256": "3f4d8f8e5de2ea2b52076bca9d43082d26f8904b407e7189b9e49cdfbb58d933",
+      "reason": "Retain two-app PostgreSQL/Redis deployment and one-shot migrations; increase image-processing app/import memory limit to 512 MiB after reproduced 256 MiB OOM."
+    },
+    "deploy/.env.example": {
+      "upstreamSha256": "6e0813410690e2d434f538f769de7f650515a499b593ea2d63985f3d443641b1"
+    },
+    "deploy/README.md": {
+      "upstreamSha256": "7ad5d20877905d0e1219665dd8163f660c460e78ec13821807f26b535c83d91e"
+    },
+    "deploy/update.sh": {
+      "upstreamSha256": "23af11c622209920f23f74383bc18d08ccd130018e5c16b001ac88b3da7c2855"
+    },
+    "docs/cheat-analysis-api.md": {
+      "upstreamSha256": "3f50519084957b638dda4d66db0945684ee71d7f26eddf650797b9629707c1f0"
+    },
+    "docs/turtle-soup-api.md": {
+      "upstreamSha256": "70eaabcb06d8642b7dac60f134b207f39596359510b38275a765acf9ab41ec16"
+    },
+    "package.json": {
+      "upstreamSha256": "1d61ccf889f3e3b134fd3748738928fa38ccfa422a75b2d5e3798f32d145f54f",
+      "localSha256": "79860b0217051c90522b2d2fb15f3d9b093a0748805c14fd5459870f00fdfb03",
+      "reason": "Add unified Windows local development and upstream verification commands."
+    },
+    "pnpm-lock.yaml": {
+      "upstreamSha256": "73e7fd0d8164ebb28d314d83d63e1560589ccd41f888efc86cf1e47a67f0d79e",
+      "localSha256": "adb89c23e88f194733bfc9f142c5c905ce1e202e12815b2ba52b7d5f8e87260f",
+      "reason": "Reviewed direct and transitive security updates; frozen installation, build, 799 JS tests and final image acceptance; full audit has zero advisories."
+    },
+    "pnpm-workspace.yaml": {
+      "upstreamSha256": "41f4d2770436cdeacd7322fca9d522962d38c65ce66b0b56ba304ed92f8aa30d",
+      "localSha256": "4b42abe584a54d9839a2eee158344bf9a0cc52524b24d854fe91d1926f9895dc",
+      "reason": "Retain shared packages and permitted native builds; pin shell-quote 1.11.0 override for concurrently security fix."
+    },
+    "pow-wasm/Cargo.lock": {
+      "upstreamSha256": "03787897bef79b684b7937af471a1a666425021d2a99c6db42339452fc4f0393"
+    },
+    "pow-wasm/Cargo.toml": {
+      "upstreamSha256": "1fe7729a4c355cb0d8c9d43b392a8e31c10b1eed8c01e3fb5d2bf83b7f3021cc"
+    },
+    "pow-wasm/src/lib.rs": {
+      "upstreamSha256": "74f159bbb50ec60232be90e596f03b6fef861a83cc40f366650b06a4e598dc4d"
+    },
+    "scripts/build-pow.mjs": {
+      "upstreamSha256": "1f0738d5dd6a99d819651025c949a5a6f06c89b04c3c1049f84843fff68e4382"
+    },
+    "scripts/import-local-players.ts": {
+      "upstreamSha256": "aaf81d9363f362d3f89d822b2e3c6a5722e80ce192e2a552671b1cba5935bd0b"
+    },
+    "scripts/local.ps1": {
+      "upstreamSha256": "b4686537249a64eb307254d3b2da203fcbd35024db74ac854fc645d3e51f227d",
+      "localSha256": "b61ae19ed762be3bab0d21f026fbae1ce5ccfe04646fc047378c11f13cddb56b",
+      "reason": "Replace the separate legacy local stack with the integrated launcher, storage and isolated tests."
+    },
+    "scripts/verify-production.cjs": {
+      "upstreamSha256": "fc9365f885f670275f0f60f27eb29dbb657156e544c73078c38e453d9beb0d56",
+      "localSha256": "6dc40b8a87246657e9e155e9ef12e4a8f27dee4dc6042c0bcd3055ad0a6c1312",
+      "reason": "Extend disposable acceptance with location projections, replay codec, shared assets, two-instance settlement and PostgreSQL submission deduplication. Reviewed 2026-10-24 password recovery: Exercise PostgreSQL password recovery, Redis cooldown and concurrent one-time consumption with mocked SMTP in disposable containers. Reviewed 2026-11-04: Assert private multiplayer replay keys, required-Redis rejection, and PostgreSQL solo/daily final-result recovery after an injected Redis save failure, including authenticated reads through both apps."
+    },
+    "scripts/verify-production.sh": {
+      "upstreamSha256": "edd1e84ccf7ab9b66078aab7915d7575fc4d03b10717eea12f5c18621a693591",
+      "localSha256": "b0e78e06841684ddc1835bb218252c16b4ae7310180465759c72c49ba9b9ead0",
+      "reason": "Enforce Compose memory/heap/pool budgets; validate real app background build, large image backpressure, cgroup OOM counters and existing two-instance acceptance."
+    },
+    "server/package.json": {
+      "upstreamSha256": "c8095542e108b8bd277827952fbec4ac13c2f106268295d9f2c01fb24ed9b09c",
+      "localSha256": "79778bcc61293b97a3023844b4acacf7de5a263639320f5805943bcc1fdd262f",
+      "reason": "Retain shared game packages and SQLite tooling; update Express, Sharp, Socket.IO, Zod and Vitest with 468 server tests and PostgreSQL acceptance."
+    },
+    "server/scripts/benchmark-websocket-compression.cjs": {
+      "upstreamSha256": "c179a595cf069660fd2dae66587be484e28a93da781297529ca4713537b154c2"
+    },
+    "server/scripts/loadtest.cjs": {
+      "upstreamSha256": "ec7f5dc2620008befa4af327007d67e8d92a666610d9a509416e8213ff79e87b"
+    },
+    "server/src/config.ts": {
+      "upstreamSha256": "1cd8dbb1b804d9593690cd02ec1927cf4923b524ee2eeb18fc773cba59f5179d",
+      "localSha256": "978ff11a780a8fe2205606617c348be5ff6578a6bed230b4ddc35b85f85c85e4",
+      "reason": " Reviewed 2026-10-24: Raise authenticated data-import default to 16 MiB for full timestamp/provenance exports; keep environment override and generic 64 KiB gate."
+    },
+    "server/src/controllers/admin/accounts.ts": {
+      "upstreamSha256": "958d79ca902fb2360e6fd845149ff86646a19c300198107cac7c2bd3fa7e0139"
+    },
+    "server/src/controllers/admin/gameViews.ts": {
+      "upstreamSha256": "880ed954ee1caec5b2d7911d33d4f8f5748bbdbcc3bc1b844c3b42d4171976b8"
+    },
+    "server/src/controllers/admin/helpers.ts": {
+      "upstreamSha256": "4f140e59aa901c5364dd603087d805c8fef25cb64e62bde50045e860a9519ce6"
+    },
+    "server/src/controllers/admin/moderation.ts": {
+      "upstreamSha256": "06d8d2e5199c2d284adcc1b16624a9e057161e979dc8717209076766e5a7001b"
+    },
+    "server/src/controllers/admin/operations.ts": {
+      "upstreamSha256": "48ab2f79762fae33b03e6d80b6ff1451e237d7457bee5352daded0ff3b8f4458",
+      "localSha256": "b0463f882c1e0c36d476d4da76a72c29cea7c63a0698c7a0d7271860f80157bd",
+      "reason": "Forward validated token scopes to shared token service."
+    },
+    "server/src/controllers/admin/players.ts": {
+      "upstreamSha256": "738f51cf5e0b0a1b67664af5f92fb14febc5d981945b44f88f6814d0aa068a62",
+      "localSha256": "9596914a8b693bed80255f3b515b0ac65b90df0aba108c18631cf42a9676ccb7",
+      "reason": " Reviewed 2026-10-24: Pass authenticated administrator id to career import review audit."
+    },
+    "server/src/controllers/admin/replays.ts": {
+      "upstreamSha256": "f2334bba8c6cdf58c342ed68a113919e3180820a0ae367db70664983a092f6f2"
+    },
+    "server/src/controllers/admin/reports.ts": {
+      "upstreamSha256": "61aefdb79735e7e108c0ebc87e39d6f3dc90246ebea99c7118aee4179b09a334"
+    },
+    "server/src/db/createAdmin.ts": {
+      "upstreamSha256": "f199fd19edf1783471fade12928b26d4f82ec616283cddb15425004e438c14f6"
+    },
+    "server/src/db/init.ts": {
+      "upstreamSha256": "a311dbae9f18278cae265bb7b08e86dad16b7fec6dcc9751708334122bcced69"
+    },
+    "server/src/db/knex.ts": {
+      "upstreamSha256": "a97a5029c355ed244f434eb0ad4acdc1112d51a7848b5edfaf06cb870ff65a50"
+    },
+    "server/src/db/migrate.ts": {
+      "upstreamSha256": "a19af48a16ff82b9341be6b40c9a7c9728ecad293ac4e1f8a4f3658d162b62ce",
+      "localSha256": "5f39e65740a7bb855d70a69d8dd284a00ff7869c5e85e21c6cb26f0c36b06543",
+      "reason": "Check readiness after migration, including location tables."
+    },
+    "server/src/db/ready.ts": {
+      "upstreamSha256": "ecd662a2c005dcb3607f4cb07362ed6cccbdd8f5b033b62e1aad07b69f984dd9",
+      "localSha256": "e727b0cbafd52062647ac53a505618afbd76653362674a1a001adca9c767d494",
+      "reason": "Require additive external submission receipt table, token scopes and observed value columns. Reviewed 2026-10-24: Require the additive card-link tables at application readiness. Reviewed 2026-10-24 password recovery: Require password_resets columns; application instances remain DDL-free."
+    },
+    "server/src/db/runSeed.ts": {
+      "upstreamSha256": "27f9902d9935ef0873074ca4b7a63d1a9b099ac37c137be3b3a1f7b5d8c3bf19"
+    },
+    "server/src/db/schema.ts": {
+      "upstreamSha256": "4b9d2dc8dcdc22a77b51d4ac1f0b2ee39e0c4da00330135b57dd14b50c524c46",
+      "localSha256": "f7b0befd208329c53b85dd4ee348d9554dfe8248b11947235dbfa53445dbc8e0",
+      "reason": "Invoke additive external submission migration without rewriting original records. Reviewed 2026-10-24: Run additive card schema migration without rewriting legacy players. Reviewed 2026-10-24 password recovery: Add bounded per-user password reset challenges without changing existing accounts or binding codes."
+    },
+    "server/src/db/seedPlayers.ts": {
+      "upstreamSha256": "7381b13fb11137a212d461e5a149f9d126971baa2bf1fab4c028015b6cf4da40"
+    },
+    "server/src/db/seeds/players.json": {
+      "upstreamSha256": "3fe8cf726772ce7494e6eb860a4d8a1afcc06eafa2f078ad1f78bf3deae5891b"
+    },
+    "server/src/difficulties.ts": {
+      "upstreamSha256": "9fbdbbdc3d9d1ab506f83deee5ad1f501a685611ed51d870d45e6cef1f8bee6e"
+    },
+    "server/src/index.ts": {
+      "upstreamSha256": "4265e6e9077801bf327c155b82d8f359db38f4c33e601ec85d706d2287ce5220",
+      "localSha256": "33e95c4118e28449c3782b982e65931328f2381ea23b273fd9b6b2f2659eea8f",
+      "reason": "Register location HTTP routes, assets, socket handlers and scheduler. Reviewed 2026-10-24: Register card HTTP/admin routes, shared Socket integration and graceful shutdown. Reviewed 2026-10-24: Apply existing authenticated admin data parser to career editing as well as player imports; retain PoW and ordinary JSON limits."
+    },
+    "server/src/maintenance.ts": {
+      "upstreamSha256": "716fdd47fa17e4a6785b1cd2908da1c79e09ec413eab47a9b82a589c1de2a135"
+    },
+    "server/src/middleware/apiToken.ts": {
+      "upstreamSha256": "4ff03527952a956f06c15063b8d7419308868a14269e436581eb5483886a508f",
+      "localSha256": "c3430e5f800d585b46cc49d236fcf629287ec1f04b51961a733d40ea0d79f3cb",
+      "reason": "Read legacy-compatible scopes and enforce explicit endpoint grants after existing authentication."
+    },
+    "server/src/middleware/auth.ts": {
+      "upstreamSha256": "41c2342a72bb98ca6596cbe490c12a95d89217717fc4f52aa5694f9013405e7d"
+    },
+    "server/src/middleware/clientAssets.ts": {
+      "upstreamSha256": "ed9cbf2dd7daca2dbe9f2155e70b5706836a20770340e80008f74568bbcb9b22"
+    },
+    "server/src/middleware/common.ts": {
+      "upstreamSha256": "848e97153a5597bb8dc4342713753e095240bc5ba78bb448e2aeac445da37759"
+    },
+    "server/src/middleware/jsonBody.ts": {
+      "upstreamSha256": "da33caa2ea3ab1e365ee19224a792897ef72b864074566d7ce3931249e388f31"
+    },
+    "server/src/middleware/pow.ts": {
+      "upstreamSha256": "318d0d0840d2f2d9e3bbbceaac71240a110f227113e3292a4514acf027a701d5"
+    },
+    "server/src/middleware/rateLimit.ts": {
+      "upstreamSha256": "6ad986dcc7fe439353bb5b9f370b67af04c17325e6cf11fed8a108bfc5fa9cc6"
+    },
+    "server/src/redis.ts": {
+      "upstreamSha256": "9172f960cc70b53a783172c0f5c658c4437e555fccfaf2d114731182d0d68c96"
+    },
+    "server/src/routes/admin.ts": {
+      "upstreamSha256": "728874ddaf0b4dc808a2704573e4d05a0fde3ca77c9bb28572dcd715536e7552"
+    },
+    "server/src/routes/adminSchemas.ts": {
+      "upstreamSha256": "3405eff045566294cb9b762a3d86bdd9492bfaa32a13dbc342e2099aa33fd271",
+      "localSha256": "7abc3cb3cccbd24acdbef68851d45ef33c484e3b6b2e0cfe9177870cb414440d",
+      "reason": "Validate supported token scopes, keeping creation request backward compatible."
+    },
+    "server/src/routes/announcements.ts": {
+      "upstreamSha256": "96facf535c814e2e101b4ab5eddc0a6818b691e13222ccac3c582d095370ab05"
+    },
+    "server/src/routes/auth.ts": {
+      "upstreamSha256": "fc17aaaaef62ec1b82c71eecd91ee726d4efd61fe92b372e333d0b4feade352e",
+      "localSha256": "946c6bf3aaa7da252757c063cc68d5b24efb79e2d473079bb65dd1cef97a0a4e",
+      "reason": "Also claim guest location results and submissions on login. Reviewed 2026-10-24: Claim guest card results and active identity mapping through existing account claim. Reviewed 2026-10-24 password recovery: Add username+verified-email recovery with GeeTest, existing PoW, uniform send responses, rate limits and session/socket revocation."
+    },
+    "server/src/routes/dailyChallenge.ts": {
+      "upstreamSha256": "6a6c9bf0afac91e5964610a1d81d16da0011d80ed3c45cb6f789790634a12416"
+    },
+    "server/src/routes/externalPlayers.ts": {
+      "upstreamSha256": "988e47f390a735a09324824347e744ec331e2c4f3ab32e5e8ea126223da4ac6a",
+      "localSha256": "e49f8aa4fbd54ba71f0484eb853b5e23038703e4994b63979277c9e75552a9ba",
+      "reason": "Pass Idempotency-Key to transactional submission service; enforce read, review-submit and direct-write scopes. Reviewed 2026-10-24: Add scoped versioned career export/submission while preserving legacy player contract."
+    },
+    "server/src/routes/game.ts": {
+      "upstreamSha256": "4f1043251428fb4a0359aa561a87242ed27c717c639e8522ea209b32630f2a88"
+    },
+    "server/src/routes/leaderboard.ts": {
+      "upstreamSha256": "4e3d7174eb3e496bc553ce1b9fb2aa2b51b764bcf15680147d151e83981ec6ae"
+    },
+    "server/src/routes/players.ts": {
+      "upstreamSha256": "bacc543c0bd577b426711fbff0c6787955ce5011705eb02cd16fd54c2c31a852"
+    },
+    "server/src/routes/pow.ts": {
+      "upstreamSha256": "4cf22ba23ee251b98e4acd6249a0493de4b71523069274e7851c126457bcfd2c"
+    },
+    "server/src/routes/runtimeConfig.ts": {
+      "upstreamSha256": "e577e29a4bd618fd963ca67aa345bad0311207c444761c035c53d772e1c727ee"
+    },
+    "server/src/routes/stats.ts": {
+      "upstreamSha256": "aa920ba334f83cb4f77f7756e9decbebe4a79c028bd655efbbb1e07e248ee5e6"
+    },
+    "server/src/services/apiTokens.ts": {
+      "upstreamSha256": "ad68c4256bb5c142917ef923c60cfc1e9fa0a09c664e1143921de00a517fc05a",
+      "localSha256": "c913fb0fad73dd810b59e11e954cf5957049ba97a9b494c3db453073562f6c19",
+      "reason": "Persist and expose scopes; new tokens default to read/submit; null legacy grants unchanged."
+    },
+    "server/src/services/dailyChallenge.ts": {
+      "upstreamSha256": "b3fd250a8f6cd29827f62006df657c600f017cfa0a69a46236eab4b4cdaddc30"
+    },
+    "server/src/services/emailVerification.ts": {
+      "upstreamSha256": "b8d2788268faa76fc0015438f1fa115dfc228953b0bf694e16961d547d37809b"
+    },
+    "server/src/services/externalCheatAnalysis.ts": {
+      "upstreamSha256": "5e68c8428f9009e0b29a13a9082a22e492584cadd652956e9bfae550019edc9d",
+      "localSha256": "0daacba435eac9bc832248468b7defb5a3e2da82154f3d60972180720d856905",
+      "reason": "Adapt Zod 4 record schema with explicit string keys, preserving bounded display rows."
+    },
+    "server/src/services/gameModes.ts": {
+      "upstreamSha256": "6d20c44144838d7c3ef253f1292a7479436fef5fbb0edc7f47bc1f5bde814a39"
+    },
+    "server/src/services/gameService.ts": {
+      "upstreamSha256": "f2f9ec2f889dfcaf03c4cb66b61b47885525d1daa578d4f8870e941d7e5f3923"
+    },
+    "server/src/services/geetest.ts": {
+      "upstreamSha256": "1e0b70b87c7141af25f97bd7986e65b81ba1c5d9d0dc3ba383cd56532cbab893"
+    },
+    "server/src/services/guestAccounts.ts": {
+      "upstreamSha256": "549fbaace86949f2eb91ba20df4c729c22148570d70fdae63367ff897d53823a"
+    },
+    "server/src/services/identityDisplay.ts": {
+      "upstreamSha256": "0b8cd53ddcec027227f89bfa439c28523cee3ff6cf25e482260025e11631eb3a"
+    },
+    "server/src/services/keyLock.ts": {
+      "upstreamSha256": "045382c8ed375877e5dfa16225ed825f4c2ea6ecc8ca0818e5fe7a1564efb643",
+      "localSha256": "cd6460c96606299ad1661188124f26e3865089915633d79cb5890979fe1d17fd",
+      "reason": "Renew token-checked Redis lock leases during long work; stop renewal and preserve handler errors on release. Reviewed 2026-11-04: Reject unavailable required Redis before running handlers, preventing cross-instance mutations under local-only locks; retain explicit optional-Redis fallback."
+    },
+    "server/src/services/leaderboardCache.ts": {
+      "upstreamSha256": "115bb3cfc4abebb96a016f69e2ad63bc97144d10b4fef0ee406eb0c2a937e7e1"
+    },
+    "server/src/services/matchGuessMetrics.ts": {
+      "upstreamSha256": "d6d4a67e95a571b9016f57cc0d7ca913609a467edbe8beb29736f511b4c2d5e2"
+    },
+    "server/src/services/matchResultQueue.ts": {
+      "upstreamSha256": "740b00f469d03cef0a24de6d94ba2b4d24def952ad519a6dbc0c37aa4ad96e74"
+    },
+    "server/src/services/matchmakingCooldown.ts": {
+      "upstreamSha256": "8b49e83395b658e49e08832c25b6cd906a7878c2e07d9e0a52780792597b7f64"
+    },
+    "server/src/services/matchmakingRestriction.ts": {
+      "upstreamSha256": "fa562b904dc680bab86cda6a3c12044dd54b146756c22f5c4463c81871770071"
+    },
+    "server/src/services/password.ts": {
+      "upstreamSha256": "d0abbc4f55dff154f082f08f4ef50df71bc5248823fdcd947b83053c4b812027"
+    },
+    "server/src/services/playerCache.ts": {
+      "upstreamSha256": "6bf63d0f098adfa007a1cfda2c8c4889a8642bb297f65011168d345affca6234"
+    },
+    "server/src/services/playerChangeSubmissions.ts": {
+      "upstreamSha256": "51c49e9a39b1f05398fe055a190ffa92d3fa379b8a58a0b6caf2b68c1e0253fe",
+      "localSha256": "5a2f9588c575656bde55d61c6ac3cd19d46e211986f4613fc0bb9ad269bd227e",
+      "reason": "Retain stable-target, expected-value and idempotent review pipeline; adapt expected record to explicit Zod 4 string key schema."
+    },
+    "server/src/services/playerExport.ts": {
+      "upstreamSha256": "612c0bfee6ec14f86ba725176bd0130559b3e32d0345aa6c0fb90e61e766435d",
+      "localSha256": "2b01b6c55f60c72c8a64649bc28b333fac3fa3835e599ba16893fa94d8721c75",
+      "reason": " Reviewed 2026-10-24: Add career payload and revision via one batched read; preserve legacy team_history and every player field."
+    },
+    "server/src/services/playerMutations.ts": {
+      "upstreamSha256": "83eb5033e7064cba5feb94efcfa5ef78de613b547e37c8e42949eb300d4cc0df",
+      "localSha256": "9ee78b5bc653341f1439cf7c156ee12e4123e2c5f861eb79f91de1d869a68a68",
+      "reason": "Retain additive career review/catalog invalidation; reject conflicting stable IDs atomically; preserve optional update/import semantics when upgrading Zod 4."
+    },
+    "server/src/services/playerPerformance.ts": {
+      "upstreamSha256": "0e943060d94a2a6848b4aed2cfbd1c88c428abab02bbcf2d99e443bd71c532bf"
+    },
+    "server/src/services/pow.ts": {
+      "upstreamSha256": "25bd31a7c8e1d1f08f8846482175a01e57a81b7fa2f977234f28455756074197"
+    },
+    "server/src/services/presence.ts": {
+      "upstreamSha256": "f0f43177de616b6277c239c59ab15fdd94a1e2cd591fc4bf0135a2c9147848d3",
+      "localSha256": "afab6d6147f0f3d7225c51ee6a13be2ecce9b6edfc00a7198d710acadde171f3",
+      "reason": "2026-10-24: Aggregate active classic/location/card modes with five-second shared cache, indexed Redis reads and indexed SQL counts; retain identity deduplication and legacy fields. 2026-10-24 review: Use TTL-backed single-game category projections, isolate malformed legacy records, and exclude completed soup pending settlement."
+    },
+    "server/src/services/queryCache.ts": {
+      "upstreamSha256": "21f5c0d37eea5f18f39ad12f6ec9f20cbae89337d4a7e121588617c11b222842",
+      "localSha256": "b763cc20add531033d1fd8a9d8f6b15041364446cc6922c639c274dc13f914cb",
+      "reason": "Generation-aware single flight and atomic Redis publish/invalidate prevent stale loader repopulation."
+    },
+    "server/src/services/resourceVersion.ts": {
+      "upstreamSha256": "ccd22681abdcd5b97bcb49f2e2c0704787ed9f810ca297f51ab18ee63a4b0db7"
+    },
+    "server/src/services/roomStore.ts": {
+      "upstreamSha256": "85a553b4aea3f7730ace414b487a7ab75f1ba618f96c30421db748d6fc97c45a"
+    },
+    "server/src/services/runtimeMonitor.ts": {
+      "upstreamSha256": "de8b6b65ac928ac01d50558a0e613ff91d7285d87a070242290b2bc87df49820"
+    },
+    "server/src/services/singleGame.ts": {
+      "upstreamSha256": "f6f78471f53360b7eca246ade253cb4aa46ab7c9b5db5ba5b0f0ac074fdf492b"
+    },
+    "server/src/services/singleGameStore.ts": {
+      "upstreamSha256": "ee539233ddf91b6f00a8ec4872cb3a26dea51f4f4d656682b8fa7356014489c7",
+      "localSha256": "1508f6cf45a3819a8c371affa2a4de37849efd012194665b63de3873d96a0e33",
+      "reason": "2026-10-24 review: Atomically save and remove the small presence category alongside game state using the same TTL; gameplay payload and owner pointers remain unchanged."
+    },
+    "server/src/services/singleGameVariants/classic.ts": {
+      "upstreamSha256": "21a18d0e50e315b8519d4d0475cc6777f171de47279124122c36876e2a52ea1d"
+    },
+    "server/src/services/singleGameVariants/index.ts": {
+      "upstreamSha256": "c65d2bb24777294c1b13c5dbc54e8c063027c12b5b99a20f66944c3f81cb61b0"
+    },
+    "server/src/services/singleGameVariants/turtleSoup.ts": {
+      "upstreamSha256": "4d4232870184310d951539cceb23753fb5a56e89d9573b71a5afeb8222ebac84"
+    },
+    "server/src/services/singleGameVariants/types.ts": {
+      "upstreamSha256": "a2f63382258dad883c09de2daee1c35cd01e20942717da8ad44aa2c3533c46d8"
+    },
+    "server/src/services/singleSettlementLimit.ts": {
+      "upstreamSha256": "cc1e0d9ebb8ab767479ed6715c9a4cbb6c08ab2ac872940015b28f1f7e712363"
+    },
+    "server/src/services/statsCache.ts": {
+      "upstreamSha256": "3b1d5c05b47a8ac4361bf3bd5041c5278ef203499ae75f80c0cf9eaabe56c4e4"
+    },
+    "server/src/services/targetSelection.ts": {
+      "upstreamSha256": "ff4471c0db19f8c3499df6ee71d42043d3410f480ce18769f73c4db60ad09a80"
+    },
+    "server/src/services/teamHistory.ts": {
+      "upstreamSha256": "bb04f53ed61be2b42ff8434374bc9a97f48b5cc2b3ed57ebebdace7ac1eb13fb"
+    },
+    "server/src/services/transientLog.ts": {
+      "upstreamSha256": "45c772958172b65d27155533cadcef42439fde36046a50a428fe4abea51ece2d"
+    },
+    "server/src/services/turtleSoup.ts": {
+      "upstreamSha256": "f73f5159f5437b044ff8f405f179f00b0c945d8c6d8095b0e818678bb77b7480"
+    },
+    "server/src/services/umami.ts": {
+      "upstreamSha256": "8ee2fbebee690a1c9dd684e88b49217655e41dbd7364bef72c9bf8b0be953bc3"
+    },
+    "server/src/socket/connection.ts": {
+      "upstreamSha256": "55d6ddda87552f700a1b0344f4bc9413adc7f7b78d8db68e1d151e4208c74a92"
+    },
+    "server/src/socket/constants.ts": {
+      "upstreamSha256": "c97375024d6ad37437d2dfca945e87c1006ef624563eced39a267fcaedb2782e"
+    },
+    "server/src/socket/event.ts": {
+      "upstreamSha256": "d20fda728cf32c066e56e6b2dfe212235895336e6f8a171c5d5de0642178f480"
+    },
+    "server/src/socket/handlers/context.ts": {
+      "upstreamSha256": "004a35e042611b37f3d628e68c73a2076d3ffe36bc6ed6b131b28d4b4aa9c03c"
+    },
+    "server/src/socket/handlers/disconnect.ts": {
+      "upstreamSha256": "247867a3289d8f3361c790d57d473e48da97f5b26f6084bcb5b997abcc659e7a"
+    },
+    "server/src/socket/handlers/game.ts": {
+      "upstreamSha256": "b69f3783fbd1b0eafe9bfc36b743ad1262f2e5976d243d38bf7b1b09f8ec39d8"
+    },
+    "server/src/socket/handlers/matchmaking.ts": {
+      "upstreamSha256": "ce0c8120ce4370499956ad299a9f3973595220697e47f09746062834cd9fe476"
+    },
+    "server/src/socket/handlers/presence.ts": {
+      "upstreamSha256": "7439013f3bc45e9c0026cac7d4a2510131e46015f4b2a7fa4b5ef1268f43fb72"
+    },
+    "server/src/socket/handlers/rematch.ts": {
+      "upstreamSha256": "531c66250270fb7fb80031655c5a9b0712644c0b432585a559407e9791a4c91b"
+    },
+    "server/src/socket/handlers/room.ts": {
+      "upstreamSha256": "988826afa933b573d2a577f71285d56a2c3b4fb1858b45d8ce015e1058828224"
+    },
+    "server/src/socket/handlers/session.ts": {
+      "upstreamSha256": "f396a4f9d1a4b7aa6eec4b5dc6605000297ce6662d268b450b60e15aacf6c605"
+    },
+    "server/src/socket/index.ts": {
+      "upstreamSha256": "b7736d7949e51dae37cc0412c4827b7562fef0daf3127cfdcd5b5ba35c373c7a"
+    },
+    "server/src/socket/lifecycle.ts": {
+      "upstreamSha256": "6d9ddb5a800765217000c47c6d050c84313193550df009dcbc105f32f76e21a3"
+    },
+    "server/src/socket/matchLifecycle.ts": {
+      "upstreamSha256": "7dc7d23bc6329beb6b6c9b4ec9b9352203f703c120e29be129f90b261ae2c0a7"
+    },
+    "server/src/socket/matchmakingQueue.ts": {
+      "upstreamSha256": "b214026c5e03acf171c8cca9359ad4dac5b2c728b629696040ccf547fc605e40"
+    },
+    "server/src/socket/middleware.ts": {
+      "upstreamSha256": "df3290efaa34c749b4058c08c938c70b50526e767abb148309714ccc22b681f7"
+    },
+    "server/src/socket/roomFactory.ts": {
+      "upstreamSha256": "63147451e40a32fa1319708da80dd1c5305f15f9c6a6fcec8ac2d3b391804a8d"
+    },
+    "server/src/socket/roomMaintenance.ts": {
+      "upstreamSha256": "5d3df488cc0d1665c7c9da72afa9efdc0141ca2291ee3ff2bf542b463f0f8f9a"
+    },
+    "server/src/socket/roomRules.ts": {
+      "upstreamSha256": "44414f01c9189bcf0745e0c1a9c78ed56bdd95e9e373a2b810a64ba1143203c7"
+    },
+    "server/src/socket/roomView.ts": {
+      "upstreamSha256": "9ed27d2ec574a2b209f1ab1a0df08463300fce331bffb2e5819b7512bea34766"
+    },
+    "server/src/socket/roundLifecycle.ts": {
+      "upstreamSha256": "1f10f78fc94b74f841d9073fcc065a32de08349484054675aba283890d90a203"
+    },
+    "server/src/socket/scheduleProcessor.ts": {
+      "upstreamSha256": "1f83701c1122ddd18d7fb55099e6453c44eff43c3254099a85281e1e534ac557"
+    },
+    "server/src/socket/schemas.ts": {
+      "upstreamSha256": "fdb909ca9339e406677071e7cb1b8ac65791c5ba64866a9ff6d04b53c8a899f2"
+    },
+    "server/src/socket/timers.ts": {
+      "upstreamSha256": "5f8443ccf0b8cbbb8614663b005bed1d1ed8bc5c681e6169768916037b889aba"
+    },
+    "server/src/socket/workers.ts": {
+      "upstreamSha256": "dcd4446dd7ceca8bb8355008d82d0ee1d812b2b87f4e19ada94bcd15bdf66096",
+      "localSha256": "6ce975d5f1d9df59efc4bfb5f6399a0b796e603746a3bd9a1fa189e80dd85f2d",
+      "reason": "2026-10-24: Broadcast category changes even when totals stay equal; run only lightweight expiry cleanup when no admin subscribes."
+    },
+    "server/src/types.ts": {
+      "upstreamSha256": "cb2306e5ef504c398f615d24466ca84c10ee09cda3dfdd42b63b2fa6a986cd9e"
+    },
+    "server/test/db/ready.test.ts": {
+      "upstreamSha256": "2db2dd3fda2bad5b23640bb01b562a4d1e5153517d788d9abfc339e41f746d37",
+      "localSha256": "3ac461737a20883e4a030b1fdd4acb4f7781bdab4c7bfc3584ae48e3881f2aef",
+      "reason": "Compare original legacy columns explicitly so additive query projections do not weaken migration preservation checks."
+    },
+    "server/test/db/schema.test.ts": {
+      "upstreamSha256": "958e2311fabe98810091127bf0f551464d8feaa9a5d39526d6b8a843448c5870",
+      "localSha256": "d395d71ecc4eb972be6654aacec8cd6b0453b1491ade8ed7bf1791eb9323971b",
+      "reason": "Verify repeated additive migration preserves original token fields and legacy null grants. Reviewed 2026-10-24 password recovery: Verify additive recovery migration preserves existing user and email-verification data."
+    },
+    "server/test/db/seedPlayers.test.ts": {
+      "upstreamSha256": "f1b0382bd858b14d551bb3c7638887dc3b0c38592d34c0ea480bf72166b9e1c7"
+    },
+    "server/test/middleware/clientAssets.test.ts": {
+      "upstreamSha256": "84fe4be1d6f678d88556c37a2ff0afc8e9155830f2c0206daf4c8ebe592604a9"
+    },
+    "server/test/middleware/common.test.ts": {
+      "upstreamSha256": "5a3abbc24023189e0e6737525fa8e61278c44a7a7b85c2a8bcf9b80b19dd2ebd"
+    },
+    "server/test/middleware/jsonBody.test.ts": {
+      "upstreamSha256": "77bad0a5e164ddfb9fa710a6c61696290f0fdde5eb6dac3b325e41c25e9fad46"
+    },
+    "server/test/middleware/rateLimit.test.ts": {
+      "upstreamSha256": "93575b939aa16101419a6c8f762e777b0d5f09aeb716f11e53aae37f62b51637"
+    },
+    "server/test/redis74.integration.test.ts": {
+      "upstreamSha256": "db213bd02712b637247efafe562b8ff371e43dd5bb924a120a6f7f64193fdc9f"
+    },
+    "server/test/routes/admin.integration.test.ts": {
+      "upstreamSha256": "1f0d3d5931ff64f0fbd84173c79a6c0a6e238bb8223362eca811ddbfcb52b12e",
+      "localSha256": "6b64dcbf20955295507aefa9ffa2ac81c41c29355db6150a5dbd18f32723b1ee",
+      "reason": " Reviewed 2026-10-24: Assert additive empty career and revision metadata in admin JSON export."
+    },
+    "server/test/routes/announcements.integration.test.ts": {
+      "upstreamSha256": "7d518f1d2336467b892233c03d0429b702118e6fe7990e3d8400ef5234287d2b"
+    },
+    "server/test/routes/auth.integration.test.ts": {
+      "upstreamSha256": "5e21c15b7e21e212e35bc5e46d55608fe9205b4755f269f01cdb9571748ba71d"
+    },
+    "server/test/routes/dailyChallenge.integration.test.ts": {
+      "upstreamSha256": "ce50538ae62092054b743f37eb93431d50f5cac44572ac899582f8941753b874"
+    },
+    "server/test/routes/externalPlayers.integration.test.ts": {
+      "upstreamSha256": "9e98fb6a31ad4c9e994dca0aeea169b499d3900ef3cf0ce647eec2c9fb1c45ef",
+      "localSha256": "64299967521c445836b8ea24b1f3529078e7ded8ee553e7c3c9c168a5ec494e9",
+      "reason": "Explicitly request direct-write scope for existing direct mutation integration fixture. Reviewed 2026-10-24: Assert additive empty career and revision metadata in scoped external JSON export."
+    },
+    "server/test/routes/game.integration.test.ts": {
+      "upstreamSha256": "0233536e68fcfe1ef3822033ff493f5aaeb86ae0de4c6a19764c1a47915818a3"
+    },
+    "server/test/routes/gameModes.integration.test.ts": {
+      "upstreamSha256": "34eb1eef483933fd8852087ba95a33689436083d412e53c14173b72274a35dde"
+    },
+    "server/test/routes/leaderboard.integration.test.ts": {
+      "upstreamSha256": "b87bd954164495049f79906d3177b5e902627914f6826f30cfa693ac88ab09da"
+    },
+    "server/test/routes/playerChangeSubmissions.integration.test.ts": {
+      "upstreamSha256": "a3ee393bc9f543308e161053b545b29d3d9bfc51d1ce1d4ccfb83e1ae90c2b28",
+      "localSha256": "91912a39895b8a51283135e92dfe27a20467c7ea7b2de0555a7997fa0ac7b832",
+      "reason": "HTTP regression for Idempotency-Key reuse, changed-content rejection and default direct-write denial. Also verifies repeated team-history entries survive pending review, approval and player JSON export (2026-10-25)."
+    },
+    "server/test/routes/pow.integration.test.ts": {
+      "upstreamSha256": "38ec196d9f1e9c5777818dae04b30b17455ee88a0758bed57d3eae31a00d9048",
+      "localSha256": "6d10d56ff08bef44116ef2401a605f407a8e73db56d83f73055821465e82135f",
+      "reason": " Reviewed 2026-10-24 password recovery: Verify both recovery endpoints retain the ordinary PoW gate."
+    },
+    "server/test/routes/stats.integration.test.ts": {
+      "upstreamSha256": "e068e86c790af53e21cd33064f20f3c16123a2d4131e0130424c8302f4e19615"
+    },
+    "server/test/routes/turtleSoup.integration.test.ts": {
+      "upstreamSha256": "f203adc9261ca4ebd6d88b408d1a3cf3210bf7edb44ce5dde76587bd4392d3d2"
+    },
+    "server/test/services/dailyChallenge.test.ts": {
+      "upstreamSha256": "21d36cf84f3776f9b30e39b184810842bb16815aa78a8cb8e89aa98c3d4c9d87"
+    },
+    "server/test/services/emailVerification.test.ts": {
+      "upstreamSha256": "bee057054013bda155081934de8870ae77d241a259478d73965bd9fddf9b6ac1"
+    },
+    "server/test/services/externalCheatAnalysis.test.ts": {
+      "upstreamSha256": "dfe76c989ca9351ddbfae7e296c19ac02d0785b17f74f62fa43a196c8166322b"
+    },
+    "server/test/services/gameModes.test.ts": {
+      "upstreamSha256": "70a68f999daece0b352728a7fee10a0d2e5a4237bcced4ef7004e52117229123"
+    },
+    "server/test/services/gameService.test.ts": {
+      "upstreamSha256": "fc4352cd19de65cf1a354ba464a1216da08eddb9b9707de7f4a98cc704ee2451"
+    },
+    "server/test/services/identityDisplay.test.ts": {
+      "upstreamSha256": "8dd829f3dedf9aea71071a22cb76ce6d254a73f83f136e7bb57b18e4217ed8b0"
+    },
+    "server/test/services/matchGuessMetrics.test.ts": {
+      "upstreamSha256": "e78cfef8ff0fd6f0c13b0cc78eaca774d0b6a6dc0b45dfc7eb021799e7e1dd9a"
+    },
+    "server/test/services/matchResultQueue.test.ts": {
+      "upstreamSha256": "80d607514f1772471a1bdd59d2ecaff78e5bdd7256bb3b0e449b48232fcf0e59"
+    },
+    "server/test/services/playerCache.test.ts": {
+      "upstreamSha256": "22ca12af0c045f61518c6e845e738d131f0839e935175cd9a6ba2c04b1afe394"
+    },
+    "server/test/services/resourceVersion.test.ts": {
+      "upstreamSha256": "819e8a9c1d610362963e53f88170413310903345ce65a6b9e46fd7b2489a0209"
+    },
+    "server/test/services/roomStore.test.ts": {
+      "upstreamSha256": "89a8d996554701f7a9e29bef2e574de1bfd1225fc6c7c3deb6022ed80836e0f0"
+    },
+    "server/test/services/singleGameStore.test.ts": {
+      "upstreamSha256": "02b6da261bbc0becc391e1eed848393dc8fb848e726361fe5687f89a206d4645"
+    },
+    "server/test/services/targetSelection.test.ts": {
+      "upstreamSha256": "38b5933d75e1bb81074f02857e1e27c2e6fd6d819ac5cbd9e74df660820e575c"
+    },
+    "server/test/services/turtleSoup.test.ts": {
+      "upstreamSha256": "78f592ad8cc86b2ee84808aebeb6c48083631e510daf304ca79dcf48435131b1"
+    },
+    "server/test/services/umami.test.ts": {
+      "upstreamSha256": "0e8ffbf52ccfcd2f4f4c6c0adf0b3fea3531b63cff1f05dee18c216eb20289b2"
+    },
+    "server/test/socket/socket.integration.test.ts": {
+      "upstreamSha256": "e812f0a6757c4aff500eebf412ec4a770c87261f92f3c4b4ab8822349d6f4b92"
+    },
+    "server/tsconfig.json": {
+      "upstreamSha256": "121ea200a9914957113b77c479ef3c4c49e6fae1c931d94ce6cb25c799984365"
+    }
+  }
+}

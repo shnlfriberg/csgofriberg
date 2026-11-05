@@ -1,0 +1,297 @@
+[
+  {
+    "id": "de_dust2",
+    "name": "Dust2",
+    "enabled": true,
+    "order": 0,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0,
+      "v": 0,
+      "width": 1,
+      "height": 1
+    },
+    "floors": [
+      {
+        "id": "main",
+        "name": "main",
+        "radarUrl": "/location-radars/de_dust2_main.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -2476,
+      "posY": 3239,
+      "scale": 4.4,
+      "points": []
+    }
+  },
+  {
+    "id": "de_mirage",
+    "name": "Mirage",
+    "enabled": true,
+    "order": 1,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0.135,
+      "v": 0.08,
+      "width": 0.76,
+      "height": 0.8400000000000001
+    },
+    "floors": [
+      {
+        "id": "main",
+        "name": "main",
+        "radarUrl": "/location-radars/de_mirage_main.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -3230,
+      "posY": 1713,
+      "scale": 5,
+      "points": []
+    }
+  },
+  {
+    "id": "de_inferno",
+    "name": "Inferno",
+    "enabled": true,
+    "order": 2,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0,
+      "v": 0,
+      "width": 1,
+      "height": 1
+    },
+    "floors": [
+      {
+        "id": "main",
+        "name": "main",
+        "radarUrl": "/location-radars/de_inferno_main.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -2087,
+      "posY": 3870,
+      "scale": 4.9,
+      "points": []
+    }
+  },
+  {
+    "id": "de_nuke",
+    "name": "Nuke",
+    "enabled": true,
+    "order": 3,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0.33,
+      "v": 0.2,
+      "width": 0.4699999999999999,
+      "height": 0.6000000000000001
+    },
+    "floors": [
+      {
+        "id": "upper",
+        "name": "upper",
+        "radarUrl": "/location-radars/de_nuke_upper.webp"
+      },
+      {
+        "id": "lower",
+        "name": "lower",
+        "radarUrl": "/location-radars/de_nuke_lower.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -3453,
+      "posY": 2887,
+      "scale": 7,
+      "points": []
+    }
+  },
+  {
+    "id": "de_ancient",
+    "name": "Ancient",
+    "enabled": true,
+    "order": 4,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0,
+      "v": 0,
+      "width": 1,
+      "height": 1
+    },
+    "floors": [
+      {
+        "id": "main",
+        "name": "main",
+        "radarUrl": "/location-radars/de_ancient_main.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -2953,
+      "posY": 2164,
+      "scale": 5,
+      "points": []
+    }
+  },
+  {
+    "id": "de_anubis",
+    "name": "Anubis",
+    "enabled": true,
+    "order": 5,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0,
+      "v": 0,
+      "width": 1,
+      "height": 1
+    },
+    "floors": [
+      {
+        "id": "main",
+        "name": "main",
+        "radarUrl": "/location-radars/de_anubis_main.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -2796,
+      "posY": 3328,
+      "scale": 5.22,
+      "points": []
+    }
+  },
+  {
+    "id": "de_cache",
+    "name": "Cache",
+    "enabled": true,
+    "order": 6,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0.16,
+      "v": 0.04,
+      "width": 0.6399999999999999,
+      "height": 0.9199999999999999
+    },
+    "floors": [
+      {
+        "id": "main",
+        "name": "main",
+        "radarUrl": "/location-radars/de_cache_main.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -2000,
+      "posY": 3250,
+      "scale": 5.5,
+      "points": []
+    }
+  },
+  {
+    "id": "de_overpass",
+    "name": "Overpass",
+    "enabled": false,
+    "order": 7,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0,
+      "v": 0,
+      "width": 1,
+      "height": 1
+    },
+    "floors": [
+      {
+        "id": "main",
+        "name": "main",
+        "radarUrl": "/location-radars/de_overpass_main.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -4831,
+      "posY": 1781,
+      "scale": 5.2,
+      "points": []
+    }
+  },
+  {
+    "id": "de_vertigo",
+    "name": "Vertigo",
+    "enabled": false,
+    "order": 8,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0.1,
+      "v": 0.1,
+      "width": 0.7,
+      "height": 0.75
+    },
+    "floors": [
+      {
+        "id": "upper",
+        "name": "upper",
+        "radarUrl": "/location-radars/de_vertigo_upper.webp"
+      },
+      {
+        "id": "lower",
+        "name": "lower",
+        "radarUrl": "/location-radars/de_vertigo_lower.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -3168,
+      "posY": 1762,
+      "scale": 4,
+      "points": []
+    }
+  },
+  {
+    "id": "de_train",
+    "name": "Train",
+    "enabled": false,
+    "order": 9,
+    "version": 1,
+    "width": 1024,
+    "height": 1024,
+    "bounds": {
+      "u": 0,
+      "v": 0,
+      "width": 1,
+      "height": 1
+    },
+    "floors": [
+      {
+        "id": "upper",
+        "name": "upper",
+        "radarUrl": "/location-radars/de_train_upper.webp"
+      },
+      {
+        "id": "lower",
+        "name": "lower",
+        "radarUrl": "/location-radars/de_train_lower.webp"
+      }
+    ],
+    "calibration": {
+      "posX": -2308,
+      "posY": 2078,
+      "scale": 4.082077,
+      "points": []
+    }
+  }
+]

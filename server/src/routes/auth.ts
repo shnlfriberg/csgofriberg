@@ -1,3 +1,5 @@
+import { claimCardResults } from '../card-link/claims';
+import type { Server } from 'socket.io';
 import { NextFunction, Request, Response, Router } from 'express';
 import { z } from 'zod';
 import { db } from '../db/knex';
@@ -36,6 +38,9 @@ import {
 } from '../services/emailVerification';
 import { GeeTestVerificationError, verifyGeeTest } from '../services/geetest';
 import { claimDailyChallengeAttempts } from '../services/dailyChallenge';
+import { claimLocation } from '../location/games';
+import { claimSubmissions } from '../location/submissions';
+import { issuePasswordReset, reservePasswordReset, resetPassword, recoveryEmailKey } from '../services/passwordReset';
 
 const router = Router();
 
@@ -65,6 +70,13 @@ const geeTestFields = {
 const registerSchema = credentialsSchema.extend({ email: z.string().trim().email().max(320).optional().or(z.literal('')), ...geeTestFields });
 const emailSchema = z.object({ email: z.string().trim().email().max(320), ...geeTestFields });
 const emailCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
+const passwordRequestSchema = emailSchema.extend({ username: credentialsSchema.shape.username });
+const passwordResetSchema = z.object({
+  username: credentialsSchema.shape.username,
+  email: z.string().trim().email().max(320),
+  code: z.string().trim().regex(/^\d{6}$/),
+  password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
+});
 
 function validateRegisterBody(req: Request, res: Response, next: NextFunction) {
   const result = registerSchema.safeParse(req.body);
@@ -209,6 +221,44 @@ router.post(
   })
 );
 
+router.post('/password/request',
+  rateLimit({ name: 'password-reset-request-ip', limit: 30, windowSeconds: 3600, key: requestIp, failClosed: true }),
+  validateBody(passwordRequestSchema),
+  asyncHandler(async (req, res) => {
+    try { await verifyGeeTest(req.body); }
+    catch (error) {
+      if (error instanceof GeeTestVerificationError) throw new HttpError(400, error.code);
+      throw error;
+    }
+    let reserved: boolean;
+    try { reserved = await reservePasswordReset(req.body.email); }
+    catch { throw new HttpError(503, 'RATE_LIMIT_UNAVAILABLE'); }
+    // Every valid request has the same response, independent of account eligibility or SMTP outcome.
+    res.json({ ok: true, retryAfterSeconds: 30 });
+    if (reserved) void issuePasswordReset(req.body.email, req.body.username).catch(() => {
+      // SMTP errors can contain recipient addresses; never log their raw content.
+      console.warn('[password-reset] delivery failed');
+    });
+  })
+);
+
+router.post('/password/reset',
+  rateLimit({ name: 'password-reset-verify-ip', limit: 10, windowSeconds: 600, key: requestIp, failClosed: true }),
+  validateBody(passwordResetSchema),
+  rateLimit({ name: 'password-reset-verify-mailbox', limit: 10, windowSeconds: 600,
+    key: (req) => recoveryEmailKey(req.body.email), failClosed: true }),
+  asyncHandler(async (req, res) => {
+    const userId = await resetPassword(req.body.email, req.body.code, req.body.password, req.body.username);
+    if (!userId) {
+      throw new HttpError(400, 'PASSWORD_RESET_CODE_INVALID');
+    }
+    const io = req.app.get('io') as Server | undefined;
+    io?.in(`identity:u:${userId}`).disconnectSockets(true);
+    clearAuthCookies(res);
+    res.json({ ok: true });
+  })
+);
+
 router.get('/me', requireAuth, rateLimit({
   name: 'auth-me',
   limit: 60,
@@ -349,6 +399,9 @@ router.post(
   asyncHandler(async (req, res) => {
     if (!req.guestKey) throw new HttpError(400, 'GUEST_KEY_REQUIRED');
     const guestKey = req.guestKey;
+    const cardClaimed = await claimCardResults(guestKey, req.user!.id);
+    const locationClaimed = await claimLocation(guestKey, req.user!.id, userNameFromUsername(req.user!.username));
+    await claimSubmissions(guestKey, req.user!.id, userNameFromUsername(req.user!.username));
     const dailyClaimed = await claimDailyChallengeAttempts({
       guestKey,
       userId: req.user!.id,
@@ -367,7 +420,7 @@ router.post(
       `room-player-performance:g:${guestKey}`,
       `room-player-performance:u:${req.user!.id}`
     );
-    res.json({ claimed: Number(gameClaimed) + dailyClaimed });
+    res.json({ claimed: Number(gameClaimed) + dailyClaimed + locationClaimed + cardClaimed });
   })
 );
 

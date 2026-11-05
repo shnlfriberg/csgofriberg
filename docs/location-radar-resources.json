@@ -1,0 +1,152 @@
+{
+  "title": "CS2 radar resource provenance",
+  "verifiedOn": "2026-10-05",
+  "source": {
+    "product": "Counter-Strike 2",
+    "steamAppId": 730,
+    "steamBuildId": "25687242",
+    "owner": "Valve Corporation",
+    "origin": "Locally installed game resources; no generated radar illustrations"
+  },
+  "extractionTool": {
+    "name": "Source 2 Viewer / ValveResourceFormat",
+    "url": "https://github.com/ValveResourceFormat/ValveResourceFormat"
+  },
+  "conversion": "Decoded game radar textures to lossless WebP; original canvas dimensions retained",
+  "calibration": "Overview origin/scale imported; measured per-floor calibration points and playable bounds still require field verification",
+  "rights": "Game radar artwork belongs to Valve and is not relicensed under the repository AGPL-3.0 code license.",
+  "mapCount": 10,
+  "radarCount": 13,
+  "files": [
+    {
+      "mapId": "de_dust2",
+      "floorId": "main",
+      "file": "client/public/location-radars/de_dust2_main.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_dust2_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_dust2.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "fec37be8b57898e461458590c73be0773bd3087e02e3547b651b6bf625512ca7"
+    },
+    {
+      "mapId": "de_mirage",
+      "floorId": "main",
+      "file": "client/public/location-radars/de_mirage_main.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_mirage_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_mirage.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "f8432e460dbc1da5b8abe0fd9b5d603e200ee3011e4c635e4a4f8988cc3a9070"
+    },
+    {
+      "mapId": "de_inferno",
+      "floorId": "main",
+      "file": "client/public/location-radars/de_inferno_main.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_inferno_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_inferno.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "083f71631951ea2eb057723497ff5e450796efd92e576379a757258469b52a1c"
+    },
+    {
+      "mapId": "de_nuke",
+      "floorId": "upper",
+      "file": "client/public/location-radars/de_nuke_upper.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_nuke_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_nuke.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "871b612151b7dbfe78e4455570cdd7d7494934d2451cb19373f84c49064c428a"
+    },
+    {
+      "mapId": "de_nuke",
+      "floorId": "lower",
+      "file": "client/public/location-radars/de_nuke_lower.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_nuke_lower_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_nuke.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "8b55e76adecd53bd28827e8c3a5938ce0211dfc5be834f1610d84ca4f674d78c"
+    },
+    {
+      "mapId": "de_ancient",
+      "floorId": "main",
+      "file": "client/public/location-radars/de_ancient_main.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_ancient_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_ancient.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "6e35f693fbb4b41ceff75665f1a6c31341a4406bfdf06ef11b84ec36c66e036c"
+    },
+    {
+      "mapId": "de_anubis",
+      "floorId": "main",
+      "file": "client/public/location-radars/de_anubis_main.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_anubis_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_anubis.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "1ff65324990c10ff78634f3ad7a87402f561aaa4d245ec0508c9c20d3a268db9"
+    },
+    {
+      "mapId": "de_cache",
+      "floorId": "main",
+      "file": "client/public/location-radars/de_cache_main.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_cache_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_cache.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "89330c39a223b56aa0bc8761d0f3362f0e1c939660a0bdfc24dc24ab77c72fa6"
+    },
+    {
+      "mapId": "de_overpass",
+      "floorId": "main",
+      "file": "client/public/location-radars/de_overpass_main.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_overpass_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_overpass.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "b89e3c863ea7ee0ddf3da5f63ceddad41038e4fcbb2dfc13d767d83ca94b5ef7"
+    },
+    {
+      "mapId": "de_vertigo",
+      "floorId": "upper",
+      "file": "client/public/location-radars/de_vertigo_upper.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_vertigo_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_vertigo.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "ead751768e61f27813b30e629d7ab1860a89f80b654a9f40c6de5c86f504ab66"
+    },
+    {
+      "mapId": "de_vertigo",
+      "floorId": "lower",
+      "file": "client/public/location-radars/de_vertigo_lower.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_vertigo_lower_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_vertigo.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "123acf6001721b6e6deb747313506b9a3bc835db94db5b5be6111ac5c898261e"
+    },
+    {
+      "mapId": "de_train",
+      "floorId": "upper",
+      "file": "client/public/location-radars/de_train_upper.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_train_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_train.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "cf6865daed7068a5a3473f8b9d4f286cd7975ef4fce38ccf64fb4217ab481314"
+    },
+    {
+      "mapId": "de_train",
+      "floorId": "lower",
+      "file": "client/public/location-radars/de_train_lower.webp",
+      "sourceResource": "panorama/images/overheadmaps/de_train_lower_radar_psd.vtex_c",
+      "overviewResource": "resource/overviews/de_train.txt",
+      "width": 1024,
+      "height": 1024,
+      "sha256": "5a7b9ad1481bb11af7ae401cefb7fa0b7453a927cb205b4585252ec05660a6e0"
+    }
+  ]
+}

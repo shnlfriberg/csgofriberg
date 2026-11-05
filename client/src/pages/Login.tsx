@@ -1,5 +1,5 @@
 import { CSSProperties, FormEvent, useState, useSyncExternalStore } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { KeyRound } from 'lucide-react';
 import Page from '../components/Page';
 import { api, errMsg } from '../api/client';
@@ -221,6 +221,7 @@ export default function Login() {
             {mode === 'login' ? t('auth.toRegister') : t('auth.toLogin')}
           </button>
         </form>
+        {mode === 'login' && <Link className="btn btn-ghost" to="/password-reset">{t('recovery.title')}</Link>}
       </div>
     </Page>
   );

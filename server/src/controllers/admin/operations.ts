@@ -15,7 +15,8 @@ export const addApiToken = asyncHandler(async (req, res) => {
     const token = await createApiToken(
       req.user!.id,
       req.body.name,
-      req.body.expiresInDays
+      req.body.expiresInDays,
+      req.body.scopes
     );
     res.status(201).json(token);
   });

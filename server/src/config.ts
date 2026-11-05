@@ -15,7 +15,7 @@ const configuredPasswordWorkers = Number(process.env.PASSWORD_WORKERS || 2);
 const configuredPasswordQueueLimit = Number(process.env.PASSWORD_QUEUE_LIMIT || 64);
 const configuredBcryptRounds = Number(process.env.BCRYPT_ROUNDS || 8);
 const configuredAdminImportBodyLimitBytes = Number(
-  process.env.ADMIN_IMPORT_BODY_LIMIT_BYTES || 2 * 1024 * 1024
+  process.env.ADMIN_IMPORT_BODY_LIMIT_BYTES || 16 * 1024 * 1024
 );
 const configuredPowDifficulty = Number(process.env.POW_DIFFICULTY || 17);
 const configuredPowRegisterDifficulty = Number(
@@ -70,7 +70,7 @@ export const config = {
   adminImportBodyLimitBytes:
     Number.isInteger(configuredAdminImportBodyLimitBytes) && configuredAdminImportBodyLimitBytes >= 64 * 1024
       ? configuredAdminImportBodyLimitBytes
-      : 2 * 1024 * 1024,
+      : 16 * 1024 * 1024,
   email: {
     host: process.env.EMAIL_SMTP_HOST?.trim() || '',
     port: Number(process.env.EMAIL_SMTP_PORT || 587),

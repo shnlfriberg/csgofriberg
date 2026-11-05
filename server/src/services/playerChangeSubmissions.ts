@@ -1,3 +1,5 @@
+import { submitOnce } from './submissionIdempotency';
+import { lockRow } from '../card-link/transaction';
 import { z } from 'zod';
 import { db } from '../db/knex';
 import { HttpError } from '../middleware/common';
@@ -15,6 +17,7 @@ export const playerChangeSubmissionSchema = z.object({
     playerId: z.coerce.number().int().positive().optional(),
     nickname: z.string().trim().min(1).max(64).optional(),
     changes: playerUpdateSchema,
+    expected: z.record(z.string(), z.unknown()).optional(),
   }).strict().refine((value) => value.playerId !== undefined || value.nickname !== undefined, {
     message: 'PLAYER_TARGET_REQUIRED',
   })).min(1).max(100),
@@ -72,10 +75,11 @@ function idFromReturning(value: unknown): number {
 
 export async function createPlayerChangeSubmission(
   input: PlayerChangeSubmissionInput,
-  apiToken: { id: number; name: string }
+  apiToken: { id: number; name: string },
+  idempotencyKey?: string
 ): Promise<{ submissionId: number | null; submitted: number; unchanged: number }> {
   let unchanged = 0;
-  const result = await db.transaction(async (trx) => {
+  const result = await db.transaction(async (trx) => submitOnce(trx, apiToken.id, idempotencyKey, input, async () => {
     const ids = input.players.flatMap((entry) => entry.playerId === undefined ? [] : [entry.playerId]);
     const names = input.players.flatMap((entry) => entry.nickname === undefined ? [] : [entry.nickname]);
     const rows = await trx('players').where((query) => {
@@ -127,13 +131,16 @@ export async function createPlayerChangeSubmission(
           unchanged += 1;
           continue;
         }
+        const expected = entry.expected && field in entry.expected ? canonical(field, entry.expected[field]) : oldValue;
+        const conflict = JSON.stringify(expected) !== JSON.stringify(oldValue);
         items.push({
           player_id: Number(row.id),
           player_nickname: String(row.nickname),
           field,
-          old_value: jsonValue(oldValue),
+          old_value: jsonValue(expected),
+          observed_value: jsonValue(oldValue),
           new_value: jsonValue(newValue),
-          status: 'pending',
+          status: conflict ? 'conflict' : 'pending',
         });
       }
     }
@@ -145,7 +152,7 @@ export async function createPlayerChangeSubmission(
     const submissionId = idFromReturning(created);
     await trx('player_change_items').insert(items.map((item) => ({ ...item, submission_id: submissionId })));
     return { submissionId, submitted: items.length, unchanged };
-  });
+  }));
   return result;
 }
 
@@ -173,7 +180,7 @@ export async function listPlayerChangeItems(options: {
     .select(
       'item.id', 'item.submission_id as submissionId', 'item.player_id as playerId',
       'item.player_nickname as playerNickname', 'item.field', 'item.old_value as oldValue',
-      'item.new_value as newValue', 'item.status', 'item.created_at as createdAt',
+      'item.observed_value as observedValue', 'item.new_value as newValue', 'item.status', 'item.created_at as createdAt',
       'item.handled_at as handledAt', 'submission.api_token_name as source',
       'handler.username as handledBy'
     )
@@ -183,6 +190,7 @@ export async function listPlayerChangeItems(options: {
     items: rows.map((row) => ({
       id: Number(row.id), submissionId: Number(row.submissionId), playerId: row.playerId == null ? null : Number(row.playerId),
       playerNickname: String(row.playerNickname), field: String(row.field),
+      observedValue: row.observedValue == null ? undefined : parseJsonValue(row.observedValue),
       oldValue: parseJsonValue(row.oldValue), newValue: parseJsonValue(row.newValue),
       status: String(row.status) as PlayerChangeStatus, source: String(row.source),
       createdAt: row.createdAt, handledAt: row.handledAt, handledBy: row.handledBy ?? null,
@@ -200,6 +208,8 @@ export async function reviewPlayerChangeItems(
   let rejected = 0;
   let conflict = 0;
   await db.transaction(async (trx) => {
+    // Match graph publication/build lock order before taking player row locks.
+    await lockRow(trx, 'card_catalog', { id: 1 });
     const items = await trx('player_change_items')
       .whereIn('id', itemIds).where({ status: 'pending' })
       .orderBy('id').forUpdate().select('*');

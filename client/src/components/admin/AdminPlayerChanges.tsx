@@ -17,6 +17,7 @@ interface PlayerChangeItem {
   playerNickname: string;
   field: string;
   oldValue: unknown;
+  observedValue?: unknown;
   newValue: unknown;
   status: ChangeStatus;
   source: string;
@@ -143,6 +144,7 @@ export default function AdminPlayerChanges() {
     { key: 'playerNickname', title: t('admin.nickname') },
     { key: 'field', title: t('admin.playerChangeField'), render: (item) => t(`admin.playerChangeFields.${item.field}`) },
     { key: 'oldValue', title: t('admin.playerChangeOldValue'), render: (item) => <code>{valueText(item.oldValue)}</code> },
+    { key: 'observedValue', title: t('location.baselineObserved'), render: (item) => <code>{item.observedValue === undefined ? '—' : valueText(item.observedValue)}</code> },
     { key: 'newValue', title: t('admin.playerChangeNewValue'), render: (item) => <code>{valueText(item.newValue)}</code> },
     { key: 'source', title: t('admin.playerChangeSource') },
     { key: 'createdAt', title: t('admin.playerChangeSubmittedAt'), render: (item) => formatDate(item.createdAt) },

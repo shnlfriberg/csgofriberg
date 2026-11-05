@@ -2,10 +2,13 @@ import crypto from 'crypto';
 import { db } from '../db/knex';
 import { HttpError } from '../middleware/common';
 
+import { DEFAULT_API_TOKEN_SCOPES, readTokenScopes, type ApiTokenScope } from './apiTokenScopes';
+
 const TOKEN_PREFIX = 'csgf_';
 const MAX_ACTIVE_TOKENS_PER_ADMIN = 20;
 
 export interface ApiTokenView {
+  scopes: ApiTokenScope[];
   id: number;
   name: string;
   prefix: string;
@@ -30,14 +33,15 @@ export async function listApiTokens(userId: number): Promise<ApiTokenView[]> {
     .where({ created_by_user_id: userId })
     .orderBy('created_at', 'desc')
     .limit(MAX_ACTIVE_TOKENS_PER_ADMIN)
-    .select('id', 'name', 'prefix', 'created_at', 'expires_at');
-  return tokens as ApiTokenView[];
+    .select('id', 'name', 'prefix', 'created_at', 'expires_at', 'scopes');
+  return tokens.map(token => ({ ...token, scopes: readTokenScopes(token.scopes) })) as ApiTokenView[];
 }
 
 export async function createApiToken(
   userId: number,
   name: string,
-  expiresInDays: number
+  expiresInDays: number,
+  scopes: ApiTokenScope[] = DEFAULT_API_TOKEN_SCOPES
 ): Promise<ApiTokenView & { token: string }> {
   const token = `${TOKEN_PREFIX}${crypto.randomBytes(32).toString('base64url')}`;
   const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
@@ -59,6 +63,7 @@ export async function createApiToken(
       .insert({
         name,
         token_hash: hashApiToken(token),
+        scopes: JSON.stringify(scopes),
         prefix,
         created_by_user_id: userId,
         expires_at: expiresAt,
@@ -71,9 +76,9 @@ export async function createApiToken(
   });
   const created = await db('api_tokens')
     .where({ id, created_by_user_id: userId })
-    .first('id', 'name', 'prefix', 'created_at', 'expires_at');
+    .first('id', 'name', 'prefix', 'created_at', 'expires_at', 'scopes');
   if (!created) throw new HttpError(500, 'INTERNAL_ERROR');
-  return { ...(created as ApiTokenView), token };
+  return { ...(created as ApiTokenView), scopes: readTokenScopes(created.scopes), token };
 }
 
 export async function revokeApiToken(userId: number, tokenId: number): Promise<void> {

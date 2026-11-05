@@ -85,5 +85,5 @@ export const removePlayer = asyncHandler(async (req, res) => {
   });
 
 export const importPlayerList = asyncHandler(async (req, res) => {
-    res.json(await importPlayers(req.body.players));
+    res.json(await importPlayers(req.body.players, req.user!.id));
   });

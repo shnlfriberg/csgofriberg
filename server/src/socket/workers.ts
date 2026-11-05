@@ -1,5 +1,5 @@
 import { Server } from 'socket.io';
-import { getPresenceStats, PresenceStats } from '../services/presence';
+import { cleanupPresence, getPresenceStats, PresenceStats } from '../services/presence';
 import { claimDueSchedules } from '../services/roomStore';
 import { logTransientError } from '../services/transientLog';
 import { refreshConnectionSlots } from './connection';
@@ -58,6 +58,7 @@ export function createSocketWorkers(io: Server): SocketWorkers {
         onlineUsers: stats.onlineUsers,
         multiplayerRooms: stats.multiplayerRooms,
         singleGames: stats.singleGames,
+        modes: stats.modes,
       };
       if (lastPresence && JSON.stringify(lastPresence) === JSON.stringify(comparable)) return;
       lastPresence = comparable;
@@ -66,7 +67,7 @@ export function createSocketWorkers(io: Server): SocketWorkers {
   }, 2000);
   presenceWorker.unref?.();
   const presenceCleanupWorker = setInterval(() => {
-    void getPresenceStats().catch((err) => logTransientError('[presence:cleanup]', err));
+    void cleanupPresence().catch((err) => logTransientError('[presence:cleanup]', err));
   }, 60_000);
   presenceCleanupWorker.unref?.();
   let scheduleRequest: Promise<void> | null = null;

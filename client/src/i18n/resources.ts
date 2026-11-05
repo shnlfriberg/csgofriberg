@@ -1,8 +1,17 @@
+import { cardErrors } from '../card-link/errors';
+import { cardTranslations } from '../card-link/messages';
 import { turtleSoupTranslations, turtleSoupErrors } from './turtleSoup';
+import { locationTranslations } from './location';
+import { presenceTranslations } from './presence';
+import { recoveryTranslations } from './recovery';
 export const resources = {
   zh: {
     translation: {
+      recovery: recoveryTranslations.zh,
       soup: turtleSoupTranslations.zh,
+      presence: presenceTranslations.zh,
+      location: locationTranslations.zh,
+      card: cardTranslations.zh,
       common: {
         brand: '弗一把',
         guest: '访客',
@@ -260,7 +269,9 @@ export const resources = {
         apiTokensTitle: '外部 API Token', apiTokensCount: '{{count}} 个有效 Token', apiTokenName: 'Token 名称', apiTokenNamePlaceholder: '例如：选手数据同步', apiTokenExpiresIn: '有效天数（1-365）', createApiToken: '生成 Token', creatingApiToken: '生成中...', apiTokenCreated: 'API Token 已生成', newApiToken: '新 API Token', apiTokenShownOnce: '明文仅显示这一次，请妥善保管。', copyApiToken: '复制 Token', apiTokenCopied: '已复制', apiTokenCopyFailed: '复制失败，请手动选择 Token', noApiTokens: '暂无有效 API Token', apiTokenCreatedAt: '创建：{{date}}', apiTokenExpiresAt: '到期：{{date}}', revokeApiToken: '撤销', revokeApiTokenTitle: '撤销 {{name}}？', revokeApiTokenMessage: '使用该 Token 的外部调用会立即失效。', apiTokenRevoked: 'API Token 已撤销',
       },
       errors: {
+        PASSWORD_RESET_CODE_INVALID: '验证码无效、已过期或尝试次数过多，请重新获取验证码',
         ...turtleSoupErrors.zh,
+        ...cardErrors.zh,
         GEETEST_REQUIRED: '请完成人机验证', GEETEST_FAILED: '人机验证失败，请重试', EMAIL_VERIFICATION_CODE_INVALID: '验证码无效或已过期',
         EMAIL_ALREADY_VERIFIED: '邮箱验证完成后不能再次修改', VALIDATION_FAILED: '输入格式不正确', REGISTER_USERNAME_REQUIRED: '请输入用户名', REGISTER_USERNAME_LENGTH: '用户名长度必须为 2-20 个字符', REGISTER_USERNAME_CHARACTERS: '用户名只能包含字母、数字、下划线、连字符和中文', REGISTER_PASSWORD_REQUIRED: '请输入密码', REGISTER_PASSWORD_LENGTH: '密码长度必须为 10-128 个字符', INVALID_REQUEST_BODY: '请求数据不完整，请重试', PAYLOAD_TOO_LARGE: '导入数据过大，请拆分后重试',
         INTERNAL_ERROR: '服务器开小差了，请稍后再试', AUTH_REQUIRED: '请先登录', AUTH_EXPIRED: '登录状态已过期，请重新登录',
@@ -269,6 +280,7 @@ export const resources = {
         ALREADY_GUESSED: '已经猜过这名选手了', PLAYER_NOT_FOUND: '选手不存在', PLAYER_TARGET_REQUIRED: '请提供选手 ID 或昵称', PLAYER_TARGET_MISMATCH: '选手 ID 与昵称不匹配', DUPLICATE_PLAYER_CHANGE_TARGET: '同一批次不能重复提交同一名选手', PLAYER_HAS_HISTORY: '该选手已有历史对局，无法永久删除；可以停用并移出选手池',
         PLAYER_MUST_BE_DISABLED: '永久删除前必须先停用该选手', NICKNAME_TAKEN: '选手昵称已存在', EMPTY_PLAYER_POOL: '选手库为空，请联系管理员导入数据', DIFFICULTY_UNAVAILABLE: '该难度尚未开放或选手库为空', INVALID_DIFFICULTY: '包含不存在的难度', DAILY_CHALLENGE_COMPLETED: '该难度今天已经完成，不能重新挑战。', DAILY_CHALLENGE_EXPIRED: '每日挑战已刷新，请重新进入。', DAILY_CHALLENGE_INCOMPLETE: '完成该难度的每日挑战后才能查看排行榜。',
         REDIS_UNAVAILABLE: '游戏状态服务暂时不可用，请稍后重试', RATE_LIMITED: '操作过于频繁，请稍后再试', RATE_LIMIT_UNAVAILABLE: '服务繁忙，请稍后重试',
+        API_TOKEN_SCOPE_REQUIRED: 'Token 缺少此操作所需权限', IDEMPOTENCY_KEY_INVALID: '幂等请求标识格式无效', IDEMPOTENCY_KEY_REUSED: '同一请求标识不能用于不同内容',
         AUTH_BUSY: '登录服务繁忙，请稍后重试', IDENTITY_REQUIRED: '身份校验失败，请刷新页面', API_TOKEN_REQUIRED: '缺少 API Token', API_TOKEN_INVALID: 'API Token 无效或已过期', API_TOKEN_NOT_FOUND: 'API Token 不存在', API_TOKEN_LIMIT_REACHED: '有效 API Token 已达到 20 个上限', ALREADY_IN_ROOM: '你已在一个房间中，请先退出',
         ROOM_NOT_FOUND: '房间不存在', ROOM_STARTED: '对局已开始，无法加入', ROOM_FULL: '房间已满', SPECTATING_DISABLED: '该房间未开放观战', ROOM_VERIFIED_EMAIL_ONLY: '该房间仅允许已验证邮箱用户加入',
         ROOM_CAPACITY_REACHED: '当前服务器房间数量已达上限，请稍后重试', NOT_IN_WAITING_ROOM: '当前不在等待中的房间', NOT_IN_ROOM: '你不在任何房间中',
@@ -285,7 +297,11 @@ export const resources = {
   },
   en: {
     translation: {
+      recovery: recoveryTranslations.en,
       soup: turtleSoupTranslations.en,
+      presence: presenceTranslations.en,
+      location: locationTranslations.en,
+      card: cardTranslations.en,
       difficulty: {
         beginner: 'Beginner',
         easy: 'Easy',
@@ -467,6 +483,8 @@ export const resources = {
       },
       errors: {
         ...turtleSoupErrors.en,
+        PASSWORD_RESET_CODE_INVALID: 'The code is invalid, expired, or has too many attempts. Request a new code.',
+        ...cardErrors.en,
         GEETEST_REQUIRED: 'Please complete the human verification.', GEETEST_FAILED: 'Human verification failed. Try again.', EMAIL_VERIFICATION_CODE_INVALID: 'The verification code is invalid or expired.',
         EMAIL_ALREADY_VERIFIED: 'A verified email cannot be changed.', VALIDATION_FAILED: 'Invalid input', REGISTER_USERNAME_REQUIRED: 'Enter a username.', REGISTER_USERNAME_LENGTH: 'The username must be 2-20 characters long.', REGISTER_USERNAME_CHARACTERS: 'Use only letters, numbers, underscores, hyphens, or Chinese characters.', REGISTER_PASSWORD_REQUIRED: 'Enter a password.', REGISTER_PASSWORD_LENGTH: 'The password must be 10-128 characters long.', INVALID_REQUEST_BODY: 'The request is incomplete. Please try again.', PAYLOAD_TOO_LARGE: 'The import is too large. Split it and try again.',
         INTERNAL_ERROR: 'Something went wrong on the server. Please try again later.', AUTH_REQUIRED: 'Please log in first.', AUTH_EXPIRED: 'Your session has expired. Please log in again.',
@@ -475,6 +493,7 @@ export const resources = {
         ALREADY_GUESSED: 'You already guessed this player.', PLAYER_NOT_FOUND: 'Player not found.', PLAYER_TARGET_REQUIRED: 'Provide a player ID or nickname.', PLAYER_TARGET_MISMATCH: 'The player ID and nickname do not refer to the same player.', DUPLICATE_PLAYER_CHANGE_TARGET: 'The same player cannot be submitted twice in one batch.', PLAYER_HAS_HISTORY: 'This player has game history and cannot be permanently deleted. Disable and remove them from the pool instead.',
         PLAYER_MUST_BE_DISABLED: 'Disable the player before permanently deleting them.', NICKNAME_TAKEN: 'That player nickname already exists.', EMPTY_PLAYER_POOL: 'The player pool is empty. Ask an administrator to import players.', DIFFICULTY_UNAVAILABLE: 'This difficulty is unavailable or has no players.', INVALID_DIFFICULTY: 'One or more difficulties do not exist.', DAILY_CHALLENGE_COMPLETED: 'This difficulty has already been completed today.', DAILY_CHALLENGE_EXPIRED: 'The daily challenge has refreshed. Open it again.', DAILY_CHALLENGE_INCOMPLETE: 'Complete this daily challenge difficulty to view its leaderboard.',
         REDIS_UNAVAILABLE: 'The game state service is temporarily unavailable.', RATE_LIMITED: 'Too many requests. Try again later.', RATE_LIMIT_UNAVAILABLE: 'The service is busy. Try again later.',
+        API_TOKEN_SCOPE_REQUIRED: 'Token lacks the required permission', IDEMPOTENCY_KEY_INVALID: 'Invalid idempotency key', IDEMPOTENCY_KEY_REUSED: 'Idempotency key already used for different content',
         AUTH_BUSY: 'The login service is busy. Try again later.', IDENTITY_REQUIRED: 'Identity verification failed. Refresh the page.', API_TOKEN_REQUIRED: 'API token required.', API_TOKEN_INVALID: 'The API token is invalid or expired.', API_TOKEN_NOT_FOUND: 'API token not found.', API_TOKEN_LIMIT_REACHED: 'The limit of 20 active API tokens has been reached.', ALREADY_IN_ROOM: 'You are already in a room. Leave it first.',
         ROOM_NOT_FOUND: 'Room not found.', ROOM_STARTED: 'The match has already started.', ROOM_FULL: 'The room is full.', SPECTATING_DISABLED: 'Spectating is disabled for this room.', ROOM_VERIFIED_EMAIL_ONLY: 'This room only allows users with verified email addresses.',
         ROOM_CAPACITY_REACHED: 'The server has reached its room limit. Try again later.', NOT_IN_WAITING_ROOM: 'You are not in a waiting room.', NOT_IN_ROOM: 'You are not in a room.',
@@ -491,7 +510,11 @@ export const resources = {
   },
   ja: {
     translation: {
+      recovery: recoveryTranslations.ja,
       soup: turtleSoupTranslations.ja,
+      presence: presenceTranslations.ja,
+      location: locationTranslations.ja,
+      card: cardTranslations.ja,
       difficulty: {
         beginner: '入門',
         easy: 'イージー',
@@ -671,6 +694,8 @@ export const resources = {
       },
       errors: {
         ...turtleSoupErrors.ja,
+        PASSWORD_RESET_CODE_INVALID: 'コードが無効、期限切れ、または試行回数の上限です。新しいコードを取得してください。',
+        ...cardErrors.ja,
         GEETEST_REQUIRED: '本人確認を完了してください。', GEETEST_FAILED: '本人確認に失敗しました。もう一度お試しください。', EMAIL_VERIFICATION_CODE_INVALID: '確認コードが無効または期限切れです。',
         EMAIL_ALREADY_VERIFIED: '確認済みメールは変更できません。', VALIDATION_FAILED: '入力形式が正しくありません', REGISTER_USERNAME_REQUIRED: 'ユーザー名を入力してください。', REGISTER_USERNAME_LENGTH: 'ユーザー名は 2-20 文字で入力してください。', REGISTER_USERNAME_CHARACTERS: 'ユーザー名には英数字、アンダースコア、ハイフン、中国語文字のみ使用できます。', REGISTER_PASSWORD_REQUIRED: 'パスワードを入力してください。', REGISTER_PASSWORD_LENGTH: 'パスワードは 10-128 文字で入力してください。', INVALID_REQUEST_BODY: 'リクエストデータが不足しています。もう一度お試しください。', PAYLOAD_TOO_LARGE: 'インポートデータが大きすぎます。分割して再試行してください。',
         INTERNAL_ERROR: 'サーバーで問題が発生しました。後でもう一度お試しください。', AUTH_REQUIRED: '先にログインしてください。', AUTH_EXPIRED: 'ログインの有効期限が切れました。再度ログインしてください。',
@@ -680,6 +705,7 @@ export const resources = {
         PLAYER_MUST_BE_DISABLED: '完全削除する前に選手を無効化してください。', NICKNAME_TAKEN: 'この選手名は既に存在します。', EMPTY_PLAYER_POOL: '選手プールが空です。管理者にインポートを依頼してください。',
         DIFFICULTY_UNAVAILABLE: 'この難易度は現在利用できないか、選手プールが空です。', INVALID_DIFFICULTY: '存在しない難易度が含まれています。', DAILY_CHALLENGE_COMPLETED: 'この難易度は本日すでに完了しています。', DAILY_CHALLENGE_EXPIRED: 'デイリーチャレンジが更新されました。もう一度開いてください。', DAILY_CHALLENGE_INCOMPLETE: 'この難易度のデイリーチャレンジを完了するとランキングを確認できます。',
         REDIS_UNAVAILABLE: 'ゲーム状態サービスを一時的に利用できません。', RATE_LIMITED: '操作が多すぎます。後でもう一度お試しください。', RATE_LIMIT_UNAVAILABLE: 'サービスが混雑しています。後でもう一度お試しください。',
+        API_TOKEN_SCOPE_REQUIRED: 'トークンに必要な権限がありません', IDEMPOTENCY_KEY_INVALID: '冪等キーの形式が無効です', IDEMPOTENCY_KEY_REUSED: '同じキーを異なる内容には使用できません',
         AUTH_BUSY: 'ログインサービスが混雑しています。', IDENTITY_REQUIRED: '本人確認に失敗しました。ページを更新してください。', API_TOKEN_REQUIRED: 'API トークンが必要です。', API_TOKEN_INVALID: 'API トークンが無効または期限切れです。', API_TOKEN_NOT_FOUND: 'API トークンが見つかりません。', API_TOKEN_LIMIT_REACHED: '有効な API トークンは最大 20 件です。', ALREADY_IN_ROOM: 'すでにルームに参加しています。先に退出してください。',
         ROOM_NOT_FOUND: 'ルームが見つかりません。', ROOM_STARTED: '対局はすでに始まっています。', ROOM_FULL: 'ルームは満員です。', SPECTATING_DISABLED: 'このルームは観戦できません。', ROOM_VERIFIED_EMAIL_ONLY: 'このルームには確認済みメールのユーザーのみ参加できます。',
         ROOM_CAPACITY_REACHED: 'サーバーのルーム数が上限に達しました。後でもう一度お試しください。', NOT_IN_WAITING_ROOM: '待機中のルームにいません。', NOT_IN_ROOM: 'ルームに参加していません。',

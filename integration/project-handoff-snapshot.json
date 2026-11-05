@@ -1,0 +1,200 @@
+{
+  "documentVersion": "2026-10-23",
+  "observedAt": "2026-10-23T02:16:33.886204+08:00",
+  "workspace": "F:/friberg-ex",
+  "gitMetadataPresent": false,
+  "upstream": {
+    "reviewedDate": "2026-10-23",
+    "repository": "https://github.com/shnlfriberg/csgofriberg.git",
+    "branch": "main",
+    "commit": "99f2e471474cfefd38de13033608bdc816a24242"
+  },
+  "localProfile": {
+    "database": "server/data/csgofriberg.sqlite3",
+    "assets": "data/location-assets",
+    "apiPort": 3002,
+    "webPort": 5175,
+    "redisPort": 16380,
+    "redisUrl": "redis://127.0.0.1:16380",
+    "redisPrefix": "friberg-integrated:"
+  },
+  "tableCounts": {
+    "announcements": 0,
+    "api_tokens": 2,
+    "daily_challenge_attempts": 0,
+    "daily_challenges": 12,
+    "difficulty_levels": 3,
+    "email_verifications": 0,
+    "games": 0,
+    "guest_accounts": 309,
+    "location_asset_tasks": 0,
+    "location_capture_drafts": 379,
+    "location_catalog_revision": 2,
+    "location_contributions": 1,
+    "location_daily": 4,
+    "location_daily_attempts": 3,
+    "location_maps": 10,
+    "location_point_versions": 381,
+    "location_points": 381,
+    "location_progress": 4,
+    "location_progress_archive": 0,
+    "location_questions": 408,
+    "location_replay_snapshots": 0,
+    "location_result_outbox": 0,
+    "location_results": 6,
+    "location_submissions": 0,
+    "location_versions": 841,
+    "match_players": 63,
+    "match_records": 28,
+    "match_reports": 3,
+    "player_change_items": 146,
+    "player_change_submissions": 4,
+    "player_difficulties": 1394,
+    "players": 669,
+    "report_whitelist": 0,
+    "users": 4
+  },
+  "questionStatuses": {
+    "draft": 0,
+    "review": 0,
+    "published": 408,
+    "disabled": 0
+  },
+  "maps": [
+    {
+      "id": "de_dust2",
+      "name": "Dust2",
+      "version": 3,
+      "enabled": true,
+      "floors": [
+        "main"
+      ],
+      "questions": 115,
+      "publishedCurrent": 115
+    },
+    {
+      "id": "de_mirage",
+      "name": "Mirage",
+      "version": 2,
+      "enabled": true,
+      "floors": [
+        "main"
+      ],
+      "questions": 184,
+      "publishedCurrent": 184
+    },
+    {
+      "id": "de_inferno",
+      "name": "Inferno",
+      "version": 2,
+      "enabled": true,
+      "floors": [
+        "main"
+      ],
+      "questions": 109,
+      "publishedCurrent": 109
+    },
+    {
+      "id": "de_nuke",
+      "name": "Nuke",
+      "version": 3,
+      "enabled": true,
+      "floors": [
+        "upper",
+        "lower"
+      ],
+      "questions": 0,
+      "publishedCurrent": 0
+    },
+    {
+      "id": "de_ancient",
+      "name": "Ancient",
+      "version": 3,
+      "enabled": true,
+      "floors": [
+        "main"
+      ],
+      "questions": 0,
+      "publishedCurrent": 0
+    },
+    {
+      "id": "de_anubis",
+      "name": "Anubis",
+      "version": 2,
+      "enabled": true,
+      "floors": [
+        "main"
+      ],
+      "questions": 0,
+      "publishedCurrent": 0
+    },
+    {
+      "id": "de_cache",
+      "name": "Cache",
+      "version": 2,
+      "enabled": true,
+      "floors": [
+        "main"
+      ],
+      "questions": 0,
+      "publishedCurrent": 0
+    },
+    {
+      "id": "de_overpass",
+      "name": "Overpass",
+      "version": 2,
+      "enabled": false,
+      "floors": [
+        "main"
+      ],
+      "questions": 0,
+      "publishedCurrent": 0
+    },
+    {
+      "id": "de_vertigo",
+      "name": "Vertigo",
+      "version": 3,
+      "enabled": false,
+      "floors": [
+        "upper",
+        "lower"
+      ],
+      "questions": 0,
+      "publishedCurrent": 0
+    },
+    {
+      "id": "de_train",
+      "name": "Train",
+      "version": 3,
+      "enabled": false,
+      "floors": [
+        "upper",
+        "lower"
+      ],
+      "questions": 0,
+      "publishedCurrent": 0
+    }
+  ],
+  "playerDifficultyMemberships": [
+    {
+      "key": "beginner",
+      "members": 330
+    },
+    {
+      "key": "easy",
+      "members": 395
+    },
+    {
+      "key": "normal",
+      "members": 669
+    }
+  ],
+  "assetFileCount": 822,
+  "assetBytes": 10239752,
+  "latestVerifiedTests": {
+    "server": 301,
+    "client": 241,
+    "scraperHistoricalPassed": 124,
+    "scraperHistoricalSkipped": 1
+  }
+}

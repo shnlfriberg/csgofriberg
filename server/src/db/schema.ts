@@ -1,4 +1,7 @@
+import { ensureCardSchema } from '../card-link/schema';
 import { Knex } from 'knex';
+import { ensureExternalSubmissionSchema } from './externalSubmissionSchema';
+import { ensureLocationSchema } from '../location/schema';
 import { db } from './knex';
 import { DIFFICULTY_LEVELS } from '../difficulties';
 
@@ -54,6 +57,17 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
       t.timestamp('expires_at').notNullable();
       t.timestamp('created_at').notNullable().defaultTo(instance.fn.now());
       t.index(['user_id', 'expires_at']);
+    });
+  }
+  if (!(await instance.schema.hasTable('password_resets'))) {
+    await instance.schema.createTable('password_resets', (t) => {
+      t.integer('user_id').primary().references('id').inTable('users').onDelete('CASCADE');
+      t.string('email', 320).notNullable();
+      t.string('token_hash', 64).notNullable();
+      t.integer('token_version').notNullable();
+      t.integer('attempts').notNullable().defaultTo(0);
+      t.timestamp('expires_at').notNullable();
+      t.index(['expires_at']);
     });
   }
   if (!(await instance.schema.hasTable('guest_accounts'))) {
@@ -598,5 +612,7 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
   await instance.raw(
     'create unique index if not exists "daily_attempts_solve_order_unique" on "daily_challenge_attempts" ("challenge_id", "solve_order") where "solve_order" is not null'
   );
-
+  await ensureExternalSubmissionSchema(instance);
+  await ensureLocationSchema(instance);
+  await ensureCardSchema(instance);
 }

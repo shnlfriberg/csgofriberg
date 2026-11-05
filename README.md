@@ -1,4 +1,10 @@
+> **开发接手入口（2026-10-23）**：先读 [项目设计与接手手册](docs/PROJECT_HANDOFF.md)，了解演进、架构、玩法、数据保护、运行验证和待办；智能体从根目录 [AGENTS.md](AGENTS.md) 开始。当前数量与配置见 [只读快照](integration/project-handoff-snapshot.json)。
+
 <div align="center">
+
+> **仓库边界（2026-11-06）**：本公开仓库维护游戏、图寻、卡牌连接及选手数据审核接口；爬虫程序独立维护在私有仓库 `shnlfriberg/external-scraper`，不随本仓库分发。已有权限的维护者可将私有仓库检出到 `external-scraper/`，并按其说明恢复可选联调脚本。本机双击 `启动本机测试.cmd`，访问 **http://localhost:5175/**；后台为 **http://localhost:5175/admin**。测试账号见本机 `.local-data/test-admin.json`，完整历史说明见 [整合说明](docs/integration.md)。
+
+> **开发基线核对（2026-10-20）**：公共游戏代码已核对至 [`shnlfriberg/csgofriberg@99f2e47`](https://github.com/shnlfriberg/csgofriberg/commit/99f2e471474cfefd38de13033608bdc816a24242)。普通玩法、多人、海龟汤和管理后台没有缺失的上游修复；保留图寻与爬虫开发内容。运行 `pnpm local:start`、`pnpm local:stop` 统一管理本机服务，`pnpm upstream:check` 检查公共代码及已审阅扩展是否偏离基线。详见 [逐项比对与统一结果](docs/upstream-unification.md)。
 
 # 弗一把 (csgofriberg)
 
@@ -199,6 +205,22 @@ client/src
 ├── components/        # Page / GuessBoard / GuessInputBar / DataTable / admin/*
 └── pages/             # Home / SingleGame / MultiLobby / MultiRoom / Stats / ...
 ```
+
+## 图寻
+
+娱乐模式页底部新增“图寻题目投稿”：玩家和游客都可上传截图并在雷达上标注物体位置，管理员在“图寻管理 → 投稿审核”中指定难度采纳或拒绝删除。图寻生涯统计显示累计采纳数，排行榜新增“图寻圣人榜”。见 [投稿与审核说明](docs/community-submissions.md)。
+
+首页“娱乐模式”提供随机五轮、每日挑战、多人图寻和原海龟汤入口。图寻管理位于管理员后台的同名页签，题目管理的“新增题目”窗口支持拖拽上传、地图 / 楼层选择、getpos 解析、雷达预览、草稿和审核发布。
+
+- [真实素材采集与导入](docs/location-capture.md)
+- [本机启动、上传与测试](docs/location-local-testing.md)
+- [原始题库保存、ZIP 备份与上线迁移](docs/location-bank-transfer.md)
+- [HTTP 和 Socket.IO 接口](docs/location-api.md)
+- [共享素材卷、部署、备份与回滚](docs/location-deployment.md)
+- [测试结果与待完成项](docs/location-verification.md)
+- [雷达资源来源与文件哈希](docs/location-radar-resources.json)
+
+全新安装的题库初始为空。2026-11-04 内容快照随代码保存在 [release-data/2026-11-04](release-data/2026-11-04/)：1,234 道题（1,233 道已发布）、1,118 份采集草稿、七张开放地图，以及完整引用图片。目录同时提供保留历史内容版本的 SQLite 内容归档、2,484 个图片文件和 669 人生涯导出；不含账号、凭据或个人战绩。使用方式与边界见 [题库迁移说明](docs/location-bank-transfer.md)。下载代码或更新镜像不会自动覆盖线上数据库。
 
 ## 贡献
 

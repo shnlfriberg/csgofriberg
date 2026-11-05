@@ -1,3 +1,4 @@
+import { API_TOKEN_SCOPES } from '../services/apiTokenScopes';
 // Admin HTTP contracts are shared by the route declarations and handlers.
 import { z } from 'zod';
 
@@ -30,6 +31,7 @@ export const banSchema = z.object({ banned: z.boolean() });
 export const apiTokenCreateSchema = z.object({
   name: z.string().trim().min(1).max(64),
   expiresInDays: z.number().int().min(1).max(365).default(90),
+  scopes: z.array(z.enum(API_TOKEN_SCOPES)).min(1).max(3).optional(),
 });
 
 export const userGameReplayParamsSchema = z.object({

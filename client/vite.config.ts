@@ -1,6 +1,11 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { fileURLToPath } from 'node:url';
+
+const localEnv = loadEnv('development', fileURLToPath(new URL('../', import.meta.url)), 'VITE_');
+const apiTarget = process.env.VITE_API_PROXY_TARGET || localEnv.VITE_API_PROXY_TARGET || 'http://localhost:3000';
+const devPort = Number(process.env.VITE_DEV_PORT || localEnv.VITE_DEV_PORT || 5173);
 
 const configuredVersion = process.env.RESOURCE_VERSION?.trim();
 if (configuredVersion && !/^\d{13}$/.test(configuredVersion)) {
@@ -38,17 +43,18 @@ export default defineConfig({
     },
   ],
   server: {
-    port: 5173,
+    port: devPort,
     proxy: {
-      '/api': 'http://localhost:3000',
-      '/socket.io': { target: 'http://localhost:3000', ws: true },
+      '/api': apiTarget,
+      '/location-assets': apiTarget,
+      '/socket.io': { target: apiTarget, ws: true },
     },
   },
   build: {
     chunkSizeWarningLimit: 700,
     rollupOptions: {
       output: {
-        // 路由保持静态导入,所有 chunk 首屏即加载;拆分只为长缓存:
+        // 重型路由按需加载；共享依赖保留稳定分组用于长缓存：
         // 业务代码变更时 vendor chunk 的 hash 不变,老用户无需重新下载。
         // 注意:所有依赖 React 的包必须同在 vendor 内,单独拆出的 chunk
         // 只能是确定不依赖 React 的包,否则 chunk 间会形成循环引用,

@@ -1,5 +1,7 @@
+import { lazy, Suspense } from 'react';
+const AdminCardLink = lazy(() => import('../components/admin/AdminCardLink'));
 import { useEffect, useState } from 'react';
-import { AlertTriangle, ClipboardCheck, Gamepad2, Swords, Users, Wrench } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, Wrench } from 'lucide-react';
 import Page from '../components/Page';
 import AdminPlayers from '../components/admin/AdminPlayers';
 import AdminAnnouncements from '../components/admin/AdminAnnouncements';
@@ -8,15 +10,21 @@ import AdminUsers, { AdminGuests } from '../components/admin/AdminUsers';
 import AdminApiTokens from '../components/admin/AdminApiTokens';
 import AdminReports from '../components/admin/AdminReports';
 import AdminPlayerChanges from '../components/admin/AdminPlayerChanges';
+import AdminLocation from '../components/admin/AdminLocation';
+import AdminPresence from '../components/admin/AdminPresence';
 import { getSocket } from '../api/socket';
 import { PresenceStats } from '../types';
 import { useTranslation } from 'react-i18next';
+import { useAdminTab } from '../components/admin/useAdminTab';
 
-type Tab = 'players' | 'playerChanges' | 'users' | 'guests' | 'reports' | 'announcements' | 'apiTokens' | 'resources';
+type Tab = 'players' | 'playerChanges' | 'users' | 'guests' | 'reports' | 'announcements' | 'apiTokens' | 'resources' | 'location' | 'cardLink';
+const tabs: Tab[] = ['players', 'playerChanges', 'users', 'guests', 'reports', 'announcements', 'apiTokens', 'resources', 'location', 'cardLink'];
 
 export default function Admin() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>('players');
+  const [tab, setTab] = useAdminTab('main', tabs, 'players');
+  const [cardVisited,setCardVisited]=useState(tab === 'cardLink');
+  const [locationVisited, setLocationVisited] = useState(tab === 'location');
   const [presence, setPresence] = useState<PresenceStats | null>(null);
 
   useEffect(() => {
@@ -35,24 +43,8 @@ export default function Admin() {
 
   return (
     <Page title={t('admin.title')} icon={<Wrench size={17} />}>
-      <section className="presence-grid" aria-label={t('admin.presence')}>
-        <div className="presence-item">
-          <Users size={20} />
-          <span>{t('admin.online')}</span>
-          <strong>{presence?.onlineUsers ?? '-'}</strong>
-        </div>
-        <div className="presence-item">
-          <Swords size={20} />
-          <span>{t('admin.multiRooms')}</span>
-          <strong>{presence?.multiplayerRooms ?? '-'}</strong>
-        </div>
-        <div className="presence-item">
-          <Gamepad2 size={20} />
-          <span>{t('admin.singleGames')}</span>
-          <strong>{presence?.singleGames ?? '-'}</strong>
-        </div>
-      </section>
-      <div className="admin-tabs">
+      <AdminPresence presence={presence} />
+      <div className="admin-tabs"><button className={tab === 'cardLink' ? 'btn' : 'btn btn-ghost'} onClick={() => {setCardVisited(true);setTab('cardLink');}}>{t('card.admin')}</button>
         <button className={tab === 'players' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('players')}>
           {t('admin.playersTab')}
         </button>
@@ -79,8 +71,11 @@ export default function Admin() {
         <button className={tab === 'resources' ? 'btn' : 'btn btn-ghost'} onClick={() => setTab('resources')}>
           {t('admin.resourcesTab')}
         </button>
+        <button className={tab === 'location' ? 'btn' : 'btn btn-ghost'} onClick={() => { setLocationVisited(true); setTab('location'); }}>{t('location.admin')}</button>
       </div>
       {tab === 'players' && <AdminPlayers />}
+      {cardVisited && <div hidden={tab !== 'cardLink'}><Suspense fallback={<p>…</p>}><AdminCardLink /></Suspense></div>}
+      {locationVisited && <div hidden={tab !== 'location'}><AdminLocation visible={tab === 'location'} /></div>}
       {tab === 'playerChanges' && <AdminPlayerChanges />}
       {tab === 'users' && <AdminUsers />}
       {tab === 'guests' && <AdminGuests />}

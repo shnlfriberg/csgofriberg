@@ -13,6 +13,9 @@ import { difficultyLabel } from '../utils/difficulty';
 import { currentLocale } from '../i18n';
 import type { PlayerPerformanceStats } from '../types';
 import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
+import StatsModeTabs from '../components/StatsModeTabs';
+import LocationStats from '../location/LocationStats';
+import CardStats from '../card-link/Stats';
 
 interface SingleStats {
   totalGames: number;
@@ -154,12 +157,16 @@ function StatsDifficultyMultiSelect({
 export default function Stats() {
   const [params] = useSearchParams();
   const identity = useAuth((state) => state.user?.id ?? 'guest');
-  return <StatsContent key={`${identity}:${params.get('variant') ?? 'classic'}`} />;
+  return params.get('variant') === 'location'
+    ? <LocationStats key={`${identity}:location`} />
+    : params.get('variant') === 'card-link'
+    ? <CardStats key={`${identity}:card-link`} />
+    : <StatsContent key={`${identity}:${params.get('variant') ?? 'classic'}`} />;
 }
 
 function StatsContent() {
   const { t } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
   const soup = searchParams.get('variant') === 'turtle-soup';
   const variant = soup ? 'turtle-soup' : 'classic';
   const [selectedDifficulties, setSelectedDifficulties] = useState<string[]>(STATS_DIFFICULTIES);
@@ -322,16 +329,7 @@ function StatsContent() {
   return (
     <Page title={t('stats.title')} icon={<BarChart3 size={17} />}>
       <div className="stats-content">
-        <div className="soup-mode-tabs" role="tablist" aria-label={t('leaderboard.modeLabel')}>
-          {(['classic', 'turtle-soup'] as const).map((value) => <button type="button" role="tab" key={value}
-            aria-selected={variant === value} className={`btn ${variant === value ? 'active' : ''}`}
-            onClick={() => {
-              if (variant === value) return;
-              statsRequestId.current++; requestId.current++;
-              setStats(null); setStatsLoading(true); setItems([]); setHasNext(false); setPage(1); setType('single'); setReplay(null);
-              setSearchParams(value === 'turtle-soup' ? { variant: value } : {});
-            }}>{t(value === 'turtle-soup' ? 'soup.shortTitle' : 'soup.classic')}</button>)}
-        </div>
+        <StatsModeTabs />
         {stats && statsError && <div role="alert"><p>{t('stats.loadFailed')}</p><button className="btn" disabled={statsLoading} onClick={loadStats}>{t('common.retry')}</button></div>}
         {!stats && statsLoading && (
           <section className="stats-difficulty-section" aria-busy="true">

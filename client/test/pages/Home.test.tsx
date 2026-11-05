@@ -55,6 +55,12 @@ describe('Home email verification reminder', () => {
     expect(daily.parentElement?.firstElementChild).toBe(daily);
   });
 
+  it('describes the entertainment mini-games below its home entry', () => {
+    renderAtRoute(<Home />);
+
+    expect(screen.getByRole('link', { name: /娱乐模式/ })).toHaveTextContent('包含海龟汤和图寻模式等小游戏');
+  });
+
   it.each([
     ['verified email', { email: 'tester@example.com', emailVerified: true }],
     ['no email', { email: null, emailVerified: false }],

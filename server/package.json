@@ -11,22 +11,34 @@
     "seed": "tsx src/db/runSeed.ts",
     "create-admin": "tsx src/db/createAdmin.ts",
     "maintenance": "tsx src/maintenance.ts",
+    "location:import": "tsx src/location/importBank.ts",
+    "location:export": "tsx src/location/exportBank.ts",
+    "location:reset-local": "tsx src/location/maintenance/resetLocal.ts",
     "loadtest": "node scripts/loadtest.cjs",
-    "benchmark:ws-compression": "node scripts/benchmark-websocket-compression.cjs"
+    "benchmark:ws-compression": "node scripts/benchmark-websocket-compression.cjs",
+    "prebuild": "pnpm --filter @friberg/location-core build && pnpm --filter @friberg/card-link-core build",
+    "pretest": "pnpm --filter @friberg/location-core build && pnpm --filter @friberg/card-link-core build",
+    "predev": "pnpm --filter @friberg/location-core build && pnpm --filter @friberg/card-link-core build",
+    "card-link:build": "tsx src/card-link/build.ts"
   },
   "dependencies": {
+    "@friberg/card-link-core": "workspace:*",
+    "@friberg/location-core": "workspace:*",
     "@socket.io/redis-adapter": "^8.3.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
+    "express": "^4.22.3",
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "knex": "^3.1.0",
     "pg": "^8.13.1",
     "redis": "^6.1.0",
-    "socket.io": "^4.8.1",
-    "zod": "^3.24.1"
+    "sharp": "^0.35.5",
+    "socket.io": "^4.8.3",
+    "yauzl": "^3.4.0",
+    "yazl": "^3.3.1",
+    "zod": "^4.6.7"
   },
   "optionalDependencies": {
     "better-sqlite3": "^13.0.3"
@@ -38,9 +50,11 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^26.2.0",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
     "socket.io-client": "^4.8.3",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3",
-    "vitest": "^2.1.8"
+    "vitest": "^4.1.12"
   }
 }

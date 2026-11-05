@@ -1,0 +1,2 @@
+# Shell scripts are executed by Linux/WSL even in a Windows checkout.
+*.sh text eol=lf

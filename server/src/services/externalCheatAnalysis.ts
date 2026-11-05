@@ -51,7 +51,7 @@ const tableItemSchema = z.object({
     key: z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]{0,31}$/),
     label: labelSchema,
   }).strict()).min(1).max(12),
-  rows: z.array(z.record(displayPrimitiveSchema)).max(100),
+  rows: z.array(z.record(z.string(), displayPrimitiveSchema)).max(100),
   severity: severitySchema.optional(),
 }).strict();
 

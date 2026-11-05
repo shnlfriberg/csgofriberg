@@ -1,5 +1,6 @@
 import { db } from '../db/knex';
 import { normalizeTeamHistory } from './teamHistory';
+import type { Career } from '../card-link/careers';
 
 export interface ExportedPlayer {
   playerId: number;
@@ -8,6 +9,8 @@ export interface ExportedPlayer {
   region: string;
   team: string;
   team_history: string[];
+  career: Career | null;
+  career_revision: number;
   age: number;
   role: string;
   major_championships: number;
@@ -18,7 +21,7 @@ export interface ExportedPlayer {
 }
 
 export async function exportPlayers(): Promise<ExportedPlayer[]> {
-  const [players, memberships] = await Promise.all([
+  const [players, memberships, careers] = await Promise.all([
     db('players')
       .select(
         'id',
@@ -38,7 +41,9 @@ export async function exportPlayers(): Promise<ExportedPlayer[]> {
     db('player_difficulties')
       .orderBy('difficulty_key')
       .select('player_id', 'difficulty_key'),
+    db('card_careers').select('player_id', 'revision', 'payload'),
   ]);
+  const careersByPlayer = new Map(careers.map(c => [Number(c.player_id), c]));
   const difficultiesByPlayer = new Map<number, string[]>();
   for (const membership of memberships) {
     const playerId = Number(membership.player_id);
@@ -53,6 +58,8 @@ export async function exportPlayers(): Promise<ExportedPlayer[]> {
     region: String(player.region),
     team: String(player.team),
     team_history: normalizeTeamHistory(player.team_history),
+    career: careersByPlayer.has(Number(player.id)) ? JSON.parse(careersByPlayer.get(Number(player.id))!.payload) : null,
+    career_revision: Number(careersByPlayer.get(Number(player.id))?.revision ?? 0),
     age: Number(player.age),
     role: String(player.role),
     major_championships: Number(player.major_championships),

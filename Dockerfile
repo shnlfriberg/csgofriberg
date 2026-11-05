@@ -16,6 +16,8 @@ RUN npm install --global "pnpm@${PNPM_VERSION}" \
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY client/package.json client/package.json
 COPY server/package.json server/package.json
+COPY packages/location-core/package.json packages/location-core/package.json
+COPY packages/card-link-core/package.json packages/card-link-core/package.json
 
 # Build-only dependencies stay in this disposable stage. Skip lifecycle scripts
 # during the broad install so the local-only SQLite driver cannot invoke
@@ -28,11 +30,13 @@ COPY scripts scripts
 COPY pow-wasm pow-wasm
 COPY client client
 COPY server server
+COPY packages packages
 
-# The deployed server tree contains production dependencies only and omits the
-# optional SQLite driver. Only that tree is copied into the runtime image.
+# The deployed server tree contains production dependencies, including sharp's
+# optional platform binaries. Production uses PostgreSQL; SQLite remains local.
 RUN pnpm build \
- && pnpm --filter server deploy --prod --no-optional --legacy /runtime/server
+ && pnpm --filter server deploy --prod --legacy /runtime/server \
+ && mkdir -p /runtime/location-assets
 
 FROM gcr.io/distroless/nodejs26-debian13:nonroot AS runtime
 
@@ -55,6 +59,8 @@ WORKDIR /app
 COPY --from=build --chown=nonroot:nonroot /runtime/server/node_modules ./server/node_modules
 COPY --from=build --chown=nonroot:nonroot /workspace/server/dist ./server/dist
 COPY --from=build --chown=nonroot:nonroot /workspace/client/dist ./client/dist
+COPY --from=build --chown=nonroot:nonroot /runtime/location-assets ./location-assets
+ENV LOCATION_ASSET_DIR=/app/location-assets
 
 USER nonroot
 EXPOSE 3000
