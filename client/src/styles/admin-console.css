@@ -788,10 +788,7 @@ html[data-theme='blast'] .admin-switch input:checked { border-color: var(--prima
 .cl-outbox-list { padding: 4px 18px; }
 
 /* 采集工作台 */
-.admin-console .location-batch-capture { padding: 18px; border-radius: var(--admin-radius); box-shadow: var(--shadow-sm); }
-.admin-console .location-batch-capture header h3 { font-size: 1rem; }
-.admin-console .location-batch-capture header p,
-.admin-console .location-batch-capture > .muted { font-size: 0.82rem; }
+.admin-console .location-batch-capture { box-shadow: var(--shadow-sm); }
 
 /* ----- 响应式 ----- */
 @media (max-width: 1200px) {

@@ -1,10 +1,60 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { useTranslation } from 'react-i18next';
+import { locationAdmin } from './location/api';
+import { Download, FolderPlus, Image as ImageIcon, ImageOff, ImagePlus, Images, MapPin, PencilLine, Save, Trash2 } from 'lucide-react';
 import type { CaptureDraft, MapDefinition, Question } from '../../location/types';
 import { captureImages } from '@friberg/location-core';
 import Radar from '../../location/Radar';
 import CaptureImagePreview from './location/CaptureImagePreview';
 import { useBatchCapture } from './location/useBatchCapture';
 import { batchColors } from './location/batchColors';
+
+/**
+ * Images of a point that were already turned into questions. Once a capture image becomes a
+ * question it leaves the capture draft, so a "complete" point has no draft images of its own.
+ */
+function PointQuestionImages({ mapId, capturePointId, revision }: { mapId: string; capturePointId: string; revision: number }) {
+  const { t } = useTranslation();
+  const [items, setItems] = useState<Question[] | null>(null);
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    const controller = new AbortController();
+    setItems(null);
+    setActive(0);
+    void locationAdmin.questions({ mapId, search: capturePointId, page: 1, pageSize: 12 }, controller.signal)
+      .then((page) => {
+        if (controller.signal.aborted) return;
+        setItems((page?.items || []).filter((item) => item.mapId === mapId && item.capturePointId === capturePointId));
+      })
+      .catch(() => { if (!controller.signal.aborted) setItems([]); });
+    return () => controller.abort();
+  }, [mapId, capturePointId, revision]);
+  if (items === null) return <div className="location-capture-noimage"><span>{t('location.loadingAdmin')}</span></div>;
+  if (!items.length) return <div className="location-capture-noimage"><ImageOff size={24} aria-hidden="true" /><span>{t('adminUi.captureNoImage')}</span></div>;
+  const shown = items[Math.min(active, items.length - 1)];
+  return (
+    <div className="location-capture-question-images">
+      <a href={shown.imageUrl} target="_blank" rel="noreferrer" title={t('adminUi.captureOpenImage')}>
+        <img src={shown.imageUrl || shown.thumbnailUrl} alt={shown.capturePointId} />
+      </a>
+      <span className="location-capture-question-note">
+        {t('adminUi.captureMovedToQuestions', { count: items.length })} · {t(`location.${shown.tier}`)} · {t(shown.status === 'review' ? 'location.reviewStatus' : `location.${shown.status}`)}
+      </span>
+      {items.length > 1 && (
+        <div className="location-capture-gallery" aria-label={t('adminUi.captureQuestionImages')}>
+          {items.map((item, index) => (
+            <div key={item.id}>
+              <button type="button" className={index === active ? 'selected' : ''} aria-pressed={index === active}
+                aria-label={t('adminUi.captureQuestionImage', { number: index + 1 })} onClick={() => setActive(index)}>
+                <img src={item.thumbnailUrl} alt="" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function LocationBatchCapture({
   maps,
@@ -105,15 +155,17 @@ export default function LocationBatchCapture({
     setSelectedId('');
     if (id) setMarking(false);
   };
+  const current = selected || selectedLocal;
+  const currentPoint = current ? points.find((point) => point.id === current.id) : undefined;
+  const previewUrl = activeImage ? activeImage.asset.url || activeImage.asset.thumbnailUrl : '';
   return (
     <section
       className="location-batch-capture"
       aria-label={t('location.batchCapture')}
     >
-      <header>
+      <header className="location-capture-head">
         <h3>{t('location.batchCapture')}</h3>
-        <p className="muted">{t('location.captureWorkflow')}</p>
-        <p className="muted">{t('location.cropImageHelp')}</p>
+        <p>{t('location.captureWorkflow')}</p>
       </header>
       {error && (
         <div className="location-alert" role="alert">
@@ -127,49 +179,93 @@ export default function LocationBatchCapture({
           </button>
         </div>
       )}
-      {notice && <p role="status">{notice}</p>}
-      <div className="location-batch-controls">
-        <label>
-          {t('location.mapName')}
-          <select
-            className="input"
-            value={mapId}
-            disabled={busy}
-            onChange={(e) => {
-              const next = maps.find((m) => m.id === e.target.value)!;
-              setMapId(next.id);
-              setBatchFilter('');
-              setFloorId(next.floors[0].id);
-              setSelectedId('');
-            }}
+      {notice && <p role="status" className="location-capture-notice">{notice}</p>}
+      <div className="location-capture-toolbar">
+        <div className="location-batch-controls">
+          <label>
+            <span>{t('location.mapName')}</span>
+            <select
+              className="input"
+              value={mapId}
+              disabled={busy}
+              onChange={(e) => {
+                const next = maps.find((m) => m.id === e.target.value)!;
+                setMapId(next.id);
+                setBatchFilter('');
+                setFloorId(next.floors[0].id);
+                setSelectedId('');
+              }}
+            >
+              {maps.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{t('location.chooseFloor')}</span>
+            <select
+              className="input"
+              value={floorId}
+              disabled={busy}
+              onChange={(e) => {
+                setFloorId(e.target.value);
+                setSelectedId('');
+              }}
+            >
+              {map?.floors.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {t(`location.floor.${f.id}`, { defaultValue: f.name })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            <span>{t('location.captureBatchFilter')}</span>
+            <select
+              className="input"
+              value={batchFilter}
+              disabled={busy}
+              onChange={(e) => filterBatch(e.target.value)}
+            >
+              <option value="">{t('location.captureAllBatches')}</option>
+              {batches.map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name} · {id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="location-capture-tools">
+          <button
+            className="btn btn-ghost btn-sm"
+            disabled={busy || (!visible.length && !local.length)}
+            onClick={exportPlan}
           >
-            {maps.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('location.chooseFloor')}
-          <select
-            className="input"
-            value={floorId}
-            disabled={busy}
-            onChange={(e) => {
-              setFloorId(e.target.value);
-              setSelectedId('');
-            }}
-          >
-            {map?.floors.map((f) => (
-              <option key={f.id} value={f.id}>
-                {t(`location.floor.${f.id}`, { defaultValue: f.name })}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          {t('location.captureBatchName')}
+            <Download size={15} aria-hidden="true" />{t('location.captureExport')}
+          </button>
+          <label className="btn btn-ghost btn-sm">
+            <Images size={15} aria-hidden="true" />{t('location.captureBatchImages')}
+            <input
+              type="file"
+              hidden
+              multiple
+              accept="image/png,image/jpeg,image/webp"
+              aria-label={t('location.captureBatchImages')}
+              disabled={busy || !drafts.length}
+              onChange={(e) => {
+                queueFiles(e.target.files);
+                e.target.value = '';
+              }}
+            />
+          </label>
+        </div>
+      </div>
+      <div className={`location-capture-marking${marking ? ' is-active' : ''}`}>
+        <label className="location-capture-batch-name">
+          <span>{t('location.captureBatchName')}</span>
           <input
             className="input"
             value={batchName}
@@ -178,29 +274,11 @@ export default function LocationBatchCapture({
             onChange={(e) => setBatchName(e.target.value)}
           />
         </label>
-        <label>
-          {t('location.captureBatchFilter')}
-          <select
-            className="input"
-            value={batchFilter}
-            disabled={busy}
-            onChange={(e) => filterBatch(e.target.value)}
-          >
-            <option value="">{t('location.captureAllBatches')}</option>
-            {batches.map(([id, name]) => (
-              <option key={id} value={id}>
-                {name} · {id.slice(0, 8)}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-      <div className="location-admin-actions">
-        <button className="btn btn-ghost" disabled={busy} onClick={newBatch}>
-          {t('location.newCaptureBatch')}
+        <button className="btn btn-ghost btn-sm" disabled={busy} onClick={newBatch}>
+          <FolderPlus size={15} aria-hidden="true" />{t('location.newCaptureBatch')}
         </button>
         <button
-          className={`btn ${marking ? '' : 'btn-ghost'}`}
+          className={`btn btn-sm ${marking ? '' : 'btn-ghost'}`}
           aria-pressed={marking}
           disabled={busy}
           onClick={() => {
@@ -208,59 +286,38 @@ export default function LocationBatchCapture({
             setBatchFilter('');
           }}
         >
-          {t('location.captureMarking')}
+          <MapPin size={15} aria-hidden="true" />{t('location.captureMarking')}
         </button>
         <button
-          className="btn"
+          className="btn btn-sm"
           disabled={busy || !pending.length}
           onClick={() => void savePoints()}
         >
-          {t('location.captureSavePoints', { count: pending.length })}
+          <Save size={15} aria-hidden="true" />{t('location.captureSavePoints', { count: pending.length })}
         </button>
-        <button
-          className="btn btn-ghost"
-          disabled={busy || (!visible.length && !local.length)}
-          onClick={exportPlan}
-        >
-          {t('location.captureExport')}
-        </button>
-        <label className="btn btn-ghost">
-          {t('location.captureBatchImages')}
-          <input
-            type="file"
-            hidden
-            multiple
-            accept="image/png,image/jpeg,image/webp"
-            aria-label={t('location.captureBatchImages')}
-            disabled={busy || !drafts.length}
-            onChange={(e) => {
-              queueFiles(e.target.files);
-              e.target.value = '';
-            }}
-          />
-        </label>
+        <p className="location-capture-hint">
+          {t(marking ? 'location.captureMarkHelp' : 'location.captureSelectHelp')}
+        </p>
       </div>
-      <p className="muted">
-        {t(marking ? 'location.captureMarkHelp' : 'location.captureSelectHelp')}
-      </p>
       <div className="location-batch-layout" ref={mapPanel}>
         <div className="location-batch-map">
-          <div className="location-batch-legend" role="group" aria-label={t('location.captureBatchLegend')}>
-            <strong>{t('location.captureBatchLegend')}</strong>
-            <button type="button" disabled={busy} aria-pressed={!batchFilter}
-              onClick={() => filterBatch('')}>{t('location.captureAllBatches')}</button>
-            {batches.map(([id, name]) => (
-              <button type="button" key={id} disabled={busy}
-                aria-pressed={batchFilter === id} onClick={() => filterBatch(id)}>
-                <i className="location-batch-swatch" style={{ background: colors.get(id) }} aria-hidden="true" />
-                {name} · {id.slice(0, 8)}
-              </button>
-            ))}
-          </div>
-          <div className="location-capture-status-legend" aria-label={t('location.captureStatusLegend')}>
-            {(['empty', 'awaiting-question', 'complete'] as const).map((status) => (
-              <span key={status}><i className={`location-capture-status-key capture-${status}`} aria-hidden="true" />{statusLabels[status]}</span>
-            ))}
+          <div className="location-capture-legends">
+            <div className="location-batch-legend" role="group" aria-label={t('location.captureBatchLegend')}>
+              <button type="button" disabled={busy} aria-pressed={!batchFilter}
+                onClick={() => filterBatch('')}>{t('location.captureAllBatches')}</button>
+              {batches.map(([id, name]) => (
+                <button type="button" key={id} disabled={busy}
+                  aria-pressed={batchFilter === id} onClick={() => filterBatch(id)}>
+                  <i className="location-batch-swatch" style={{ background: colors.get(id) }} aria-hidden="true" />
+                  {name} · {id.slice(0, 8)}
+                </button>
+              ))}
+            </div>
+            <div className="location-capture-status-legend" aria-label={t('location.captureStatusLegend')}>
+              {(['empty', 'awaiting-question', 'complete'] as const).map((status) => (
+                <span key={status}><i className={`location-capture-status-key capture-${status}`} aria-hidden="true" />{statusLabels[status]}</span>
+              ))}
+            </div>
           </div>
           {map && (
             <Radar
@@ -272,129 +329,153 @@ export default function LocationBatchCapture({
             />
           )}
         </div>
-        <div className="location-batch-points">
-          <h4>
-            {t('location.capturePointList', {
-              count: visible.length + local.length,
-            })}
-          </h4>
-          <div className="location-batch-point-list">
-            {points.map((p) => (
-              <button
-                type="button"
-                key={p.id}
-                className={`location-batch-point ${selectedId === p.id ? 'selected' : ''}`}
-                style={{ '--capture-batch-color': p.color } as CSSProperties}
-                title={p.title}
-                disabled={busy}
-                onClick={() => selectPoint(p.id)}
-              >
-                <strong>
-                  #{p.order} · {p.capturePointId}
-                </strong>
-                <span className="location-batch-point-batch">
-                  <i className="location-batch-swatch" style={{ background: p.color }} aria-hidden="true" />
-                  {p.batchName} · {p.batchId.slice(0, 8)}
-                </span>
-                <span>
-                  {p.statusLabel}
-                  {' · '}{t('location.captureImageCount', { count: p.imageCount })}
-                  {' · '}{t('location.captureQuestionCount', { count: p.questionCount })}
-                  {p.pending &&
-                    ` · ${t('location.captureUnsaved')}`}
-                </span>
-                <small>
-                  u {p.u.toFixed(4)} · v {p.v.toFixed(4)}
-                </small>
-              </button>
-            ))}
-          </div>
-          {(selected || selectedLocal) && (
-            <div className="location-batch-selection">
-              <strong>{(selected || selectedLocal)!.batchName} · {(selected || selectedLocal)!.batchId.slice(0, 8)}</strong>
-              <strong>{(selected || selectedLocal)!.capturePointId}</strong>
-              {selectedImage ? (
-                <CaptureImagePreview
-                  url={selectedImage.preview}
-                  alt={(selected || selectedLocal)!.capturePointId}
-                />
-              ) : (
-                activeImage && (
-                  <img
-                    src={activeImage.asset.thumbnailUrl}
-                    alt={selected?.capturePointId || ''}
-                  />
-                )
-              )}
-              {selectedImage && (
-                <small>
-                  {t('location.captureUnsaved')} · {selectedImage.file.name}
-                </small>
-              )}
-              {selected && (
-                <>
-                  {pointImages.length > 0 && (
-                    <div className="location-capture-gallery" aria-label={t('location.capturePointImages')}>
-                      {pointImages.map((image, index) => (
-                        <div key={image.id}>
-                          <button type="button" className={activeImage?.id === image.id ? 'selected' : ''}
-                            aria-label={t('location.captureSelectImage', { number: index + 1 })}
-                            aria-pressed={activeImage?.id === image.id}
-                            onClick={() => setSelectedImageId(image.id)} disabled={busy}>
-                            <img src={image.asset.thumbnailUrl} alt={t('location.captureSelectImage', { number: index + 1 })} />
-                          </button>
-                          <button type="button" className="btn btn-ghost btn-sm" disabled={busy}
-                            onClick={() => void removeImage(image.id)}>{t('location.captureRemoveImage')}</button>
-                        </div>
-                      ))}
+        <aside className="location-batch-side">
+          <section className="location-batch-selection" aria-label={t('adminUi.capturePointDetail')} aria-live="polite">
+            {!current ? (
+              <div className="location-capture-placeholder">
+                <ImageIcon size={28} aria-hidden="true" />
+                <p>{t('adminUi.capturePickHint')}</p>
+              </div>
+            ) : (
+              <>
+                <header className="location-capture-detail-head">
+                  <div>
+                    <strong>#{currentPoint?.order ?? current.order} · {current.capturePointId}</strong>
+                    <span className="location-batch-point-batch">
+                      <i className="location-batch-swatch" style={{ background: currentPoint?.color }} aria-hidden="true" />
+                      {current.batchName} · {current.batchId.slice(0, 8)}
+                    </span>
+                  </div>
+                  {currentPoint && (
+                    <span className={`location-capture-state capture-${currentPoint.captureStatus}`}>{currentPoint.statusLabel}</span>
+                  )}
+                </header>
+                <div className="location-capture-preview">
+                  {selectedImage ? (
+                    <CaptureImagePreview url={selectedImage.preview} alt={current.capturePointId} />
+                  ) : previewUrl ? (
+                    <a href={previewUrl} target="_blank" rel="noreferrer" title={t('adminUi.captureOpenImage')}>
+                      <img src={previewUrl} alt={selected?.capturePointId || ''} />
+                    </a>
+                  ) : selected && currentPoint && currentPoint.questionCount > 0 ? (
+                    <PointQuestionImages mapId={selected.mapId} capturePointId={selected.capturePointId} revision={revision} />
+                  ) : (
+                    <div className="location-capture-noimage">
+                      <ImageOff size={24} aria-hidden="true" />
+                      <span>{t('adminUi.captureNoImage')}</span>
                     </div>
                   )}
-                  <p className="muted">{t('location.captureSharedPointHelp')}</p>
-                  {selected.mapVersion !==
-                    maps.find((m) => m.id === selected.mapId)?.version && (
-                    <p className="location-rules-note">
-                      {t('location.captureMapChanged')}
-                    </p>
-                  )}
-                  <label className="btn btn-ghost">
-                    {t('location.captureAddImages')}
-                    <input
-                      type="file"
-                      hidden
-                      multiple
-                      accept="image/png,image/jpeg,image/webp"
-                      disabled={busy}
-                      aria-label={t('location.captureAddImages')}
-                      onChange={(e) => {
-                        queueFiles(e.target.files, selected.id);
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
-                  <button
-                    className="btn"
-                    disabled={busy || !activeImage}
-                    onClick={() => activeImage && onEdit(selected, activeImage.id)}
-                  >
-                    {t('location.captureComplete')}
-                  </button>
-                </>
-              )}
-              <button
-                className="btn btn-ghost"
-                disabled={busy}
-                onClick={() => void removeSelected()}
-              >
-                {t('location.captureRemove')}
-              </button>
+                </div>
+                {selectedImage && (
+                  <small className="location-capture-meta">
+                    {t('location.captureUnsaved')} · {selectedImage.file.name}
+                  </small>
+                )}
+                {currentPoint && (
+                  <small className="location-capture-meta">
+                    {t('location.captureImageCount', { count: currentPoint.imageCount })}
+                    {' · '}{t('location.captureQuestionCount', { count: currentPoint.questionCount })}
+                    {' · '}u {current.u.toFixed(4)} · v {current.v.toFixed(4)}
+                    {currentPoint.pending && ` · ${t('location.captureUnsaved')}`}
+                  </small>
+                )}
+                {selected && (
+                  <>
+                    {pointImages.length > 0 && (
+                      <div className="location-capture-gallery" aria-label={t('location.capturePointImages')}>
+                        {pointImages.map((image, index) => (
+                          <div key={image.id}>
+                            <button type="button" className={activeImage?.id === image.id ? 'selected' : ''}
+                              aria-label={t('location.captureSelectImage', { number: index + 1 })}
+                              aria-pressed={activeImage?.id === image.id}
+                              onClick={() => setSelectedImageId(image.id)} disabled={busy}>
+                              <img src={image.asset.thumbnailUrl} alt={t('location.captureSelectImage', { number: index + 1 })} />
+                            </button>
+                            <button type="button" className="admin-action is-danger" disabled={busy}
+                              onClick={() => void removeImage(image.id)}>{t('location.captureRemoveImage')}</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {selected.mapVersion !==
+                      maps.find((m) => m.id === selected.mapId)?.version && (
+                      <p className="location-rules-note">
+                        {t('location.captureMapChanged')}
+                      </p>
+                    )}
+                    <div className="location-capture-detail-actions">
+                      <button
+                        className="btn btn-sm"
+                        disabled={busy || !activeImage}
+                        onClick={() => activeImage && onEdit(selected, activeImage.id)}
+                      >
+                        <PencilLine size={15} aria-hidden="true" />{t('location.captureComplete')}
+                      </button>
+                      <label className="btn btn-ghost btn-sm">
+                        <ImagePlus size={15} aria-hidden="true" />{t('location.captureAddImages')}
+                        <input
+                          type="file"
+                          hidden
+                          multiple
+                          accept="image/png,image/jpeg,image/webp"
+                          disabled={busy}
+                          aria-label={t('location.captureAddImages')}
+                          onChange={(e) => {
+                            queueFiles(e.target.files, selected.id);
+                            e.target.value = '';
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <p className="location-capture-meta">{t('location.captureSharedPointHelp')}</p>
+                  </>
+                )}
+                <button
+                  className="admin-action is-danger location-capture-remove"
+                  disabled={busy}
+                  onClick={() => void removeSelected()}
+                >
+                  <Trash2 size={14} aria-hidden="true" />{t('location.captureRemove')}
+                </button>
+              </>
+            )}
+          </section>
+          <section className="location-batch-points">
+            <h4>
+              {t('location.capturePointList', {
+                count: visible.length + local.length,
+              })}
+            </h4>
+            <div className="location-batch-point-list">
+              {points.map((p) => (
+                <button
+                  type="button"
+                  key={p.id}
+                  className={`location-batch-point ${selectedId === p.id ? 'selected' : ''}`}
+                  style={{ '--capture-batch-color': p.color } as CSSProperties}
+                  title={p.title}
+                  disabled={busy}
+                  aria-pressed={selectedId === p.id}
+                  onClick={() => selectPoint(p.id)}
+                >
+                  <i className={`location-capture-status-key capture-${p.captureStatus}`} aria-hidden="true" />
+                  <strong>#{p.order} · {p.capturePointId}</strong>
+                  <span>
+                    {p.statusLabel}
+                    {' · '}{t('location.captureImageCount', { count: p.imageCount })}
+                    {p.pending && ` · ${t('location.captureUnsaved')}`}
+                  </span>
+                </button>
+              ))}
             </div>
-          )}
-        </div>
+          </section>
+        </aside>
       </div>
       {!!images.length && (
         <section className="location-batch-images">
           <h4>{t('location.captureConfirmImages')}</h4>
           <p className="muted">{t('location.captureMatchHelp')}</p>
+          <p className="muted">{t('location.cropImageHelp')}</p>
           <div className="location-admin-actions">
             <button
               className="btn btn-ghost"
