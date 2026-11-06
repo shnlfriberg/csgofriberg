@@ -2,51 +2,44 @@
   max-width: 1280px;
   margin: auto;
 }
-.cl-description {
-  font-size: 1.15rem;
-  opacity: 0.8;
-}
 .cl-toolbar,
 .cl-players {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  margin: 18px 0;
+  margin: 12px 0;
 }
+/* Theme input colours: the old fixed dark fallback made the light theme's select unreadable. */
 .cl-toolbar input,
 .cl-toolbar select,
 .cl-search {
-  padding: 10px 14px;
+  padding: 9px 12px;
   border: 1px solid #8886;
   border-radius: 9px;
-  background: var(--surface, #20242b);
-  color: inherit;
+  background: var(--input-bg, var(--card));
+  color: var(--text);
 }
 .cl-search {
   width: min(100%, 450px);
 }
-.cl-modes {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin: 24px 0;
-}
-.cl-mode {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 28px 20px;
-  background: linear-gradient(140deg, #224147, #29233f);
-  color: #fff;
-  border: 1px solid #6b929b;
-  border-radius: 16px;
-  cursor: pointer;
-}
-.cl-mode:disabled {
-  opacity: 0.45;
-}
-.cl-setup { margin: 24px 0; }
+/* Lobby entries are home-style menu cards (see .ent-menu-grid) under the page subtitle. */
+.cl-modes.ent-menu-grid { margin: 0; }
+.cl-page .single-lobby-subtitle { margin-bottom: 4px; }
+.cl-mode { font: inherit; cursor: pointer; text-align: center; }
+.cl-mode:disabled { opacity: 0.45; }
+.cl-rules-entry { display: flex; justify-content: center; margin-top: 16px; }
+.cl-game-page .cl-rules-entry { margin-top: 8px; }
+.cl-rules-entry .game-rules-trigger { margin-top: 0; }
+.cl-lobby-links { justify-content: center; }
+/* Setup mirrors the multiplayer create/join cards. */
+.cl-setup { display: grid; gap: 14px; width: min(760px, 100%); margin: 0 auto 14px; }
+.cl-setup .card { margin: 0; }
+.cl-setup-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 6px; }
+.cl-setup-heading h3 { margin: 0; }
+.cl-setup-action { display: flex; justify-content: center; margin-top: 14px; }
+.cl-join-room .join-room-form { grid-template-columns: minmax(0, 1fr) auto; }
+.cl-join-room .input { text-align: center; font-family: Consolas, monospace; font-weight: 700; letter-spacing: 3px; }
 .cl-daily-layout .cl-setup { min-width: 0; }
 .cl-daily-layout .cl-daily-leaderboard .daily-leaderboard-table th,
 .cl-daily-layout .cl-daily-leaderboard .daily-leaderboard-table td { padding: 12px 8px; }
@@ -57,9 +50,7 @@
 @media (min-width: 960px) {
   .cl-daily-layout.daily-content-layout.has-leaderboard { grid-template-columns: minmax(0, 3fr) minmax(380px, 2fr); }
 }
-.cl-setup h2 { margin: 0; font-size: 1.2rem; }
-.cl-setup label { display: flex; align-items: center; gap: 10px; }
-.cl-join-room { margin-top: 28px; padding-top: 16px; border-top: 1px solid var(--border); }
+.cl-join-room > .muted { margin: 0 0 10px; }
 .cl-board {
   display: flex;
   align-items: center;
@@ -113,11 +104,6 @@
   background: #e9bc671a;
   border-radius: 8px;
 }
-.cl-rules {
-  padding: 12px;
-  border: 1px solid #8884;
-  border-radius: 10px;
-}
 .cl-error {
   padding: 12px;
   background: #a5313126;
@@ -132,16 +118,7 @@
    Keep natural overflow for expanded help/results, zoom and small screens. */
 @media (min-width: 900px) {
   .cl-game-page .page-scroll { padding-block: 10px; }
-  .cl-game-page .cl-intro {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 6px;
-  }
-  .cl-game-page .cl-description { margin: 0; font-size: 13px; }
-  .cl-game-page .cl-rules { padding: 3px 8px; font-size: 12px; }
-  .cl-game-page .cl-rules[open] { flex: 1; }
+  .cl-game-page .cl-rules-entry .game-rules-trigger { padding: 3px 10px; font-size: 12px; }
   .cl-game-page .cl-toolbar,
   .cl-game-page .cl-players { margin: 5px 0; gap: 8px 12px; font-size: 12px; }
   .cl-game-page .cl-match-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
@@ -158,7 +135,6 @@
 @media (min-width: 900px) and (max-height: 740px) {
   .cl-game-page .header-bar { padding-block: 8px; }
   .cl-game-page .page-scroll { padding-block: 6px; }
-  .cl-game-page .cl-intro { margin-bottom: 4px; }
   .cl-game-page .cl-toolbar,
   .cl-game-page .cl-players { margin-block: 3px; }
 }
@@ -185,14 +161,9 @@
   margin: 12px 0;
 }
 @media (max-width: 700px) {
-  .cl-modes {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  .cl-mode {
-    padding: 20px 12px;
-  }
   .cl-toolbar {
     gap: 8px;
+    margin: 10px 0;
   }
   .cl-board {
     padding: 18px 8px;
@@ -200,4 +171,21 @@
   .cl-history {
     flex-wrap: wrap;
   }
+}
+/* Phones/tablets in a round: one-line header and rules, smaller toolbars, cards sized by CSS below. */
+@media (max-width: 899px) {
+  .cl-game-page .page-scroll { padding-block: 8px 16px; gap: 8px; }
+  .cl-game-page .cl-rules-entry .game-rules-trigger { padding: 3px 10px; font-size: 12px; }
+  .cl-game-page .cl-toolbar,
+  .cl-game-page .cl-players { margin: 6px 0; gap: 6px 8px; font-size: 12px; }
+  .cl-game-page .cl-toolbar .btn { min-height: 32px; padding: 4px 10px; font-size: 12px; }
+  .cl-game-page .cl-toolbar select { padding: 4px 8px; }
+  .cl-game-page .cl-daily-notice,
+  .cl-game-page .cl-recovery-notice { margin: 4px 0; font-size: 12px; }
+  .cl-game-page .cl-error { margin: 4px 0; padding: 6px 8px; font-size: 12px; }
+  .cl-game-page .cl-board { min-height: 0; padding: 10px 6px; border-radius: 14px; }
+  .cl-game-page .cl-hand { padding: 8px 2px; }
+  .cl-game-page .cl-search { width: 100%; margin-top: 6px; padding: 8px 12px; box-sizing: border-box; }
+  .cl-game-page summary { font-size: 12px; }
+  .cl-game-page .cl-slot { width: 24px; }
 }

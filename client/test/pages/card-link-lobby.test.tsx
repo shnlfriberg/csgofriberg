@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithProviders } from '../render';
 import CardLobby, { type LobbyScene } from '../../src/card-link/Lobby';
@@ -29,11 +29,11 @@ describe('card lobby flow', () => {
     expect(options.setVariant).toHaveBeenCalledWith('limited');
     fireEvent.click(screen.getByRole('button', { name: '开始' }));
     expect(options.start).toHaveBeenLastCalledWith('practice', 'normal', 0);
-    fireEvent.change(screen.getByLabelText('时间'), { target: { value: '120' } });
+    fireEvent.click(within(screen.getByRole('group', { name: '时间' })).getByRole('button', { name: '120 秒' }));
     fireEvent.click(screen.getByRole('button', { name: '开始' }));
     expect(options.start).toHaveBeenLastCalledWith('practice', 'normal', 120);
     view.rerender(<CardLobby {...options} scene="friend" />);
-    expect(screen.queryByRole('option', { name: '不限时' })).toBeNull();
+    expect(within(screen.getByRole('group', { name: '时间' })).queryByRole('button', { name: '不限时' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: '创建好友房' }));
     expect(options.start).toHaveBeenLastCalledWith('friend', 'normal', 180);
     fireEvent.change(screen.getByLabelText('房间码'), { target: { value: 'abc123ef' } });

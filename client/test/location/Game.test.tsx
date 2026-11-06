@@ -85,7 +85,8 @@ describe('location pages', () => {
     post.mockResolvedValueOnce({ data: playing }).mockResolvedValueOnce({ data: { ...playing, status: 'finished', totalScore: 1, question: null } })
       .mockResolvedValueOnce({ data: { ...playing, id: 'banned-next' } });
     renderAtRoute(<LocationGame mode="random" />);
-    expect(screen.getByRole('heading', { name: '图寻单人模式', level: 1 })).toBeInTheDocument();
+    expect(document.title).toContain('图寻单人模式');
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     const toggle = screen.getByText('禁用地图（Ban 图）').closest('summary')!;
     expect(toggle.parentElement).not.toHaveAttribute('open');
     fireEvent.click(toggle);
@@ -127,7 +128,8 @@ describe('location pages', () => {
   });
   it('groups entertainment entries by game and keeps modes one level deeper', () => {
     const { container } = renderAtRoute(<Entertainment />);
-    expect(screen.getByRole('heading', { name: '娱乐模式' })).toBeInTheDocument();
+    expect(document.title).toContain('娱乐模式');
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     expect(screen.queryByText('3 种小游戏')).not.toBeInTheDocument();
     expect([...container.querySelectorAll('.location-mode-card')].map(link => link.getAttribute('href')))
       .toEqual(['/entertainment/location', '/turtle-soup', '/entertainment/card-link']);
@@ -135,11 +137,12 @@ describe('location pages', () => {
   });
   it('offers daily, infinite and multiplayer inside the location menu', () => {
     const { container } = renderAtRoute(<LocationMenu />);
-    expect(screen.getByRole('heading', { name: '图寻' })).toBeInTheDocument();
+    expect(document.title).toContain('图寻');
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     expect([...container.querySelectorAll('.location-mode-card')].map(link => link.getAttribute('href')))
       .toEqual(['/entertainment/location/daily', '/entertainment/location/random', '/entertainment/location/multi']);
     expect(screen.getByRole('link', { name: /娱乐模式/ })).toHaveAttribute('href', '/entertainment');
-    expect(container.querySelector('a[href="/entertainment/location/history"]')).toBeInTheDocument();
+    expect(container.querySelector('a[href="/entertainment/location/history"]')).not.toBeInTheDocument();
     expect(container.querySelector('a[href="/entertainment/location/submit"]')).toBeInTheDocument();
   });
   it('keeps the location rules trigger inside each single-player mode page', async () => {

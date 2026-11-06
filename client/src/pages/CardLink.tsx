@@ -3,7 +3,7 @@ import { useCardMotion } from "../card-link/useCardMotion";
 import { useCardPointerDrag } from "../card-link/useCardPointerDrag";
 import ConnectionSlot from "../card-link/ConnectionSlot";
 import SolutionRoute from "../card-link/SolutionRoute";
-import DifficultyRules from "../card-link/DifficultyRules";
+import GameRules from "../components/GameRules";
 import PlayerCardFace from "../card-link/PlayerCardFace";
 import MatchClock from '../card-link/MatchClock';
 import ConnectionStatus from '../card-link/ConnectionStatus';
@@ -284,15 +284,7 @@ export default function CardLink() {
       className={`cl-page${view?.current ? ' cl-game-page' : ''}`}
     >
       <div ref={motionRoot}>
-        <div className="cl-intro">
-        <p className="cl-description">{tr("description")}</p>
-        <details className="cl-rules">
-          <summary>{tr("rules")}</summary>
-          <p>{tr("instructions")}</p>
-          <DifficultyRules />
-          <p>{tr("notice")}</p>
-        </details>
-        </div>
+        {!id && <p className="muted single-lobby-subtitle">{tr("description")}</p>}
         {error && (
           <p role="alert" className="cl-error">
             {error}
@@ -353,7 +345,7 @@ export default function CardLink() {
                 </button>
               </p>
             )}
-            <div className="cl-toolbar">
+            <div className="cl-toolbar cl-lobby-links">
               <Link className="btn btn-ghost" to="/stats?variant=card-link">{tr("history")}</Link>
               <button
                 className="btn btn-ghost"
@@ -601,6 +593,7 @@ export default function CardLink() {
             )}
           </>
         )}
+        <div className="cl-rules-entry"><GameRules variant="card-link" /></div>
       </div>
       {view && resultReady && dismissedResult !== resultKey && <RoundResult key={resultKey}
         view={view} directory={directory} close={() => setDismissedResult(resultKey)} back={backToLobby}

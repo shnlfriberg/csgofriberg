@@ -33,6 +33,7 @@ export default function Radar({
   hint,
   selection,
   onSelectArea,
+  showHint = true,
 }: {
   map: MapDefinition;
   floorId: string;
@@ -45,6 +46,8 @@ export default function Radar({
   hint?: string;
   selection?: RadarSelection | null;
   onSelectArea?: (selection: RadarSelection) => void;
+  /** Read-only reviews omit the placement hint line. */
+  showHint?: boolean;
 }) {
   const { t } = useTranslation();
   const [failed, setFailed] = useState(false);
@@ -278,7 +281,7 @@ export default function Radar({
           </div>
         )}
       </div>
-      <p className="muted">{hint || t(pin ? 'location.pinned' : 'location.pinHint')}</p>
+      {showHint && <p className="muted">{hint || t(pin ? 'location.pinned' : 'location.pinHint')}</p>}
     </div>
   );
 }

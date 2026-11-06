@@ -1,5 +1,3 @@
-.soup-intro { margin: 1.5rem 0 2rem; }
-.soup-intro h1 { font-size: clamp(1.5rem, 3vw, 2.5rem); margin: .5rem 0; }
 .soup-counter { font-size: 1.3rem; color: var(--success); font-variant-numeric: tabular-nums; }
 .soup-counter small { color: var(--text-sec); font-size: .8rem; }
 .soup-layout { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(19rem, 1fr); gap: 1.25rem; align-items: start; padding: .5rem 0 1rem; }
@@ -91,8 +89,18 @@ html .soup-mode-tabs [role='tab'][aria-selected='true'] { background: var(--text
 @media (max-width: 760px) {
   .soup-page .header-bar .title { white-space: normal; overflow: visible; max-width: none; line-height: 1.3; font-size: .9rem; }
   .soup-page .header-bar .title > svg { flex-shrink: 0; }
-  .soup-layout { grid-template-columns: minmax(0, 1fr); gap: .8rem; }
+  .soup-layout { grid-template-columns: minmax(0, 1fr); gap: .8rem; padding-block: 0 .5rem; }
+  .soup-layout > .card { padding: .85rem; margin-bottom: 0; }
+  .soup-layout h2 { margin-bottom: .5rem; }
   .soup-history-scroll { flex: none; height: min(24rem, 36dvh); }
+  /* One row per question (label | control | ask) instead of label-above stacks. */
+  .soup-question { display: grid; grid-template-columns: 4.75rem minmax(0, 1fr); align-items: center; column-gap: .5rem; margin-bottom: .45rem; }
+  .soup-question label { margin: 0; font-size: .78rem; line-height: 1.25; overflow-wrap: anywhere; }
+  .soup-question-controls .input,
+  .soup-question-controls .btn { min-height: 2.4rem; height: 2.4rem; padding: .35rem .6rem; }
+  .soup-no-team { grid-column: 2; justify-self: start; padding-block: .15rem 0; }
+  .soup-questions .soup-giveup { margin: .35rem 0 .5rem; }
+  .soup-questions .soup-rules-entry { margin: .25rem auto 0; }
   .soup-empty { padding: 1.5rem .5rem; }
   .soup-page .status-bar > .muted { display: none; }
   .soup-event { gap: .4rem; grid-template-columns: 1.4rem minmax(0, 1fr) auto; }

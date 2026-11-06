@@ -43,10 +43,13 @@ export async function reservePasswordReset(email: string): Promise<boolean> {
   return Boolean(await reserveRateLimit('password-reset-mailbox', identity, 3, 3600));
 }
 
-/** Delivery is deliberately detached from the HTTP response to avoid SMTP/account timing leaks. */
-export async function issuePasswordReset(emailInput: string, username: string): Promise<void> {
+/**
+ * Delivery is deliberately detached from the HTTP response to avoid SMTP/account timing leaks.
+ * A verified email is unique across accounts, so it alone identifies the account to recover.
+ */
+export async function issuePasswordReset(emailInput: string): Promise<void> {
   const email = recoveryEmail(emailInput);
-  const user = await db('users').where({ email, username }).whereNotNull('email_verified_at')
+  const user = await db('users').where({ email }).whereNotNull('email_verified_at')
     .first('id', 'token_version');
   if (!user) return;
   const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
@@ -63,9 +66,12 @@ export async function issuePasswordReset(emailInput: string, username: string): 
   }
 }
 
-export async function resetPassword(emailInput: string, code: string, password: string, username: string): Promise<number | null> {
+export interface PasswordResetResult { userId: number; username: string }
+
+/** Returns the recovered account only after the mailbox code was verified and consumed. */
+export async function resetPassword(emailInput: string, code: string, password: string): Promise<PasswordResetResult | null> {
   const email = recoveryEmail(emailInput);
-  const user = await db('users').where({ email, username }).whereNotNull('email_verified_at').first('id');
+  const user = await db('users').where({ email }).whereNotNull('email_verified_at').first('id', 'username');
   if (!user || !/^\d{6}$/.test(code)) return null;
   const expected = codeHash(user.id, email, code);
   // Charge attempts atomically before expensive hashing, including across app instances.
@@ -79,11 +85,11 @@ export async function resetPassword(emailInput: string, code: string, password: 
     const consumed = await trx('password_resets').where({ user_id: user.id, token_hash: expected, expires_at: challenge.expires_at })
       .where('expires_at', '>', new Date()).del();
     if (!consumed) return false;
-    const updated = await trx('users').where({ id: user.id, email, username, token_version: challenge.token_version })
+    const updated = await trx('users').where({ id: user.id, email, token_version: challenge.token_version })
       .whereNotNull('email_verified_at')
       .update({ password_hash: passwordHash, token_version: trx.raw('token_version + 1') });
     return Boolean(updated);
   });
   if (ok) await invalidateAuthUser(user.id);
-  return ok ? Number(user.id) : null;
+  return ok ? { userId: Number(user.id), username: String(user.username) } : null;
 }

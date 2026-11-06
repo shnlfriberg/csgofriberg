@@ -78,7 +78,7 @@ export default function LocationSubmission() {
   };
   return <Page title={t('location.submissionTitle')} icon={<UploadCloud size={17} />} className="location-page location-submission-page"
     actions={<Link className="btn btn-ghost btn-sm" to="/entertainment/location">{t('location.title')}</Link>}>
-    <header className="submission-heading"><h1>{t('location.submissionTitle')}</h1><p>{t('location.submissionIntro')}</p></header>
+    <p className="muted single-lobby-subtitle">{t('location.submissionIntro')}</p>
     <div className="submission-layout">
       <div className="submission-editor">
         <section className="card submission-workflow"><h2>{t('location.submissionBatchTitle')}</h2>

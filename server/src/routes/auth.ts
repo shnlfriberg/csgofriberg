@@ -70,9 +70,9 @@ const geeTestFields = {
 const registerSchema = credentialsSchema.extend({ email: z.string().trim().email().max(320).optional().or(z.literal('')), ...geeTestFields });
 const emailSchema = z.object({ email: z.string().trim().email().max(320), ...geeTestFields });
 const emailCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
-const passwordRequestSchema = emailSchema.extend({ username: credentialsSchema.shape.username });
+// Recovery is keyed by the verified (unique) email; an older client's username field is stripped.
+const passwordRequestSchema = emailSchema;
 const passwordResetSchema = z.object({
-  username: credentialsSchema.shape.username,
   email: z.string().trim().email().max(320),
   code: z.string().trim().regex(/^\d{6}$/),
   password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
@@ -235,7 +235,7 @@ router.post('/password/request',
     catch { throw new HttpError(503, 'RATE_LIMIT_UNAVAILABLE'); }
     // Every valid request has the same response, independent of account eligibility or SMTP outcome.
     res.json({ ok: true, retryAfterSeconds: 30 });
-    if (reserved) void issuePasswordReset(req.body.email, req.body.username).catch(() => {
+    if (reserved) void issuePasswordReset(req.body.email).catch(() => {
       // SMTP errors can contain recipient addresses; never log their raw content.
       console.warn('[password-reset] delivery failed');
     });
@@ -248,14 +248,15 @@ router.post('/password/reset',
   rateLimit({ name: 'password-reset-verify-mailbox', limit: 10, windowSeconds: 600,
     key: (req) => recoveryEmailKey(req.body.email), failClosed: true }),
   asyncHandler(async (req, res) => {
-    const userId = await resetPassword(req.body.email, req.body.code, req.body.password, req.body.username);
-    if (!userId) {
+    const recovered = await resetPassword(req.body.email, req.body.code, req.body.password);
+    if (!recovered) {
       throw new HttpError(400, 'PASSWORD_RESET_CODE_INVALID');
     }
     const io = req.app.get('io') as Server | undefined;
-    io?.in(`identity:u:${userId}`).disconnectSockets(true);
+    io?.in(`identity:u:${recovered.userId}`).disconnectSockets(true);
     clearAuthCookies(res);
-    res.json({ ok: true });
+    // The code proved mailbox ownership, so the login name can be shown for the next sign-in.
+    res.json({ ok: true, username: recovered.username });
   })
 );
 

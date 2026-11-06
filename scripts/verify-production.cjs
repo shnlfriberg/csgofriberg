@@ -28,19 +28,19 @@ async function main() {
         email_verified_at: new Date(), password_hash: await password.hashPassword('Before-reset-password') }).returning('id');
       assert.equal(await recovery.reservePasswordReset(email), true);
       assert.equal(await recovery.reservePasswordReset(email), false);
-      await recovery.issuePasswordReset(email, username);
+      await recovery.issuePasswordReset(email);
       assert.equal(mails.length, 1); assert.equal(mails[0][0], email);
       assert(!/https?:|\.online/.test(mails[0][2]));
       const code = mails[0][2].match(/\b\d{6}\b/)[0];
       const results = await Promise.all([
-        recovery.resetPassword(email, code, 'After-reset-password', username),
-        recovery.resetPassword(email, code, 'After-reset-password', username),
+        recovery.resetPassword(email, code, 'After-reset-password'),
+        recovery.resetPassword(email, code, 'After-reset-password'),
       ]);
-      assert.deepEqual(results.filter(Boolean), [user.id]);
+      assert.deepEqual(results.filter(Boolean), [{ userId: user.id, username }]);
       const updated = await db('users').where({ id: user.id }).first();
       assert.equal(updated.token_version, 1);
       assert.equal(await password.verifyPassword('After-reset-password', updated.password_hash), true);
-      assert.equal(await recovery.resetPassword(email, code, 'Repeated-password', username), null);
+      assert.equal(await recovery.resetPassword(email, code, 'Repeated-password'), null);
       console.log('PASS PostgreSQL password reset, Redis cooldown, code-only mocked mail, concurrent single consumption and token revocation');
     } finally { await closeRedis(); await password.closePasswordWorkers(); }
     return;

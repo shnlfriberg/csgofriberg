@@ -1,7 +1,7 @@
 import RoomCountdown from '../location/RoomCountdown';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, ArrowLeft, Copy } from 'lucide-react';
+import { Users, ArrowLeft, Copy, LogOut, House, Dices, DoorOpen, XCircle, Zap } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Page from '../components/Page';
 import GameRules from '../components/GameRules';
@@ -263,11 +263,46 @@ export default function LocationMulti() {
       }
     });
   };
+  const statusBar = room ? (
+    <>
+      <Users size={14} aria-hidden="true" />
+      <strong className="location-room-code">
+        {room.id}
+        <button
+          className="btn btn-ghost btn-sm"
+          aria-label={t('location.copy')}
+          onClick={() =>
+            void navigator.clipboard
+              .writeText(room.id)
+              .catch(() => undefined)
+          }
+        >
+          <Copy size={14} />
+        </button>
+      </strong>
+      <span>
+        {room.round
+          ? t('location.round', { round: room.round })
+          : t('location.waiting')}
+      </span>
+      <RoomCountdown clock deadline={room.startsAt || room.endsAt || room.nextAt} offset={offset.current} />
+      <span className="location-status-meta">{t(`location.${room.difficulty}`)}</span>
+      <button
+        className="btn btn-ghost btn-sm location-abandon"
+        disabled={busy}
+        onClick={() => void leave()}
+      >
+        <LogOut size={14} aria-hidden="true" />
+        {t('location.leaveRoom')}
+      </button>
+    </>
+  ) : undefined;
   return (
     <Page
       title={`${t('location.title')} · ${t('location.multiplayer')}`}
-      className="location-page"
+      className="location-page location-play-page location-multi-page"
       icon={<Users size={18} />}
+      statusBar={statusBar}
       actions={
         <Link className="btn btn-ghost btn-sm" to="/entertainment/location" aria-label={t('location.title')}>
           <ArrowLeft size={16} />
@@ -290,141 +325,154 @@ export default function LocationMulti() {
       )}
       {!room ? (
         <section className="location-lobby">
-          <span className="location-eyebrow">CS2 // MULTIPLAYER</span>
-          <h1>{t('location.multiplayer')}</h1>
-          <p>{t('location.roomHelp')}</p>
-          <DifficultySelect
-            value={difficulty}
-            onChange={setDifficulty}
-            disabled={busy || queued}
-          />
-          <div className="location-multi-controls">
-            <label>
-              {t('location.duration')}
-              <select
-                className="input"
+          <p className="muted single-lobby-subtitle">{t('location.roomHelp')}</p>
+          <div className="lobby-grid location-lobby-grid">
+            <div className="card multi-lobby-create-card">
+              <h3>
+                <House size={16} aria-hidden="true" />
+                {t('location.createRoom')}
+              </h3>
+              <DifficultySelect
+                variant="pills"
+                value={difficulty}
+                onChange={setDifficulty}
                 disabled={busy || queued}
-                value={duration}
-                onChange={(e) => setDuration(Number(e.target.value))}
-              >
+              />
+              <div className="option-row" role="group" aria-label={t('location.duration')}>
+                <span className="opt-label">{t('location.duration')}</span>
                 {[60, 120, 180].map((seconds) => (
-                  <option key={seconds} value={seconds}>
+                  <button
+                    type="button"
+                    key={seconds}
+                    className={`opt-btn ${duration === seconds ? 'active' : ''}`}
+                    aria-pressed={duration === seconds}
+                    disabled={busy || queued}
+                    onClick={() => setDuration(seconds)}
+                  >
                     {t('location.seconds', { count: seconds })}
-                  </option>
+                  </button>
                 ))}
-              </select>
-            </label>
-            <button
-              className="btn location-start"
-              disabled={busy || queued}
-              onClick={() =>
-                void run(async () =>
-                  accept(
-                    await roomAction<RoomView>('location:room:create', {
-                      difficulty,
-                      duration,
-                    })
-                  )
-                )
-              }
-            >
-              {t('location.createRoom')}
-            </button>
-          </div>
-          <div className="location-join">
-            <input
-              className="input"
-              aria-label={t('location.roomCode')}
-              placeholder={t('location.roomCode')}
-              maxLength={5}
-              value={code}
-              disabled={busy || queued}
-              onChange={(e) =>
-                setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
-              }
-            />
-            <button
-              className="btn"
-              disabled={busy || queued || code.length !== 5}
-              onClick={() =>
-                void run(async () =>
-                  accept(
-                    await roomAction<RoomView>('location:room:join', {
-                      roomId: code,
-                    })
-                  )
-                )
-              }
-            >
-              {t('location.joinRoom')}
-            </button>
-          </div>
-          <div className="location-match">
-            {authInitialized && !canUseMatchmaking && (
-              <p className="muted matchmaking-requirement">
-                {t('multi.matchVerifiedRequired')}
-              </p>
-            )}
-            <button
-              className="btn btn-ghost"
-              disabled={
-                busy || (!queued && (!authInitialized || !canUseMatchmaking))
-              }
-              onClick={() =>
-                void run(async () => {
-                  if (queued) {
-                    await roomAction('location:match:cancel', { difficulty });
-                    setQueued(false);
-                    searching.current = false;
-                  } else {
-                    if (!matchmakingAllowed.current) {
-                      setError(t('errors.EMAIL_VERIFICATION_REQUIRED'));
-                      return;
-                    }
-                    searchDifficulty.current = difficulty;
-                    const result = await roomAction<{
-                      room?: RoomView;
-                      queued?: boolean;
-                    }>('location:match:join', { difficulty });
-                    if (result.room) accept(result.room);
-                    else {
-                      setQueued(true);
-                      searching.current = true;
-                    }
+              </div>
+              <div className="location-card-action">
+                <button
+                  className="btn btn-lg location-start"
+                  disabled={busy || queued}
+                  onClick={() =>
+                    void run(async () =>
+                      accept(
+                        await roomAction<RoomView>('location:room:create', {
+                          difficulty,
+                          duration,
+                        })
+                      )
+                    )
                   }
-                })
-              }
-            >
-              {t(queued ? 'location.cancelMatch' : 'location.quickMatch')}
-            </button>
-            {queued && <p role="status">{t('location.searching')}</p>}
+                >
+                  <Zap size={16} aria-hidden="true" />
+                  {t('location.createRoom')}
+                </button>
+              </div>
+            </div>
+            <div className="card multi-lobby-match-card">
+              <h3>
+                <Dices size={16} aria-hidden="true" />
+                {t('location.quickMatch')}
+              </h3>
+              <p className="muted">{t('location.quickMatchHelp')}</p>
+              {authInitialized && !canUseMatchmaking && (
+                <p className="muted matchmaking-requirement">
+                  {t('multi.matchVerifiedRequired')}
+                </p>
+              )}
+              <DifficultySelect
+                variant="pills"
+                value={difficulty}
+                onChange={setDifficulty}
+                disabled={busy || queued}
+              />
+              <div className="location-card-action">
+                {queued && (
+                  <p role="status" className="location-searching">
+                    <span className="spinner matchmaking-spinner" aria-hidden="true" />
+                    {t('location.searching')}
+                  </p>
+                )}
+                <button
+                  className={queued ? 'btn btn-ghost' : 'btn btn-accent btn-lg'}
+                  disabled={
+                    busy || (!queued && (!authInitialized || !canUseMatchmaking))
+                  }
+                  onClick={() =>
+                    void run(async () => {
+                      if (queued) {
+                        await roomAction('location:match:cancel', { difficulty });
+                        setQueued(false);
+                        searching.current = false;
+                      } else {
+                        if (!matchmakingAllowed.current) {
+                          setError(t('errors.EMAIL_VERIFICATION_REQUIRED'));
+                          return;
+                        }
+                        searchDifficulty.current = difficulty;
+                        const result = await roomAction<{
+                          room?: RoomView;
+                          queued?: boolean;
+                        }>('location:match:join', { difficulty });
+                        if (result.room) accept(result.room);
+                        else {
+                          setQueued(true);
+                          searching.current = true;
+                        }
+                      }
+                    })
+                  }
+                >
+                  {queued ? <XCircle size={15} aria-hidden="true" /> : <Dices size={16} aria-hidden="true" />}
+                  {t(queued ? 'location.cancelMatch' : 'location.quickMatch')}
+                </button>
+              </div>
+            </div>
+            <div className="card multi-lobby-join-card">
+              <h3>
+                <DoorOpen size={16} aria-hidden="true" />
+                {t('location.joinRoom')}
+              </h3>
+              <p className="muted">{t('location.joinHelp')}</p>
+              <div className="join-room-form location-join">
+                <input
+                  className="input"
+                  aria-label={t('location.roomCode')}
+                  placeholder={t('location.roomCode')}
+                  maxLength={5}
+                  autoComplete="off"
+                  value={code}
+                  disabled={busy || queued}
+                  onChange={(e) =>
+                    setCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+                  }
+                />
+                <button
+                  className="btn btn-success"
+                  disabled={busy || queued || code.length !== 5}
+                  onClick={() =>
+                    void run(async () =>
+                      accept(
+                        await roomAction<RoomView>('location:room:join', {
+                          roomId: code,
+                        })
+                      )
+                    )
+                  }
+                >
+                  <DoorOpen size={15} aria-hidden="true" />
+                  {t('location.joinRoom')}
+                </button>
+              </div>
+            </div>
           </div>
         </section>
       ) : (
         <>
-          <div className="location-game-status">
-            <strong>
-              {room.id}
-              <button
-                className="btn btn-ghost btn-sm"
-                aria-label={t('location.copy')}
-                onClick={() =>
-                  void navigator.clipboard
-                    .writeText(room.id)
-                    .catch(() => undefined)
-                }
-              >
-                <Copy size={14} />
-              </button>
-            </strong>
-            <span>
-              {room.round
-                ? t('location.round', { round: room.round })
-                : t('location.waiting')}
-            </span>
-            <RoomCountdown clock deadline={room.startsAt || room.endsAt || room.nextAt} offset={offset.current} />
-            <span>{t(`location.${room.difficulty}`)}</span>
-          </div>
           <div className="location-player-strip">
             {[...room.players]
               .sort(
@@ -459,7 +507,7 @@ export default function LocationMulti() {
               ))}
           </div>
           {['round_over', 'finished'].includes(room.status) && (
-            <label>
+            <label className="location-player-pins">
               {t('location.playerPins')}
               <select
                 className="input"
@@ -488,7 +536,7 @@ export default function LocationMulti() {
               </button>
               {room.host === room.me && (
                 <button
-                  className="btn location-start"
+                  className="btn btn-green location-start"
                   disabled={
                     busy ||
                     room.players.length < 2 ||
@@ -542,13 +590,6 @@ export default function LocationMulti() {
               </>
             )
           )}
-          <button
-            className="btn btn-ghost location-abandon"
-            disabled={busy}
-            onClick={() => void leave()}
-          >
-            {t('location.leaveRoom')}
-          </button>
         </>
       )}
       <div className="location-rules-entry">

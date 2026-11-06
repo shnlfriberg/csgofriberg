@@ -67,7 +67,7 @@ describe('password recovery', () => {
   it('requires the existing human verification before sending', async () => {
     const user = await account(); config.geetest.enabled = true;
     try {
-      const result = await post('/password/request', { username: user.username, email: user.email });
+      const result = await post('/password/request', { email: user.email });
       expect(result.response.status).toBe(400); expect(result.data.code).toBe('GEETEST_REQUIRED');
       expect(sendEmail).not.toHaveBeenCalled();
       expect(await redis()!.get(redisKey(`password-reset-cooldown:${recoveryEmailKey(user.email)}`))).toBeNull();
@@ -75,10 +75,10 @@ describe('password recovery', () => {
   });
   it('returns the same response for bound, absent, unverified and throttled mailboxes', async () => {
     const user = await account(); const unverified = await account(false);
-    const bound = await post('/password/request', { username: user.username, email: ` ${user.email.toUpperCase()} ` });
-    const absent = await post('/password/request', { username: "missing-user", email: `missing${run}@example.com` });
-    const pending = await post('/password/request', { username: unverified.username, email: unverified.email });
-    const cooldown = await post('/password/request', { username: user.username, email: user.email });
+    const bound = await post('/password/request', { email: ` ${user.email.toUpperCase()} ` });
+    const absent = await post('/password/request', { email: `missing${run}@example.com` });
+    const pending = await post('/password/request', { email: unverified.email });
+    const cooldown = await post('/password/request', { email: user.email });
     for (const result of [bound, absent, pending, cooldown]) {
       expect(result.response.status).toBe(200); expect(result.data).toEqual({ ok: true, retryAfterSeconds: 30 });
     }
@@ -99,7 +99,7 @@ describe('password recovery', () => {
       return originalFetch(input, init);
     });
     config.geetest.enabled = true;
-    const body = { username: user.username, email: user.email, lot_number: 'test-lot', captcha_output: 'test-output', pass_token: 'test-token', gen_time: '123' };
+    const body = { email: user.email, lot_number: 'test-lot', captcha_output: 'test-output', pass_token: 'test-token', gen_time: '123' };
     try {
       expect((await post('/password/request', body)).data.code).toBe('GEETEST_FAILED');
       expect(sendEmail).not.toHaveBeenCalled();
@@ -112,26 +112,23 @@ describe('password recovery', () => {
     const user = await account();
     let rejectSend!: (error: Error) => void;
     sendEmail.mockImplementation(() => new Promise((_, reject) => { rejectSend = reject; }));
-    const result = await post('/password/request', { username: user.username, email: user.email });
+    const result = await post('/password/request', { email: user.email });
     expect(result.data).toEqual({ ok: true, retryAfterSeconds: 30 });
     await vi.waitFor(() => expect(sendEmail).toHaveBeenCalledOnce());
     rejectSend(new Error('SMTP failure with private recipient'));
     await vi.waitFor(async () => expect(await db('password_resets').where({ user_id: user.id }).first()).toBeUndefined());
   });
-  it('requires username and silently rejects mismatched username/email pairs', async () => {
+  it('identifies the account by its verified email alone and returns the login name after reset', async () => {
     const user = await account();
-    expect((await post('/password/request', { email: user.email })).response.status).toBe(400);
-    const mismatch = await post('/password/request', { username: 'another-user', email: user.email });
-    expect(mismatch.response.status).toBe(200);
-    expect(mismatch.data).toEqual({ ok: true, retryAfterSeconds: 30 });
-    await issuePasswordReset(user.email, 'another-user');
-    expect(sendEmail).not.toHaveBeenCalled();
-    await issuePasswordReset(user.email, user.username);
-    const code = deliveredCode(user.email);
-    const result = await post('/password/reset', { username: 'another-user', email: user.email, code, password: newPassword });
-    expect(result.data.code).toBe('PASSWORD_RESET_CODE_INVALID');
-    expect((await db('users').where({ id: user.id }).first()).token_version).toBe(0);
-    expect(await resetPassword(user.email, code, newPassword, user.username)).toBe(user.id);
+    expect((await post('/password/request', {})).response.status).toBe(400);
+    // Older clients may still send a username; it is stripped rather than matched.
+    const legacy = await post('/password/request', { username: 'another-user', email: user.email });
+    expect(legacy.data).toEqual({ ok: true, retryAfterSeconds: 30 });
+    await vi.waitFor(() => expect(sendEmail).toHaveBeenCalledOnce());
+    const result = await post('/password/reset', { username: 'another-user', email: user.email, code: deliveredCode(user.email), password: newPassword });
+    expect(result.response.status).toBe(200);
+    expect(result.data).toEqual({ ok: true, username: user.username });
+    expect((await db('users').where({ id: user.id }).first()).token_version).toBe(1);
   });
   it('resets once, invalidates access and refresh cookies, and keeps account data', async () => {
     const user = await account();
@@ -139,9 +136,9 @@ describe('password recovery', () => {
     const cookie = login.response.headers.getSetCookie().map((value) => value.split(';')[0]).join('; ');
     // Prime the shared auth cache before resetting.
     expect((await post('/refresh', {}, undefined, cookie)).response.status).toBe(200);
-    await issuePasswordReset(user.email, user.username); const code = deliveredCode(user.email);
-    const result = await post('/password/reset', { username: user.username, email: user.email, code, password: newPassword });
-    expect(result.response.status).toBe(200);
+    await issuePasswordReset(user.email); const code = deliveredCode(user.email);
+    const result = await post('/password/reset', { email: user.email, code, password: newPassword });
+    expect(result.response.status).toBe(200); expect(result.data).toEqual({ ok: true, username: user.username });
     expect(socketRoom).toHaveBeenCalledWith(`identity:u:${user.id}`);
     expect(disconnectSockets).toHaveBeenCalledWith(true);
     const changed = await db('users').where({ id: user.id }).first();
@@ -150,41 +147,41 @@ describe('password recovery', () => {
     expect(await verifyPassword(oldPassword, changed.password_hash)).toBe(false);
     expect((await post('/refresh', {}, undefined, cookie)).response.status).toBe(401);
     const me = await fetch(`${baseUrl}/api/auth/me`, { headers: { Cookie: cookie } }); expect(me.status).toBe(401);
-    expect(await resetPassword(user.email, code, oldPassword, user.username)).toBeNull();
+    expect(await resetPassword(user.email, code, oldPassword)).toBeNull();
     expect((await post('/login', { username: user.username, password: newPassword })).response.status).toBe(200);
   });
   it('rejects cross-purpose codes, wrong codes, expired codes and unverified mailboxes uniformly', async () => {
-    const user = await account(); await issuePasswordReset(user.email, user.username); const code = deliveredCode(user.email);
+    const user = await account(); await issuePasswordReset(user.email); const code = deliveredCode(user.email);
     expect((await post('/email/verify-code', { code })).response.status).toBe(401);
     const wrong = code === '000000' ? '000001' : '000000';
-    const unknown = await post('/password/reset', { username: 'missing-user', email: 'absent@example.com', code, password: newPassword });
-    const bad = await post('/password/reset', { username: user.username, email: user.email, code: wrong, password: newPassword });
+    const unknown = await post('/password/reset', { email: 'absent@example.com', code, password: newPassword });
+    const bad = await post('/password/reset', { email: user.email, code: wrong, password: newPassword });
     expect(bad.data).toEqual(unknown.data); expect(bad.data.code).toBe('PASSWORD_RESET_CODE_INVALID');
-    for (let i = 0; i < 4; i++) expect(await resetPassword(user.email, wrong, newPassword, user.username)).toBeNull();
-    expect(await resetPassword(user.email, code, newPassword, user.username)).toBeNull();
-    await issuePasswordReset(user.email, user.username);
+    for (let i = 0; i < 4; i++) expect(await resetPassword(user.email, wrong, newPassword)).toBeNull();
+    expect(await resetPassword(user.email, code, newPassword)).toBeNull();
+    await issuePasswordReset(user.email);
     await db('password_resets').where({ user_id: user.id }).update({ expires_at: new Date(Date.now() - 1000) });
-    expect(await resetPassword(user.email, deliveredCode(user.email), newPassword, user.username)).toBeNull();
-    const pending = await account(false); await issuePasswordReset(pending.email, pending.username);
+    expect(await resetPassword(user.email, deliveredCode(user.email), newPassword)).toBeNull();
+    const pending = await account(false); await issuePasswordReset(pending.email);
     expect(sendEmail.mock.calls.some((call) => call[0] === pending.email)).toBe(false);
   });
   it('replaces old codes and permits only one concurrent consumption', async () => {
-    const user = await account(); await issuePasswordReset(user.email, user.username); const oldCode = deliveredCode(user.email);
-    await issuePasswordReset(user.email, user.username); let code = deliveredCode(user.email);
+    const user = await account(); await issuePasswordReset(user.email); const oldCode = deliveredCode(user.email);
+    await issuePasswordReset(user.email); let code = deliveredCode(user.email);
     // Random codes may repeat; avoid a probabilistic assertion in the test.
-    if (code === oldCode) { await issuePasswordReset(user.email, user.username); code = deliveredCode(user.email); }
-    if (code !== oldCode) expect(await resetPassword(user.email, oldCode, newPassword, user.username)).toBeNull();
-    const results = await Promise.all([resetPassword(user.email, code, newPassword, user.username), resetPassword(user.email, code, 'Other-strong-password', user.username)]);
-    expect(results.filter(Boolean)).toEqual([user.id]);
+    if (code === oldCode) { await issuePasswordReset(user.email); code = deliveredCode(user.email); }
+    if (code !== oldCode) expect(await resetPassword(user.email, oldCode, newPassword)).toBeNull();
+    const results = await Promise.all([resetPassword(user.email, code, newPassword), resetPassword(user.email, code, 'Other-strong-password')]);
+    expect(results.filter(Boolean)).toEqual([{ userId: user.id, username: user.username }]);
     expect((await db('users').where({ id: user.id }).first()).token_version).toBe(1);
   });
   it('rejects a challenge if the account email or login version changed', async () => {
-    const user = await account(); await issuePasswordReset(user.email, user.username);
+    const user = await account(); await issuePasswordReset(user.email);
     await db('users').where({ id: user.id }).increment('token_version', 1);
-    expect(await resetPassword(user.email, deliveredCode(user.email), newPassword, user.username)).toBeNull();
-    await issuePasswordReset(user.email, user.username);
+    expect(await resetPassword(user.email, deliveredCode(user.email), newPassword)).toBeNull();
+    await issuePasswordReset(user.email);
     await db('users').where({ id: user.id }).update({ email: `changed${run}@example.com` });
-    expect(await resetPassword(user.email, deliveredCode(user.email), newPassword, user.username)).toBeNull();
+    expect(await resetPassword(user.email, deliveredCode(user.email), newPassword)).toBeNull();
   });
   it('limits sends per mailbox across IPs, with a shared cooldown', async () => {
     const email = `quota${run}@example.com`;
@@ -195,16 +192,16 @@ describe('password recovery', () => {
     await redis()!.del(key); expect(await reservePasswordReset(email)).toBe(false);
   });
   it('enforces password policy before consuming the code', async () => {
-    const user = await account(); await issuePasswordReset(user.email, user.username);
-    const result = await post('/password/reset', { username: user.username, email: user.email, code: deliveredCode(user.email), password: 'short' });
+    const user = await account(); await issuePasswordReset(user.email);
+    const result = await post('/password/reset', { email: user.email, code: deliveredCode(user.email), password: 'short' });
     expect(result.response.status).toBe(400);
     expect((await db('password_resets').where({ user_id: user.id }).first()).attempts).toBe(0);
   });
   it('limits verification attempts by IP even when mailboxes keep changing', async () => {
     const ip = '2001:db8:abce::1';
     for (let i = 0; i < 10; i++) {
-      expect((await post('/password/reset', { username: "missing-user", email: `absent${i}@example.com`, code: '123456', password: newPassword }, ip)).response.status).toBe(400);
+      expect((await post('/password/reset', { email: `absent${i}@example.com`, code: '123456', password: newPassword }, ip)).response.status).toBe(400);
     }
-    expect((await post('/password/reset', { username: 'missing-user', email: 'another@example.com', code: '123456', password: newPassword }, ip)).response.status).toBe(429);
+    expect((await post('/password/reset', { email: 'another@example.com', code: '123456', password: newPassword }, ip)).response.status).toBe(429);
   });
 });

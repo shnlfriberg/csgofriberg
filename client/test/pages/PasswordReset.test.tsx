@@ -21,35 +21,36 @@ describe('password recovery form', () => {
     renderAtRoute(<Login />, { path: '/login', route: '/login' });
     expect(screen.getByRole('link', { name: '忘记密码' })).toHaveAttribute('href', '/password-reset');
   });
-  it('requires the username before requesting a code', async () => {
+  it('asks only for the bound email and keeps the send button beside the code input', async () => {
     const user = userEvent.setup(); renderAtRoute(<PasswordReset />);
-    await user.type(screen.getByLabelText('绑定邮箱'), 'bound@example.com');
+    expect(screen.queryByLabelText('用户名')).toBeNull();
+    const codeRow = screen.getByLabelText('邮箱验证码').parentElement!;
+    expect(codeRow).toContainElement(screen.getByRole('button', { name: '发送验证码' }));
+    await user.type(screen.getByLabelText('绑定邮箱'), 'not-an-email');
     await user.click(screen.getByRole('button', { name: '发送验证码' }));
-    expect(screen.getByRole('alert')).toHaveTextContent('请输入用户名');
+    expect(screen.getByRole('alert')).toHaveTextContent('邮箱');
     expect(mocks.captcha).not.toHaveBeenCalled(); expect(mocks.post).not.toHaveBeenCalled();
   });
   it('requires human verification, displays a generic send message and blocks repeated sends', async () => {
     const user = userEvent.setup(); renderAtRoute(<PasswordReset />);
-    await user.type(screen.getByLabelText('用户名'), 'test-user');
     await user.type(screen.getByLabelText('绑定邮箱'), 'bound@example.com');
     await user.click(screen.getByRole('button', { name: '发送验证码' }));
     expect(mocks.captcha).toHaveBeenCalledOnce();
-    expect(mocks.post).toHaveBeenCalledWith('/auth/password/request', { username: 'test-user', email: 'bound@example.com', lot_number: 'proof' });
+    expect(mocks.post).toHaveBeenCalledWith('/auth/password/request', { email: 'bound@example.com', lot_number: 'proof' });
     expect(screen.getByRole('status')).toHaveTextContent('验证码已发送');
     expect(screen.getByRole('button', { name: /秒后可重新发送/ })).toBeDisabled();
   });
   it('does not send if human verification is cancelled', async () => {
     mocks.captcha.mockResolvedValue({ enabled: true, proof: null });
     const user = userEvent.setup(); renderAtRoute(<PasswordReset />);
-    await user.type(screen.getByLabelText('用户名'), 'test-user');
     await user.type(screen.getByLabelText('绑定邮箱'), 'bound@example.com');
     await user.click(screen.getByRole('button', { name: '发送验证码' }));
     expect(mocks.post).not.toHaveBeenCalled(); expect(screen.queryByRole('status')).toBeNull();
     expect(screen.getByRole('button', { name: '发送验证码' })).toBeEnabled();
   });
-  it('validates matching passwords then resets and returns to login', async () => {
+  it('validates matching passwords then resets and names the recovered account', async () => {
+    mocks.post.mockResolvedValue({ data: { ok: true, username: 'test-user' } });
     const user = userEvent.setup(); renderAtRoute(<PasswordReset />);
-    await user.type(screen.getByLabelText('用户名'), 'test-user');
     await user.type(screen.getByLabelText('绑定邮箱'), 'bound@example.com');
     await user.type(screen.getByLabelText('邮箱验证码'), '012345');
     await user.type(screen.getByLabelText('新密码（10–128 位）'), 'New-strong-password');
@@ -58,7 +59,7 @@ describe('password recovery form', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('两次输入的密码不一致'); expect(mocks.post).not.toHaveBeenCalled();
     await user.clear(screen.getByLabelText('确认密码')); await user.type(screen.getByLabelText('确认密码'), 'New-strong-password');
     await user.click(screen.getByRole('button', { name: '重置密码' }));
-    expect(mocks.post).toHaveBeenCalledWith('/auth/password/reset', { username: 'test-user', email: 'bound@example.com', code: '012345', password: 'New-strong-password' });
+    expect(mocks.post).toHaveBeenCalledWith('/auth/password/reset', { email: 'bound@example.com', code: '012345', password: 'New-strong-password' });
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('账号 test-user 的密码重置成功'));
     expect(mocks.clear).toHaveBeenCalledOnce(); expect(mocks.close).toHaveBeenCalledOnce();
     expect(screen.getByRole('link', { name: '返回登录' })).toHaveAttribute('href', '/login');
@@ -67,7 +68,6 @@ describe('password recovery form', () => {
   it('retains input and allows retry on failure', async () => {
     mocks.post.mockRejectedValue(new Error('failed'));
     const user = userEvent.setup(); renderAtRoute(<PasswordReset />);
-    await user.type(screen.getByLabelText('用户名'), 'test-user');
     await user.type(screen.getByLabelText('绑定邮箱'), 'bound@example.com');
     await user.click(screen.getByRole('button', { name: '发送验证码' }));
     expect(screen.getByRole('alert')).toHaveTextContent('验证码无效或已过期');

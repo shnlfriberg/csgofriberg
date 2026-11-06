@@ -173,6 +173,9 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
             />
           )}
+          {mode === 'login' && (
+            <Link className="auth-text-link auth-forgot-link" to="/password-reset">{t('recovery.title')}</Link>
+          )}
           {mode === 'register' && (
             <div className="auth-field">
               <input
@@ -221,7 +224,6 @@ export default function Login() {
             {mode === 'login' ? t('auth.toRegister') : t('auth.toLogin')}
           </button>
         </form>
-        {mode === 'login' && <Link className="btn btn-ghost" to="/password-reset">{t('recovery.title')}</Link>}
       </div>
     </Page>
   );

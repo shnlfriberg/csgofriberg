@@ -67,10 +67,11 @@ function CardLinkRulesContent() {
   </article>;
 }
 
-export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turtle-soup' | 'location' }) {
+export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turtle-soup' | 'location' | 'card-link' }) {
   const { t } = useTranslation();
   const soupOnly = variant === 'turtle-soup';
   const locationOnly = variant === 'location';
+  const cardOnly = variant === 'card-link';
   const [open, setOpen] = useState(false);
   const titleId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -111,10 +112,10 @@ export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turt
         type="button"
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
-        data-umami-event={soupOnly ? 'soup-rules-open' : locationOnly ? 'location-rules-open' : 'home-rules-open'}
+        data-umami-event={soupOnly ? 'soup-rules-open' : locationOnly ? 'location-rules-open' : cardOnly ? 'card-rules-open' : 'home-rules-open'}
       >
         <BookOpen size={14} aria-hidden="true" />
-        {t(soupOnly ? 'soup.rules' : locationOnly ? 'location.rulesTrigger' : 'rules.trigger')}
+        {t(soupOnly ? 'soup.rules' : locationOnly ? 'location.rulesTrigger' : cardOnly ? 'card.rules' : 'rules.trigger')}
       </button>
 
       {open && (
@@ -137,24 +138,30 @@ export default function GameRules({ variant = 'all' }: { variant?: 'all' | 'turt
                 </span>
                 <div className="game-rules-heading-copy">
                   <span className="game-rules-kicker">HOW TO PLAY</span>
-              <h2 id={titleId}>{t(soupOnly ? 'soup.rules' : locationOnly ? 'location.rulesTitle' : 'rules.title')}</h2>
-                  <p>{t(soupOnly ? 'soup.description' : locationOnly ? 'location.rulesDescription' : 'rules.description')}</p>
+              <h2 id={titleId}>{cardOnly ? `${t('card.title')} · ${t('card.rules')}` : t(soupOnly ? 'soup.rules' : locationOnly ? 'location.rulesTitle' : 'rules.title')}</h2>
+                  <p>{t(soupOnly ? 'soup.description' : locationOnly ? 'location.rulesDescription' : cardOnly ? 'card.description' : 'rules.description')}</p>
                 </div>
-                <strong className="guess-limit">{soupOnly ? t('soup.questionBudget', { count: SOUP_MAX_ATTEMPTS }) : locationOnly ? t('location.rulesLimit') : <><span>{t('rules.max')}</span> {t('rules.guesses')}</>}</strong>
+                {!cardOnly && <strong className="guess-limit">{soupOnly ? t('soup.questionBudget', { count: SOUP_MAX_ATTEMPTS }) : locationOnly ? t('location.rulesLimit') : <><span>{t('rules.max')}</span> {t('rules.guesses')}</>}</strong>}
                 <button
                   ref={closeRef}
                   className="confirm-close"
                   type="button"
                   aria-label={t('rules.close')}
                   onClick={closeRules}
-                  data-umami-event={soupOnly ? 'soup-rules-close' : locationOnly ? 'location-rules-close' : 'home-rules-close'}
+                  data-umami-event={soupOnly ? 'soup-rules-close' : locationOnly ? 'location-rules-close' : cardOnly ? 'card-rules-close' : 'home-rules-close'}
                 >
                   <X size={18} />
                 </button>
               </header>
 
               <div className="game-rules-dialog-body">
-                {soupOnly ? <SoupRulesContent /> : locationOnly ? <LocationRulesContent /> : <>
+                {soupOnly ? <SoupRulesContent /> : locationOnly ? <LocationRulesContent /> : cardOnly ? <>
+                  <CardLinkRulesContent />
+                  <article className="rule-panel" aria-label={t('card.rules')}>
+                    <p>{t('card.instructions')}</p>
+                    <p className="muted">{t('card.notice')}</p>
+                  </article>
+                </> : <>
                 <div className="rule-quick-guide" aria-label={t('rules.feedbackLabel')}>
                   <div className="rule-feedback rule-feedback-correct">
                     <span className="rule-color-swatch" aria-hidden="true" />

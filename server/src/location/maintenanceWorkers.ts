@@ -1,5 +1,4 @@
-import { locationMetrics, observeMetric } from './metrics';
-import { db } from '../db/knex';
+import { observeMetric } from './metrics';
 import { flushDueResults } from './resultOutbox';
 import { flushAssetRemovals } from './assetTasks';
 import { archiveExpiredProgress } from './progressArchive';
@@ -23,10 +22,6 @@ export function startMaintenanceWorkers(): () => Promise<void> {
     startWorker('outbox', 500, flushDueResults),
     startWorker('asset-removals', 10000, flushAssetRemovals),
     startWorker('progress-archive', 60000, archiveExpiredProgress),
-    startWorker('metrics', 60000, async () => {
-      const outbox = await db('location_result_outbox').count({ pending: '*' }).min({ oldestDueAt: 'due_at' }).first();
-      console.log(JSON.stringify({ event: 'location.metrics', ...locationMetrics(), outbox }));
-    }),
   ];
   return async () => { await Promise.all(stops.map(stop => stop())); };
 }

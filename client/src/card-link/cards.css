@@ -199,6 +199,23 @@
     width: 122px;
     min-height: 196px;
   }
+  /* In a round the board and hand both need to stay visible on a phone screen. */
+  .cl-game-page .cl-card,
+  .cl-card-drag-preview,
+  .cl-card-ghost {
+    flex-basis: 100px;
+    width: 100px;
+    min-height: 152px;
+    padding: 8px 6px 8px;
+    gap: 4px;
+  }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-identity { min-height: 0; gap: 3px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-identity strong { font-size: 15px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-suit { font-size: 22px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-corner { flex-direction: row; align-items: center; gap: 4px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-corner > span { font-size: 14px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-actions { gap: 3px; }
+  :is(.cl-game-page, .cl-card-drag-preview, .cl-card-ghost) .cl-card-actions button { min-width: 26px; min-height: 26px; padding-inline: 4px; }
   .cl-card-identity {
     min-height: 96px;
   }

@@ -125,8 +125,8 @@
     },
     "client/src/components/GameRules.tsx": {
       "upstreamSha256": "e63a4bb1de766ab1bac360ab802d064500f54d3baba1f782e6f7134b90859790",
-      "localSha256": "b8dc33ad64a3c419590f5d217f8d3b675610044fca2478f10bd76332a5fae6ac",
-      "reason": "2026-10-24: Add home card-link rules for unlimited/limited hands using shared hand-size and credit limits; preserve existing rule variants. 2026-10-25: Include the shared difficulty table requested by the user (2 / 3 / 4-5 shortest links)."
+      "localSha256": "129336fb27bab586aaf5c6165517fb8d373b887cf31ebd36fd437cbb40e4a406",
+      "reason": "2026-10-24: Add home card-link rules for unlimited/limited hands using shared hand-size and credit limits; preserve existing rule variants. 2026-10-25: Include the shared difficulty table requested by the user (2 / 3 / 4-5 shortest links). Reviewed 2026-11-06: Add a card-link-only rules popup variant so the card page uses the same rules dialog as soup/location."
     },
     "client/src/components/GuessBoard.tsx": {
       "upstreamSha256": "3dd5cda61c236d365537191461fc887bd39b8a74bf64605ae4915129ec039114"
@@ -144,7 +144,9 @@
       "upstreamSha256": "f4de5dd921d3fbab3453ce696d1f4b92be3b2c27c180048e393afd5f79981e6a"
     },
     "client/src/components/MenuCard.tsx": {
-      "upstreamSha256": "0bf1ec3030063ed6e171e129dc2cf1b2111aa71f5d97d264b3d6d90a0b2be4ca"
+      "upstreamSha256": "0bf1ec3030063ed6e171e129dc2cf1b2111aa71f5d97d264b3d6d90a0b2be4ca",
+      "localSha256": "a03cf5722921decc58dac406914d8d04b44749b0747e4c4fdff8a9d6f78e8c3e",
+      "reason": "Reviewed 2026-11-06: Optional className so entertainment entry pages reuse the home menu card."
     },
     "client/src/components/ModalPortal.tsx": {
       "upstreamSha256": "65a2702b255c51c846bace0c857c5ec206df4d887ace5d470b28b40987a1c053"
@@ -279,8 +281,8 @@
     },
     "client/src/pages/Login.tsx": {
       "upstreamSha256": "ad2eb9c41d0518695c2ce1590e9193d8cbded110bd5c988d92fb4bc983a1f09b",
-      "localSha256": "bd02c35ecc29b24a446703ec6c0fe2cbc9dffb3005e248c6abd5cd6a6a4102f2",
-      "reason": " Reviewed 2026-10-24 password recovery: Add the forgot-password entry using the existing login page."
+      "localSha256": "81ae8878b911fe177ddc41b01519d23aa0435f204653de19a82da40d146b1657",
+      "reason": "Reviewed 2026-10-24 password recovery: Add the forgot-password entry using the existing login page. Reviewed 2026-11-06: Show forgot-password as a compact text link under the password field."
     },
     "client/src/pages/MultiLobby.tsx": {
       "upstreamSha256": "858fefeb517ea8be8c8be4a39aebf59b92eacc728d6e9049389650176831283a"
@@ -343,7 +345,9 @@
       "upstreamSha256": "890da371752884d2081f5986527ce388de893206e550ce9b41686f0b4cf620a8"
     },
     "client/src/styles/controls.css": {
-      "upstreamSha256": "f6409bf2f28d6cf5e35ef1093578e4ffe0320f76f2d895394288cdca91b1a4ec"
+      "upstreamSha256": "f6409bf2f28d6cf5e35ef1093578e4ffe0320f76f2d895394288cdca91b1a4ec",
+      "localSha256": "c1a4deac47eedbdfdc1788338f23a4820a1aed7c8d302601919cb89d7a8782e7",
+      "reason": "Reviewed 2026-11-06: Compact password-recovery layout (send-code button beside the code input) and auth text links."
     },
     "client/src/styles/daily.css": {
       "upstreamSha256": "93830c44566e9fa2b06a2bd3bea3e8b9a0d4ed896f198fda0fd87a30e4d91ddb"
@@ -384,7 +388,9 @@
       "upstreamSha256": "63a6735f1a4fbe64fb54ca5ddd94bd2af6246a840334fc153744415b806c29cb"
     },
     "client/src/styles/turtle-soup.css": {
-      "upstreamSha256": "0e95c2c86da2b46f6f9bf4e09f6fa348e1688d4b5667ebc02c037fecf557978a"
+      "upstreamSha256": "0e95c2c86da2b46f6f9bf4e09f6fa348e1688d4b5667ebc02c037fecf557978a",
+      "localSha256": "a7c090863c6922f34aa1760c571b3aa647a1b0ab9d7a9f76976af319dbaf5ba2",
+      "reason": "Reviewed 2026-11-06: Compact soup intro and one-row question controls on phones."
     },
     "client/src/turtleSoup.ts": {
       "upstreamSha256": "7056c7e5bb8f34b11cd04b8f82aaf2dc7420363cec5d6a381be355688cf39c81"
@@ -579,8 +585,8 @@
     },
     "scripts/verify-production.cjs": {
       "upstreamSha256": "fc9365f885f670275f0f60f27eb29dbb657156e544c73078c38e453d9beb0d56",
-      "localSha256": "6dc40b8a87246657e9e155e9ef12e4a8f27dee4dc6042c0bcd3055ad0a6c1312",
-      "reason": "Extend disposable acceptance with location projections, replay codec, shared assets, two-instance settlement and PostgreSQL submission deduplication. Reviewed 2026-10-24 password recovery: Exercise PostgreSQL password recovery, Redis cooldown and concurrent one-time consumption with mocked SMTP in disposable containers. Reviewed 2026-11-04: Assert private multiplayer replay keys, required-Redis rejection, and PostgreSQL solo/daily final-result recovery after an injected Redis save failure, including authenticated reads through both apps."
+      "localSha256": "eded7a10d11b6c66151f79a9d24235c3f73552f2b04cd6c582c9236b9ed4baf1",
+      "reason": "Extend disposable acceptance with location projections, replay codec, shared assets, two-instance settlement and PostgreSQL submission deduplication. Reviewed 2026-10-24 password recovery: Exercise PostgreSQL password recovery, Redis cooldown and concurrent one-time consumption with mocked SMTP in disposable containers. Reviewed 2026-11-04: Assert private multiplayer replay keys, required-Redis rejection, and PostgreSQL solo/daily final-result recovery after an injected Redis save failure, including authenticated reads through both apps. Reviewed 2026-11-06: Password recovery is keyed by the verified email only and returns the recovered username."
     },
     "scripts/verify-production.sh": {
       "upstreamSha256": "edd1e84ccf7ab9b66078aab7915d7575fc4d03b10717eea12f5c18621a693591",
@@ -714,8 +720,8 @@
     },
     "server/src/routes/auth.ts": {
       "upstreamSha256": "fc17aaaaef62ec1b82c71eecd91ee726d4efd61fe92b372e333d0b4feade352e",
-      "localSha256": "946c6bf3aaa7da252757c063cc68d5b24efb79e2d473079bb65dd1cef97a0a4e",
-      "reason": "Also claim guest location results and submissions on login. Reviewed 2026-10-24: Claim guest card results and active identity mapping through existing account claim. Reviewed 2026-10-24 password recovery: Add username+verified-email recovery with GeeTest, existing PoW, uniform send responses, rate limits and session/socket revocation."
+      "localSha256": "5a67629ea802dbcd58d5c64300d8c6085d9d14106b763e0e50b68737aafa5219",
+      "reason": "Also claim guest location results and submissions on login. Reviewed 2026-10-24: Claim guest card results and active identity mapping through existing account claim. Reviewed 2026-10-24 password recovery: Add username+verified-email recovery with GeeTest, existing PoW, uniform send responses, rate limits and session/socket revocation. Reviewed 2026-11-06: Password recovery requests/resets use the verified (unique) email only; a legacy username field is stripped; successful reset returns the username."
     },
     "server/src/routes/dailyChallenge.ts": {
       "upstreamSha256": "6a6c9bf0afac91e5964610a1d81d16da0011d80ed3c45cb6f789790634a12416"

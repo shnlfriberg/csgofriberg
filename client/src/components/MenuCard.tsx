@@ -9,14 +9,15 @@ interface Props {
   description: string;
   color: string;
   eventName?: string;
+  className?: string;
 }
 
 /** 首页田字格入口卡片 */
-export default function MenuCard({ to, icon, label, description, color, eventName }: Props) {
+export default function MenuCard({ to, icon, label, description, color, eventName, className }: Props) {
   return (
     <Link
       to={to}
-      className="menu-card"
+      className={`menu-card${className ? ` ${className}` : ''}`}
       style={{ ['--menu-color' as string]: color }}
       data-umami-event={eventName}
     >

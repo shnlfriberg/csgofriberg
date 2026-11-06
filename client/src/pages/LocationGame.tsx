@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { MapPin, ArrowLeft, History } from 'lucide-react';
+import { MapPin, ArrowLeft, Flag, Play, Target } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Page from '../components/Page';
 import GameRules from '../components/GameRules';
@@ -29,7 +29,6 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
     setReview,
     busy,
     error,
-    date,
     pending,
     daily,
     board,
@@ -42,23 +41,54 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
     submitDaily,
     synchronize,
   } = useLocationGame(mode);
+  // Same shell as the main game pages: progress lives in the shared status bar under the header.
+  const statusBar = game ? (
+    <>
+      <Target size={14} aria-hidden="true" />
+      <strong className="location-status-round">{t('location.round', { round: game.round })}</strong>
+      <span className="location-round-dots" aria-hidden="true">
+        {[1, 2, 3, 4, 5].map((n) => (
+          <span
+            className={
+              n <= game.answered
+                ? 'done'
+                : n === game.round
+                  ? 'active'
+                  : ''
+            }
+            key={n}
+          >
+            {n}
+          </span>
+        ))}
+      </span>
+      <span className="location-status-meta">
+        {t(`location.${game.difficulty}`)}
+        {game.totalScore !== null &&
+          ` · ${game.totalScore.toLocaleString()}`}
+      </span>
+      {game.status !== 'finished' && (
+        <button
+          className="btn btn-ghost btn-sm location-abandon"
+          disabled={busy || Boolean(pending)}
+          onClick={() => void abandon()}
+        >
+          <Flag size={14} aria-hidden="true" />
+          {t('location.abandon')}
+        </button>
+      )}
+    </>
+  ) : undefined;
   return (
     <Page
       title={modeTitle}
-      className={`location-page location-${mode}-page`}
+      className={`location-page location-play-page location-${mode}-page`}
       icon={<MapPin size={18} />}
+      statusBar={statusBar}
       actions={
-        <>
-          <Link className="btn btn-ghost btn-sm" to="/entertainment/location" aria-label={t('location.title')}>
-            <ArrowLeft size={16} />
-          </Link>
-          <Link
-            className="btn btn-ghost btn-sm"
-            to="/entertainment/location/history"
-          >
-            <History size={16} />
-          </Link>
-        </>
+        <Link className="btn btn-ghost btn-sm" to="/entertainment/location" aria-label={t('location.title')}>
+          <ArrowLeft size={16} />
+        </Link>
       }
     >
       {error && (
@@ -75,11 +105,7 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
       {!game && (
         <>
           <section className="location-lobby">
-            <span className="location-eyebrow">
-              CS2 // {date || 'LOCATION'}
-            </span>
-            <h1>{modeTitle}</h1>
-            <p>{t(`location.${mode}Description`)}</p>
+            <p className="muted single-lobby-subtitle">{t(`location.${mode}Description`)}</p>
             <DifficultySelect
               value={difficulty}
               onChange={setDifficulty}
@@ -89,49 +115,28 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
               <p className="location-rules-note">{t('location.dailyNotice')}</p>
             )}
             {mode === 'random' && <MapBanSelect value={bannedMapIds} onChange={setBannedMapIds} disabled={busy || !initialized} />}
-            <button
-              className="btn location-start"
-              disabled={
-                busy ||
-                !initialized ||
-                (mode === 'daily' && daily?.available === false)
-              }
-              onClick={() => void start()}
-            >
-              {t('location.start')}
-            </button>
+            <div className="single-lobby-action">
+              <button
+                className="btn btn-lg btn-green location-start"
+                disabled={
+                  busy ||
+                  !initialized ||
+                  (mode === 'daily' && daily?.available === false)
+                }
+                onClick={() => void start()}
+              >
+                <Play size={17} aria-hidden="true" />
+                {t('location.start')}
+              </button>
+            </div>
             {daily?.available === false && (
-              <p>{t('location.emptyDescription')}</p>
+              <p className="muted location-empty">{t('location.emptyDescription')}</p>
             )}
           </section>
         </>
       )}
       {game && (
         <>
-          <div className="location-game-status">
-            <strong>{t('location.round', { round: game.round })}</strong>
-            <div className="location-round-dots">
-              {[1, 2, 3, 4, 5].map((n) => (
-                <span
-                  className={
-                    n <= game.answered
-                      ? 'done'
-                      : n === game.round
-                        ? 'active'
-                        : ''
-                  }
-                  key={n}
-                >
-                  {n}
-                </span>
-              ))}
-            </div>
-            <span>
-              {t(`location.${game.difficulty}`)}
-              {game.totalScore !== null &&
-                ` · ${game.totalScore.toLocaleString()}`}
-            </span>
-          </div>
           {pending && (
             <div className="location-alert">
               <button
@@ -150,27 +155,34 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
                   <Results
                     results={game.results}
                     score={game.totalScore || 0}
+                    actions={
+                      <Link className="btn btn-ghost" to="/entertainment">
+                        {t('location.back')}
+                      </Link>
+                    }
                   />
-                  <Link className="btn btn-ghost" to="/entertainment">
-                    {t('location.back')}
-                  </Link>
                 </section>
                 <DailyLeaderboard board={board} difficulty={difficulty} />
               </div>
             ) : (
-              <>
-                <Results results={game.results} score={game.totalScore || 0} />
-                <button
-                  className="btn location-start"
-                  disabled={busy}
-                  onClick={() => void playAgain()}
-                >
-                  {t('location.playAgain')}
-                </button>
-                <Link className="btn btn-ghost" to="/entertainment">
-                  {t('location.back')}
-                </Link>
-              </>
+              <Results
+                results={game.results}
+                score={game.totalScore || 0}
+                actions={
+                  <>
+                    <button
+                      className="btn btn-green location-start"
+                      disabled={busy}
+                      onClick={() => void playAgain()}
+                    >
+                      {t('location.playAgain')}
+                    </button>
+                    <Link className="btn btn-ghost" to="/entertainment">
+                      {t('location.back')}
+                    </Link>
+                  </>
+                }
+              />
             )
           ) : game.status === 'ready' ? (
             <div className="location-final">
@@ -188,7 +200,7 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
                 ))}
               </div>
               <button
-                className="btn location-start"
+                className="btn btn-lg btn-green location-start"
                 disabled={busy || Boolean(pending)}
                 onClick={() => void submitDaily()}
               >
@@ -196,15 +208,17 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
               </button>
             </div>
           ) : review !== null && game.results[review] ? (
-            <>
-              <RoundReview result={game.results[review]} />
-              <button
-                className="btn location-start"
-                onClick={() => setReview(null)}
-              >
-                {t('location.next')}
-              </button>
-            </>
+            <RoundReview
+              result={game.results[review]}
+              action={
+                <button
+                  className="btn location-start"
+                  onClick={() => setReview(null)}
+                >
+                  {t('location.next')}
+                </button>
+              }
+            />
           ) : (
             game.question && (
               <QuestionPanel
@@ -215,15 +229,6 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
                 onSubmit={answer}
               />
             )
-          )}
-          {game.status !== 'finished' && (
-            <button
-              className="btn btn-ghost location-abandon"
-              disabled={busy || Boolean(pending)}
-              onClick={() => void abandon()}
-            >
-              {t('location.abandon')}
-            </button>
           )}
         </>
       )}
