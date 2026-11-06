@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Download, Plus, Search } from 'lucide-react';
+import { Download, FileJson, Plus, Upload } from 'lucide-react';
 import DataTable, { Column } from '../DataTable';
+import Badge from '../Badge';
 import PlayerEditForm, { PlayerForm, emptyPlayer } from './PlayerEditForm';
+import AdminDialog from './AdminDialog';
+import { Panel, Pagination, SearchBox, Toolbar } from './ui';
 import { api, errMsg } from '../../api/client';
 import { useConfirm } from '../ConfirmDialog';
 import { playerRoleLabel } from '../../utils/playerRoles';
@@ -24,7 +27,7 @@ interface PlayerPage {
   totalPages: number;
 }
 
-/** 管理后台 - 选手管理(列表/新增/编辑/删除/JSON 导入导出) */
+/** 管理后台 - 选手库(列表/新增/编辑/停用/删除/JSON 导入导出) */
 export default function AdminPlayers() {
   const { t } = useTranslation();
   const confirm = useConfirm();
@@ -36,7 +39,7 @@ export default function AdminPlayers() {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState<PlayerForm | null>(null);
-  const [importText, setImportText] = useState('');
+  const [importOpen, setImportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const requestId = useRef(0);
 
@@ -67,7 +70,6 @@ export default function AdminPlayers() {
   useEffect(() => {
     void load();
   }, [load]);
-
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -144,22 +146,6 @@ export default function AdminPlayers() {
     }
   };
 
-  const doImport = async () => {
-    try {
-      const parsed = JSON.parse(importText);
-      const list = Array.isArray(parsed) ? parsed : parsed.players;
-      const res = await api.post('/admin/players/import', { players: list });
-      clearPlayerListCache();
-      toast.success(t('admin.importDone', { created: res.data.created, updated: res.data.updated }));
-      if (res.data.careerReviews) toast.success(t('card.careerView.importReviews', { count: res.data.careerReviews }));
-      setImportText('');
-      if (page !== 1) setPage(1);
-      else await load();
-    } catch (err) {
-      toast.error(err instanceof SyntaxError ? t('admin.jsonError') : errMsg(err));
-    }
-  };
-
   const doExport = async () => {
     setExporting(true);
     try {
@@ -187,33 +173,42 @@ export default function AdminPlayers() {
   };
 
   const columns: Column<AdminPlayer>[] = [
-    { key: 'nickname', title: t('admin.nickname') },
-    { key: 'nationality', title: t('admin.nationality'), render: (p) => countryLabel(t, p.nationality) },
-    { key: 'region', title: t('admin.region'), render: (p) => regionLabel(t, p.region) },
-    { key: 'team', title: t('admin.team') },
-    { key: 'age', title: t('admin.age') },
+    {
+      key: 'nickname',
+      title: t('adminUi.playerColumn'),
+      render: (p) => <span className="admin-cell-stack"><strong>{p.nickname}</strong><small>{p.team || '—'}</small></span>,
+    },
+    {
+      key: 'geo',
+      title: t('adminUi.geoColumn'),
+      render: (p) => <span className="admin-cell-stack"><span>{countryLabel(t, p.nationality)}</span><small>{regionLabel(t, p.region)}</small></span>,
+    },
     { key: 'role', title: t('admin.role'), render: (p) => playerRoleLabel(p.role) },
-    { key: 'major_championships', title: t('admin.majorTitles') },
-    { key: 'major_appearances', title: t('admin.major') },
-    { key: 'difficulties', title: t('admin.difficulties'), render: (p) => p.difficulties.map((key) => difficultyLabel(t, key)).join(', ') },
-    { key: 'is_active', title: t('admin.status'), render: (p) => (p.is_active ? t('common.active') : t('common.retired')) },
-    { key: 'is_enabled', title: t('admin.pool'), render: (p) => (p.is_enabled ? t('admin.available') : t('admin.disabled')) },
+    { key: 'age', title: t('admin.age') },
+    { key: 'major', title: t('adminUi.majorColumn'), render: (p) => <span className="admin-num">{p.major_championships} / {p.major_appearances}</span> },
+    { key: 'difficulties', title: t('admin.difficulties'), render: (p) => p.difficulties.map((key) => difficultyLabel(t, key)).join(' · ') || '—' },
+    {
+      key: 'status',
+      title: t('adminUi.statusColumn'),
+      render: (p) => (
+        <span className="admin-badges">
+          <Badge text={p.is_enabled ? t('admin.available') : t('admin.disabled')} color={p.is_enabled ? 'green' : 'gray'} />
+          {!p.is_active && <Badge text={t('common.retired')} color="gray" />}
+        </span>
+      ),
+    },
     {
       key: 'actions',
       title: t('admin.actions'),
       render: (p) => (
-        <span className="admin-player-actions">
-          <button type="button" className="btn btn-ghost" onClick={() => setEditing(p)}>{t('admin.edit')}</button>
-          <button
-            type="button"
-            className="btn btn-ghost"
-            onClick={() => void setEnabled(p, !p.is_enabled)}
-          >
+        <span className="admin-row-actions">
+          <button type="button" className="admin-action" onClick={() => setEditing(p)}>{t('admin.edit')}</button>
+          <button type="button" className="admin-action" onClick={() => void setEnabled(p, !p.is_enabled)}>
             {p.is_enabled ? t('admin.disable') : t('admin.enable')}
           </button>
           <button
             type="button"
-            className="btn btn-red"
+            className="admin-action is-danger"
             onClick={() => void remove(p)}
             disabled={p.is_enabled}
             title={p.is_enabled ? t('admin.disableFirst') : t('admin.delete')}
@@ -227,108 +222,57 @@ export default function AdminPlayers() {
 
   return (
     <>
-      <div className="card admin-players-card">
-        <div className="admin-players-header">
-          <div className="admin-players-title">
-            <h3>{t('admin.playersTitle')}</h3>
-            <p className="muted">{t('admin.totalPlayers', { count: total })}</p>
-          </div>
-          <div className="admin-player-header-actions">
-            <button
-              type="button"
-              className="btn btn-ghost admin-player-export"
-              onClick={() => void doExport()}
-              disabled={exporting}
-            >
-              <Download size={16} />
-              {exporting ? t('admin.exporting') : t('admin.exportAction')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-green admin-player-add"
-              onClick={() => setEditing({ ...emptyPlayer })}
-            >
-              <Plus size={16} />
-              {t('admin.addPlayer')}
-            </button>
-          </div>
-        </div>
-        <div className="admin-list-toolbar">
-          <label className="admin-search">
-            <Search size={16} />
-            <input
-              className="input"
-              value={searchInput}
-              onChange={(event) => setSearchInput(event.target.value)}
-              placeholder={t('admin.searchPlayers')}
-            />
-          </label>
-          <label className="admin-page-size">
-            <span>{t('admin.pageSize')}</span>
-            <select
-              className="input"
-              value={pageSize}
-              onChange={(event) => {
-                setPage(1);
-                setPageSize(Number(event.target.value));
-              }}
-            >
-              {[20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
-            </select>
-          </label>
-        </div>
-        <div className="admin-players-table">
+      <Panel flush className="admin-list-panel">
+        <Toolbar
+          end={(
+            <>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setImportOpen(true)}>
+                <Upload size={15} />
+                {t('adminUi.importJson')}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void doExport()} disabled={exporting}>
+                <Download size={15} />
+                {exporting ? t('admin.exporting') : t('admin.exportAction')}
+              </button>
+              <button type="button" className="btn btn-sm" onClick={() => setEditing({ ...emptyPlayer })}>
+                <Plus size={15} />
+                {t('admin.addPlayer')}
+              </button>
+            </>
+          )}
+        >
+          <SearchBox value={searchInput} onChange={setSearchInput} placeholder={t('admin.searchPlayers')} />
+          <span className="admin-toolbar-meta">{t('admin.totalPlayers', { count: total })}</span>
+        </Toolbar>
+        <div className="admin-table admin-players-table">
           <DataTable
             columns={columns}
             rows={players}
             rowKey={(p) => p.id}
-            empty={loading ? t('common.loading') : search ? t('admin.noMatchPlayers') : t('admin.noPlayers')}
+            loading={loading}
+            empty={search ? t('admin.noMatchPlayers') : t('admin.noPlayers')}
           />
         </div>
-        <div className="admin-pagination">
-          <span className="muted">
-            {total ? `${(page - 1) * pageSize + 1}-${Math.min(page * pageSize, total)} / ${total}` : t('admin.zeroItems')}
-          </span>
-          <div className="admin-pagination-actions">
-            <button
-              className="btn btn-ghost"
-              aria-label={t('common.previousPage')}
-              title={t('common.previousPage')}
-              disabled={loading || page <= 1}
-              onClick={() => setPage((current) => Math.max(1, current - 1))}
-            >
-              <ChevronLeft size={17} />
-            </button>
-            <span>{t('admin.pageOf', { page, total: Math.max(1, Math.ceil(total / pageSize)) })}</span>
-            <button
-              className="btn btn-ghost"
-              aria-label={t('common.nextPage')}
-              title={t('common.nextPage')}
-              disabled={loading || page >= Math.max(1, Math.ceil(total / pageSize))}
-              onClick={() => setPage((current) => current + 1)}
-            >
-              <ChevronRight size={17} />
-            </button>
-          </div>
-        </div>
-      </div>
-      <div className="card admin-import-card">
-        <h3>{t('admin.importTitle')}</h3>
-        <p>{t('card.careerView.exportNote')}</p>
-        <p className="muted">
-          {t('admin.importDescription')}
-        </p>
-        <textarea
-          className="input"
-          rows={6}
-          value={importText}
-          onChange={(e) => setImportText(e.target.value)}
-          placeholder={t('admin.importPlaceholder')}
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          totalPages={Math.ceil(total / pageSize)}
+          loading={loading}
+          onPage={setPage}
+          onPageSize={(size) => { setPage(1); setPageSize(size); }}
         />
-        <button className="btn" style={{ marginTop: 8 }} onClick={() => void doImport()} disabled={!importText.trim()}>
-          {t('admin.importAction')}
-        </button>
-      </div>
+      </Panel>
+      {importOpen && (
+        <PlayerImportDialog
+          onClose={() => setImportOpen(false)}
+          onImported={async () => {
+            setImportOpen(false);
+            if (page !== 1) setPage(1);
+            else await load();
+          }}
+        />
+      )}
       {editing && (
         <PlayerEditForm
           key={editing.id ?? 'new'}
@@ -339,5 +283,70 @@ export default function AdminPlayers() {
         />
       )}
     </>
+  );
+}
+
+function PlayerImportDialog({ onClose, onImported }: { onClose: () => void; onImported: () => Promise<void> }) {
+  const { t } = useTranslation();
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [fileName, setFileName] = useState('');
+
+  const readFile = async (file: File | undefined) => {
+    if (!file) return;
+    setFileName(file.name);
+    setText(await file.text());
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    try {
+      const parsed = JSON.parse(text);
+      const list = Array.isArray(parsed) ? parsed : parsed.players;
+      const res = await api.post('/admin/players/import', { players: list });
+      clearPlayerListCache();
+      toast.success(t('admin.importDone', { created: res.data.created, updated: res.data.updated }));
+      if (res.data.careerReviews) toast.success(t('card.careerView.importReviews', { count: res.data.careerReviews }));
+      await onImported();
+    } catch (err) {
+      toast.error(err instanceof SyntaxError ? t('admin.jsonError') : errMsg(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <AdminDialog
+      title={t('admin.importTitle')}
+      icon={<FileJson size={18} aria-hidden="true" />}
+      size="lg"
+      onClose={onClose}
+      footer={(
+        <>
+          <button className="btn btn-ghost btn-sm" type="button" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="btn btn-sm" type="button" onClick={() => void submit()} disabled={busy || !text.trim()}>
+            {busy ? t('common.loading') : t('admin.importAction')}
+          </button>
+        </>
+      )}
+    >
+      <div className="admin-form-stack">
+        <p className="admin-help">{t('admin.importDescription')}</p>
+        <p className="admin-help">{t('card.careerView.exportNote')}</p>
+        <label className="admin-file-pick">
+          <input type="file" accept="application/json,.json" onChange={(event) => { void readFile(event.target.files?.[0]); event.target.value = ''; }} />
+          <span className="btn btn-ghost btn-sm"><Upload size={15} />{t('adminUi.chooseFile')}</span>
+          <span className="admin-file-name">{fileName || t('adminUi.orPaste')}</span>
+        </label>
+        <textarea
+          className="input admin-code-input"
+          rows={10}
+          value={text}
+          aria-label={t('admin.importTitle')}
+          onChange={(event) => setText(event.target.value)}
+          placeholder={t('admin.importPlaceholder')}
+        />
+      </div>
+    </AdminDialog>
   );
 }

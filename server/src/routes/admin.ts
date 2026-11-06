@@ -33,7 +33,7 @@ import {
 } from '../controllers/admin/moderation';
 import {
   getApiTokens, addApiToken, revokeApiTokenForAdmin,
-  addAnnouncement, deleteAnnouncement, broadcastResourceVersion,
+  addAnnouncement, updateAnnouncement, deleteAnnouncement, broadcastResourceVersion,
 } from '../controllers/admin/operations';
 
 const router = Router();
@@ -333,6 +333,14 @@ router.post(
   adminWriteLimit,
   validateBody(announcementSchema),
   addAnnouncement
+);
+
+router.put(
+  '/announcements/:id',
+  adminWriteLimit,
+  validateParams(idParamsSchema),
+  validateBody(announcementSchema),
+  updateAnnouncement
 );
 
 router.delete(

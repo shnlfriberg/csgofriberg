@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
+import { ArrowRight, Check, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api, errMsg } from '../../api/client';
 import { currentLocale } from '../../i18n';
@@ -7,6 +7,7 @@ import Badge from '../Badge';
 import DataTable, { type Column } from '../DataTable';
 import { toast } from '../Toast';
 import { useConfirm } from '../ConfirmDialog';
+import { Panel, Pagination, SearchBox, Segmented, Toolbar, formatDateTime } from './ui';
 
 type ChangeStatus = 'pending' | 'approved' | 'rejected' | 'conflict';
 
@@ -34,15 +35,12 @@ interface PlayerChangePage {
   totalPages: number;
 }
 
-function formatDate(value: string | null): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString(currentLocale());
-}
+const PAGE_SIZE = 50;
 
 export default function AdminPlayerChanges() {
   const { t } = useTranslation();
   const confirm = useConfirm();
+  const locale = currentLocale();
   const [items, setItems] = useState<PlayerChangeItem[]>([]);
   const [status, setStatus] = useState<'all' | ChangeStatus>('pending');
   const [searchInput, setSearchInput] = useState('');
@@ -59,7 +57,7 @@ export default function AdminPlayerChanges() {
     setLoading(true);
     try {
       const response = await api.get<PlayerChangePage>('/admin/player-change-submissions', {
-        params: { status, page, pageSize: 50, search: search || undefined },
+        params: { status, page, pageSize: PAGE_SIZE, search: search || undefined },
       });
       setItems(response.data.items);
       setSelectedIds(new Set());
@@ -135,34 +133,83 @@ export default function AdminPlayerChanges() {
     return String(value);
   };
   const statusLabel = (value: ChangeStatus) => t(`admin.playerChangeStatus.${value}`);
+  const statusColor = (value: ChangeStatus) => value === 'approved' ? 'green' : value === 'pending' ? 'amber' : 'gray';
   const columns: Column<PlayerChangeItem>[] = [
     {
       key: 'selection',
       title: <input ref={selectAllRef} type="checkbox" aria-label={t('admin.selectAllPlayerChanges')} checked={allVisibleSelected} disabled={!selectableItems.length} onChange={(event) => toggleAll(event.target.checked)} />,
       render: (item) => <input type="checkbox" aria-label={t('admin.selectPlayerChange', { player: item.playerNickname, field: t(`admin.playerChangeFields.${item.field}`) })} checked={selectedIds.has(item.id)} disabled={item.status !== 'pending'} onChange={(event) => toggleSelected(item.id, event.target.checked)} />,
     },
-    { key: 'playerNickname', title: t('admin.nickname') },
-    { key: 'field', title: t('admin.playerChangeField'), render: (item) => t(`admin.playerChangeFields.${item.field}`) },
-    { key: 'oldValue', title: t('admin.playerChangeOldValue'), render: (item) => <code>{valueText(item.oldValue)}</code> },
-    { key: 'observedValue', title: t('location.baselineObserved'), render: (item) => <code>{item.observedValue === undefined ? '—' : valueText(item.observedValue)}</code> },
-    { key: 'newValue', title: t('admin.playerChangeNewValue'), render: (item) => <code>{valueText(item.newValue)}</code> },
-    { key: 'source', title: t('admin.playerChangeSource') },
-    { key: 'createdAt', title: t('admin.playerChangeSubmittedAt'), render: (item) => formatDate(item.createdAt) },
-    { key: 'status', title: t('admin.playerChangeStatusLabel'), render: (item) => <Badge text={statusLabel(item.status)} color={item.status === 'approved' ? 'green' : item.status === 'pending' ? 'amber' : 'gray'} /> },
-    { key: 'handled', title: t('admin.playerChangeHandledBy'), render: (item) => item.handledBy ? `${item.handledBy} · ${formatDate(item.handledAt)}` : '-' },
+    {
+      key: 'playerNickname',
+      title: t('adminUi.playerColumn'),
+      render: (item) => <span className="admin-cell-stack"><strong>{item.playerNickname}</strong><small>{t(`admin.playerChangeFields.${item.field}`)}</small></span>,
+    },
+    {
+      key: 'change',
+      title: t('adminUi.changeColumn'),
+      render: (item) => (
+        <span className="admin-diff">
+          <code className="is-old" title={t('admin.playerChangeOldValue')}>{valueText(item.oldValue)}</code>
+          <ArrowRight size={14} aria-hidden="true" />
+          <code className="is-new" title={t('admin.playerChangeNewValue')}>{valueText(item.newValue)}</code>
+          {item.observedValue !== undefined && (
+            <small>{t('location.baselineObserved')}: {valueText(item.observedValue)}</small>
+          )}
+        </span>
+      ),
+    },
+    {
+      key: 'source',
+      title: t('admin.playerChangeSource'),
+      render: (item) => <span className="admin-cell-stack"><span>{item.source}</span><small>{formatDateTime(item.createdAt, locale)}</small></span>,
+    },
+    {
+      key: 'status',
+      title: t('admin.playerChangeStatusLabel'),
+      render: (item) => (
+        <span className="admin-cell-stack">
+          <span><Badge text={statusLabel(item.status)} color={statusColor(item.status)} /></span>
+          {item.handledBy && <small>{item.handledBy} · {formatDateTime(item.handledAt, locale)}</small>}
+        </span>
+      ),
+    },
   ];
 
-  return <div className="card admin-users-card admin-player-changes-card">
-    <div className="admin-players-header">
-      <div className="admin-players-title"><h3>{t('admin.playerChangesTitle')}</h3><p className="muted">{t('admin.totalPlayerChanges', { count: total })}</p></div>
-    </div>
-    <div className="admin-list-toolbar">
-      <label className="admin-search"><Search size={16} /><input className="input" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={t('admin.searchPlayerChanges')} /></label>
-      <label className="admin-page-size"><span>{t('admin.playerChangeStatusLabel')}</span><select className="input" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as typeof status); }}><option value="pending">{statusLabel('pending')}</option><option value="approved">{statusLabel('approved')}</option><option value="rejected">{statusLabel('rejected')}</option><option value="conflict">{statusLabel('conflict')}</option><option value="all">{t('admin.playerChangeStatus.all')}</option></select></label>
-      <button className="btn admin-player-change-action" type="button" disabled={!selectedIds.size || reviewing} onClick={() => void review('approve')}><Check size={16} />{t('admin.approveSelectedChanges', { count: selectedIds.size })}</button>
-      <button className="btn btn-ghost admin-player-change-action" type="button" disabled={!selectedIds.size || reviewing} onClick={() => void review('reject')}><X size={16} />{t('admin.rejectSelectedChanges', { count: selectedIds.size })}</button>
-    </div>
-    <div className="admin-users-table admin-player-changes-table"><DataTable columns={columns} rows={items} rowKey={(item) => item.id} loading={loading} empty={t('admin.noPlayerChanges')} /></div>
-    <div className="admin-pagination"><span className="muted">{total ? `${(page - 1) * 50 + 1}-${Math.min(page * 50, total)} / ${total}` : t('admin.zeroItems')}</span><div className="admin-pagination-actions"><button className="btn btn-ghost" type="button" aria-label={t('common.previousPage')} disabled={loading || page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft size={17} /></button><span>{t('admin.pageOf', { page, total: totalPages })}</span><button className="btn btn-ghost" type="button" aria-label={t('common.nextPage')} disabled={loading || page >= totalPages} onClick={() => setPage((value) => value + 1)}><ChevronRight size={17} /></button></div></div>
-  </div>;
+  return (
+    <Panel flush className="admin-list-panel">
+      <Toolbar
+        end={(
+          <>
+            <span className="admin-selection" aria-live="polite">{t('adminUi.selectedCount', { count: selectedIds.size })}</span>
+            <button className="btn btn-ghost btn-sm" type="button" disabled={!selectedIds.size || reviewing} onClick={() => void review('reject')}>
+              <X size={15} />{t('admin.rejectSelectedChanges', { count: selectedIds.size })}
+            </button>
+            <button className="btn btn-sm" type="button" disabled={!selectedIds.size || reviewing} onClick={() => void review('approve')}>
+              <Check size={15} />{t('admin.approveSelectedChanges', { count: selectedIds.size })}
+            </button>
+          </>
+        )}
+      >
+        <Segmented
+          label={t('admin.playerChangeStatusLabel')}
+          value={status}
+          onChange={(value) => { setPage(1); setStatus(value); }}
+          options={[
+            { value: 'pending', label: statusLabel('pending') },
+            { value: 'approved', label: statusLabel('approved') },
+            { value: 'rejected', label: statusLabel('rejected') },
+            { value: 'conflict', label: statusLabel('conflict') },
+            { value: 'all', label: t('admin.playerChangeStatus.all') },
+          ]}
+        />
+        <SearchBox value={searchInput} onChange={setSearchInput} placeholder={t('admin.searchPlayerChanges')} />
+        <span className="admin-toolbar-meta">{t('admin.totalPlayerChanges', { count: total })}</span>
+      </Toolbar>
+      <div className="admin-table admin-changes-table">
+        <DataTable columns={columns} rows={items} rowKey={(item) => item.id} loading={loading} empty={t('admin.noPlayerChanges')} />
+      </div>
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} totalPages={totalPages} loading={loading} onPage={setPage} />
+    </Panel>
+  );
 }

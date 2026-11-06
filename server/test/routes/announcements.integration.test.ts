@@ -72,6 +72,33 @@ describe('popup announcements', () => {
         title,
         is_popup: 1,
       }));
+
+      const edited = await request(`/api/admin/announcements/${created.data.id}`, {
+        method: 'PUT',
+        headers: { Cookie: cookie },
+        body: JSON.stringify({ title, content: '已更正', is_popup: false }),
+      });
+      expect(edited.response.status).toBe(200);
+      const afterEdit = await request('/api/announcements');
+      expect(afterEdit.data).toContainEqual(expect.objectContaining({
+        id: created.data.id,
+        title,
+        content: '已更正',
+        is_popup: 0,
+      }));
+
+      const missing = await request('/api/admin/announcements/999999999', {
+        method: 'PUT',
+        headers: { Cookie: cookie },
+        body: JSON.stringify({ title, content: 'x', is_popup: false }),
+      });
+      expect(missing.response.status).toBe(404);
+      const invalid = await request(`/api/admin/announcements/${created.data.id}`, {
+        method: 'PUT',
+        headers: { Cookie: cookie },
+        body: JSON.stringify({ title: '   ', content: 'x' }),
+      });
+      expect(invalid.response.status).toBe(400);
     } finally {
       await db('announcements').where({ title }).del();
       await invalidateCached('announcements');

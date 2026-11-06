@@ -7,6 +7,8 @@ import Radar from '../../../location/Radar';
 import type { Guess, LocationSubmission, MapDefinition, SubmissionPage, Tier } from '../../../location/types';
 import type { MergePoint } from '@friberg/location-core';
 import { locationAdmin } from './api';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { Pagination } from '../ui';
 
 export default function SubmissionManager({ maps, onChanged }: { maps: MapDefinition[]; onChanged: () => Promise<void> }) {
   const { t } = useTranslation(); const confirm = useConfirm();
@@ -86,12 +88,22 @@ export default function SubmissionManager({ maps, onChanged }: { maps: MapDefini
     }
     finally { reviewLock.current = false; if (alive.current) setBusy(false); }
   };
-  return <section className="submission-review"><h3>{t('location.submissions')}</h3><p className="muted">{t('location.submissionAdminHelp')}</p>
-    <button className="btn btn-ghost btn-sm" disabled={busy || loading} onClick={() => setRevision(n => n + 1)}>{t('location.submissionRefresh')}</button>
-    {error && <div className="location-alert" role="alert">{error}<button className="btn btn-ghost" disabled={busy} onClick={() => setRevision(n => n + 1)}>{t('location.retry')}</button></div>}
-    {notice && <p role="status">{notice}</p>}
+  return <section className="admin-panel submission-review" aria-labelledby="location-submissions-title">
+    <header className="admin-panel-head">
+      <div className="admin-panel-title">
+        <h2 id="location-submissions-title">{selected ? selected.submitterName : t('location.submissions')}</h2>
+        <p>{selected ? `${new Date(selected.createdAt).toLocaleString()}${selected.note ? ` · ${selected.note}` : ''}` : t('location.submissionAdminHelp')}</p>
+      </div>
+      <div className="admin-panel-actions">
+        {selected
+          ? <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setSelected(null)}><ArrowLeft size={15} aria-hidden="true" />{t('location.submissionBack')}</button>
+          : <button className="btn btn-ghost btn-sm" disabled={busy || loading} onClick={() => setRevision(n => n + 1)}><RefreshCw size={15} aria-hidden="true" />{t('location.submissionRefresh')}</button>}
+      </div>
+    </header>
+    <div className="admin-panel-body">
+    {error && <div className="location-alert" role="alert">{error}<button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setRevision(n => n + 1)}>{t('location.retry')}</button></div>}
+    {notice && <p role="status" className="admin-help">{notice}</p>}
     {selected ? <div className="submission-review-editor">
-      <header><h4>{selected.submitterName}</h4><p>{new Date(selected.createdAt).toLocaleString()}</p><p>{selected.note}</p></header>
       <fieldset disabled={busy} className="submission-fields"><div className="submission-review-images"><Photo url={selected.imageUrl} />
         <div><div className="submission-selects"><label>{t('location.mapName')}<select className="input" value={pin?.mapId || ''} onChange={e => {
           const next = maps.find(m => m.id === e.target.value); if (next) { setPin({ mapId: next.id, floorId: next.floors[0].id, u: .5, v: .5 }); setTargetId(''); setVerified(false); }
@@ -130,13 +142,20 @@ export default function SubmissionManager({ maps, onChanged }: { maps: MapDefini
         {map && (selected.mapVersion !== map.version || selected.mapId !== map.id) && <p role="status">{t('location.submissionMapChanged')}</p>}
         <label>{t('location.submissionTier')}<select className="input" value={tier} onChange={e => setTier(e.target.value as Tier | '')}><option value="">{t('location.captureChooseTier')}</option>{(['easy', 'medium', 'hard'] as const).map(value => <option key={value} value={value}>{t(`location.${value}`)}</option>)}</select></label>
         <label className="submission-verification"><input type="checkbox" checked={verified} onChange={e => setVerified(e.target.checked)} />{t('location.submissionVerify')}</label>
-        <div className="submission-actions"><button className="btn" disabled={!map?.enabled || !tier || !verified || !answer || (joinPoint && (pointsLoading || !!pointsError))} onClick={() => void review('approve')}>{t('location.submissionApprove')}</button><button className="btn btn-danger" onClick={() => void review('reject')}>{t('location.submissionReject')}</button><button className="btn btn-ghost" onClick={() => setSelected(null)}>{t('location.submissionBack')}</button></div>
+        <div className="submission-actions"><button className="btn btn-ghost" onClick={() => setSelected(null)}>{t('location.submissionBack')}</button><button className="btn btn-danger" onClick={() => void review('reject')}>{t('location.submissionReject')}</button><button className="btn" disabled={!map?.enabled || !tier || !verified || !answer || (joinPoint && (pointsLoading || !!pointsError))} onClick={() => void review('approve')}>{t('location.submissionApprove')}</button></div>
       </fieldset>
     </div> : <>
-      {loading ? <p role="status">{t('common.loading')}</p> : !data?.items.length ? <p>{t('location.submissionEmpty')}</p> : <div className="submission-queue">{data.items.map(item => <article className="card" key={item.id}>
-        <img src={item.thumbnailUrl} alt={t('location.submissionPending')} /><strong>{item.submitterName}</strong><span>{maps.find(m => m.id === item.mapId)?.name || item.mapId} · {item.floorId}</span><p>{item.note}</p><button className="btn" onClick={() => open(item)}>{t('location.submissionReview')}</button>
+      {loading ? <p role="status" className="admin-help">{t('common.loading')}</p> : !data?.items.length ? <p className="admin-empty">{t('location.submissionEmpty')}</p> : <div className="submission-queue">{data.items.map(item => <article className="submission-queue-item" key={item.id}>
+        <img src={item.thumbnailUrl} alt={t('location.submissionPending')} />
+        <div className="submission-queue-copy">
+          <strong>{item.submitterName}</strong>
+          <span>{maps.find(m => m.id === item.mapId)?.name || item.mapId} · {t(`location.floor.${item.floorId}`, { defaultValue: item.floorId })}</span>
+          {item.note && <p>{item.note}</p>}
+        </div>
+        <button className="btn btn-sm" onClick={() => open(item)}>{t('location.submissionReview')}</button>
       </article>)}</div>}
-      <div className="submission-pagination"><button className="btn btn-ghost" disabled={page === 1 || loading} onClick={() => setPage(n => n - 1)}>{t('common.previousPage')}</button><span>{page} · {data?.total ?? 0}</span><button className="btn btn-ghost" disabled={!data || page * data.pageSize >= data.total || loading} onClick={() => setPage(n => n + 1)}>{t('common.nextPage')}</button></div>
     </>}
+    </div>
+    {!selected && data && data.total > data.pageSize && <Pagination page={page} pageSize={data.pageSize} total={data.total} totalPages={Math.ceil(data.total / data.pageSize)} loading={loading} onPage={setPage} />}
   </section>;
 }

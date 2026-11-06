@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Eye, Search, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, ShieldCheck, ShieldX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { api, errMsg } from '../../api/client';
 import { currentLocale } from '../../i18n';
 import { difficultyLabel } from '../../utils/difficulty';
 import Badge from '../Badge';
 import DataTable, { type Column } from '../DataTable';
-import ModalPortal from '../ModalPortal';
 import { toast } from '../Toast';
 import { useConfirm } from '../ConfirmDialog';
 import {
@@ -16,6 +15,8 @@ import {
   type AdminUser,
 } from './AdminUsers';
 import ExternalAnalysisPanel, { type ExternalAnalysisView } from './ExternalAnalysisPanel';
+import AdminDialog from './AdminDialog';
+import { FilterSelect, Panel, Pagination, SearchBox, Segmented, Toolbar, formatDateTime } from './ui';
 
 type ReportStatus = 'pending' | 'resolved' | 'dismissed';
 
@@ -52,15 +53,13 @@ type ReportedIdentity =
   | { type: 'user'; user: AdminUser }
   | { type: 'guest'; guest: AdminGuest };
 
-function formatDate(value: string | null): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? '-' : date.toLocaleString(currentLocale());
-}
+const PAGE_SIZE = 50;
+const statusColor = (status: ReportStatus) => status === 'pending' ? 'amber' : status === 'resolved' ? 'green' : 'gray';
 
 export default function AdminReports() {
   const { t } = useTranslation();
   const confirm = useConfirm();
+  const locale = currentLocale();
   const [reports, setReports] = useState<MatchReport[]>([]);
   const [status, setStatus] = useState<'all' | ReportStatus>('pending');
   const [reporterFilter, setReporterFilter] = useState<'all' | 'multiple' | 'single'>('all');
@@ -73,15 +72,16 @@ export default function AdminReports() {
   const [selected, setSelected] = useState<MatchReport | null>(null);
   const [reportedDetail, setReportedDetail] = useState<ReportedIdentity | null>(null);
   const [detailLoadingId, setDetailLoadingId] = useState<number | null>(null);
-  const [quickAction, setQuickAction] = useState<'single' | null>(null);
+  const [quickBusy, setQuickBusy] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set());
   const [batchSelectedOpen, setBatchSelectedOpen] = useState(false);
   const selectAllRef = useRef<HTMLInputElement>(null);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const response = await api.get<ReportPage>('/admin/reports', {
-        params: { status, reporterFilter, page, pageSize: 50, search: search || undefined },
+        params: { status, reporterFilter, page, pageSize: PAGE_SIZE, search: search || undefined },
       });
       setReports(response.data.reports);
       setSelectedIds(new Set());
@@ -112,7 +112,6 @@ export default function AdminReports() {
     }
   }, [allVisibleSelected, selectedIds]);
 
-  const visibleReportedKeys = [...new Set(reports.map((report) => report.reportedKey))];
   const toggleSelected = (reportId: number, checked: boolean) => {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -138,24 +137,28 @@ export default function AdminReports() {
   };
 
   const quickDismissSingleReporter = async () => {
+    if (!reports.length) {
+      toast.info(t('admin.quickActionNoReports'));
+      return;
+    }
     if (!await confirm({
       title: t('admin.quickDismissSingleTitle'),
       message: t('admin.quickDismissSingleMessage'),
       confirmLabel: t('admin.quickDismissSingleReporter'),
       tone: 'warning',
     })) return;
-    setQuickAction('single');
+    setQuickBusy(true);
     try {
       const response = await api.post<{ targetCount: number; updated: number }>(
         '/admin/reports/quick-dismiss/single-reporter',
-        { adminNote: t('admin.quickDismissSingleNote'), reportedKeys: visibleReportedKeys }
+        { adminNote: t('admin.quickDismissSingleNote'), reportedKeys: [...new Set(reports.map((report) => report.reportedKey))] }
       );
       toast.success(t('admin.quickDismissSingleDone', { targets: response.data.targetCount, reports: response.data.updated }));
       await load();
     } catch (error) {
       toast.error(errMsg(error));
     } finally {
-      setQuickAction(null);
+      setQuickBusy(false);
     }
   };
 
@@ -166,34 +169,92 @@ export default function AdminReports() {
       title: <input ref={selectAllRef} type="checkbox" aria-label={t('admin.selectAllReports')} checked={allVisibleSelected} disabled={!reports.length} onChange={(event) => toggleAllVisible(event.target.checked)} />,
       render: (report) => <input type="checkbox" aria-label={t('admin.selectReport', { reported: report.reported })} checked={selectedIds.has(report.id)} onChange={(event) => toggleSelected(report.id, event.target.checked)} />,
     },
-    { key: 'createdAt', title: t('admin.reportCreatedAt'), render: (report) => formatDate(report.createdAt) },
-    { key: 'reporter', title: t('admin.reporter') },
-    { key: 'reported', title: t('admin.reportedUser'), render: (report) => <span className="admin-report-reported"><strong>{report.reported}</strong>{report.pendingReporterCount > 0 && <small>{t('admin.reportReporterCount', { count: report.pendingReporterCount })}</small>}</span> },
-    { key: 'match', title: t('admin.reportMatch'), render: (report) => `${difficultyLabel(t, report.mode)} · BO${report.boType}` },
-    { key: 'description', title: t('admin.reportDescription'), render: (report) => report.description || t('admin.reportNoDescription') },
+    {
+      key: 'reported',
+      title: t('admin.reportedUser'),
+      render: (report) => (
+        <span className="admin-cell-stack">
+          <strong>{report.reported}</strong>
+          <small>
+            {t('admin.reporter')}: {report.reporter}
+            {report.pendingReporterCount > 0 && ` · ${t('admin.reportReporterCount', { count: report.pendingReporterCount })}`}
+          </small>
+        </span>
+      ),
+    },
+    {
+      key: 'match',
+      title: t('admin.reportMatch'),
+      render: (report) => <span className="admin-cell-stack"><span>{difficultyLabel(t, report.mode)} · BO{report.boType}</span><small>{formatDateTime(report.createdAt, locale)}</small></span>,
+    },
+    { key: 'description', title: t('admin.reportDescription'), render: (report) => <span className="admin-cell-clamp" title={report.description}>{report.description || t('admin.reportNoDescription')}</span> },
     {
       key: 'status',
       title: t('admin.reportStatusLabel'),
-      render: (report) => <span className="admin-report-status"><Badge text={statusLabel(report.status)} color={report.status === 'pending' ? 'amber' : report.status === 'resolved' ? 'green' : 'gray'} />{report.whitelisted && <Badge text={t('admin.reportWhitelisted')} color="gray" />}</span>,
+      render: (report) => (
+        <span className="admin-badges">
+          <Badge text={statusLabel(report.status)} color={statusColor(report.status)} />
+          {report.whitelisted && <Badge text={t('admin.reportWhitelisted')} color="gray" />}
+        </span>
+      ),
     },
-    { key: 'actions', title: t('admin.actions'), render: (report) => <span className="admin-report-actions"><button className="btn btn-ghost btn-sm" type="button" disabled={detailLoadingId === report.id} onClick={() => void openReportedDetails(report)}><Eye size={15} />{detailLoadingId === report.id ? t('common.loading') : t('admin.viewReportedDetails')}</button><button className="btn btn-ghost btn-sm" type="button" onClick={() => setSelected(report)}><AlertTriangle size={15} />{t('admin.handleReport')}</button></span> },
+    {
+      key: 'actions',
+      title: t('admin.actions'),
+      render: (report) => (
+        <span className="admin-row-actions">
+          <button className="admin-action" type="button" onClick={() => setSelected(report)}>{t('admin.handleReport')}</button>
+          <button className="admin-action" type="button" aria-label={t('admin.viewReportedDetails')} title={t('admin.viewReportedDetails')} disabled={detailLoadingId === report.id} onClick={() => void openReportedDetails(report)}>
+            {detailLoadingId === report.id ? t('common.loading') : t('admin.details')}
+          </button>
+        </span>
+      ),
+    },
   ];
 
   return <>
-    <div className="card admin-users-card admin-reports-card">
-      <div className="admin-players-header">
-        <div className="admin-players-title"><h3>{t('admin.reportsTitle')}</h3><p className="muted">{t('admin.totalReports', { count: total })}</p></div>
+    <Panel flush className="admin-list-panel">
+      <Toolbar
+        end={(
+          <>
+            <button className="btn btn-ghost btn-sm" type="button" disabled={quickBusy} onClick={() => void quickDismissSingleReporter()} title={t('admin.quickDismissSingleMessage')}>
+              <ShieldX size={15} />{quickBusy ? t('common.loading') : t('admin.quickDismissSingleReporter')}
+            </button>
+            <button className="btn btn-sm" type="button" disabled={!selectedIds.size} onClick={() => setBatchSelectedOpen(true)}>
+              <ShieldCheck size={15} />{t('admin.processSelectedReports', { count: selectedIds.size })}
+            </button>
+          </>
+        )}
+      >
+        <Segmented
+          label={t('admin.reportStatusLabel')}
+          value={status}
+          onChange={(value) => { setPage(1); setStatus(value); }}
+          options={[
+            { value: 'pending', label: statusLabel('pending') },
+            { value: 'resolved', label: statusLabel('resolved') },
+            { value: 'dismissed', label: statusLabel('dismissed') },
+            { value: 'all', label: t('admin.reportStatus.all') },
+          ]}
+        />
+        <FilterSelect
+          label={t('admin.reporterFilterLabel')}
+          value={reporterFilter}
+          onChange={(value) => { setPage(1); setReporterFilter(value); }}
+          options={[
+            { value: 'all', label: t('admin.reporterFilter.all') },
+            { value: 'multiple', label: t('admin.reporterFilter.multiple') },
+            { value: 'single', label: t('admin.reporterFilter.single') },
+          ]}
+        />
+        <SearchBox value={searchInput} onChange={setSearchInput} placeholder={t('admin.searchReports')} />
+        <span className="admin-toolbar-meta">{t('admin.totalReports', { count: total })}</span>
+      </Toolbar>
+      <div className="admin-table admin-reports-table">
+        <DataTable columns={columns} rows={reports} rowKey={(report) => report.id} loading={loading} empty={t('admin.noReports')} />
       </div>
-      <div className="admin-list-toolbar">
-        <label className="admin-search"><Search size={16} /><input className="input" value={searchInput} onChange={(event) => setSearchInput(event.target.value)} placeholder={t('admin.searchReports')} /></label>
-        <label className="admin-page-size"><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => { setPage(1); setStatus(event.target.value as typeof status); }}><option value="pending">{statusLabel('pending')}</option><option value="resolved">{statusLabel('resolved')}</option><option value="dismissed">{statusLabel('dismissed')}</option><option value="all">{t('admin.reportStatus.all')}</option></select></label>
-        <label className="admin-page-size"><span>{t('admin.reporterFilterLabel')}</span><select className="input" value={reporterFilter} onChange={(event) => { setPage(1); setReporterFilter(event.target.value as typeof reporterFilter); }}><option value="all">{t('admin.reporterFilter.all')}</option><option value="multiple">{t('admin.reporterFilter.multiple')}</option><option value="single">{t('admin.reporterFilter.single')}</option></select></label>
-        <label className="admin-page-size"><span>{t('admin.quickActionLabel')}</span><select className="input" value="" disabled={quickAction !== null} onChange={(event) => { const action = event.target.value; if (!action) return; if (!reports.length) { toast.info(t('admin.quickActionNoReports')); return; } if (action === 'single') void quickDismissSingleReporter(); }}><option value="">{quickAction ? t('common.loading') : t('admin.chooseQuickAction')}</option><option value="single">{t('admin.quickDismissSingleReporter')}</option></select></label>
-        <button className="btn btn-ghost admin-report-selected-action" type="button" disabled={!selectedIds.size} onClick={() => setBatchSelectedOpen(true)}><ShieldCheck size={16} />{t('admin.processSelectedReports', { count: selectedIds.size })}</button>
-      </div>
-      <div className="admin-users-table admin-reports-table"><DataTable columns={columns} rows={reports} rowKey={(report) => report.id} loading={loading} empty={t('admin.noReports')} /></div>
-      <div className="admin-pagination"><span className="muted">{total ? `${(page - 1) * 50 + 1}-${Math.min(page * 50, total)} / ${total}` : t('admin.zeroItems')}</span><div className="admin-pagination-actions"><button className="btn btn-ghost" type="button" aria-label={t('common.previousPage')} disabled={loading || page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}><ChevronLeft size={17} /></button><span>{t('admin.pageOf', { page, total: totalPages })}</span><button className="btn btn-ghost" type="button" aria-label={t('common.nextPage')} disabled={loading || page >= totalPages} onClick={() => setPage((value) => value + 1)}><ChevronRight size={17} /></button></div></div>
-    </div>
+      <Pagination page={page} pageSize={PAGE_SIZE} total={total} totalPages={totalPages} loading={loading} onPage={setPage} />
+    </Panel>
     {selected && <ReportDialog report={selected} onClose={() => setSelected(null)} onSaved={(updated, reload) => { if (reload) void load(); else setReports((current) => current.map((item) => item.id === updated.id ? updated : item)); setSelected(null); }} />}
     {batchSelectedOpen && <BatchSelectedDialog reportIds={[...selectedIds]} onClose={() => setBatchSelectedOpen(false)} onSaved={() => { setBatchSelectedOpen(false); setSelectedIds(new Set()); void load(); }} />}
     {reportedDetail?.type === 'user' && <UserDetailDialog user={reportedDetail.user} onClose={() => setReportedDetail(null)} onUserChange={(user) => setReportedDetail({ type: 'user', user })} />}
@@ -201,37 +262,27 @@ export default function AdminReports() {
   </>;
 }
 
+function StatusAndNote({ status, onStatus, note, onNote }: { status: ReportStatus; onStatus: (status: ReportStatus) => void; note: string; onNote: (note: string) => void }) {
+  const { t } = useTranslation();
+  return <>
+    <label className="admin-field"><span>{t('admin.reportStatusLabel')}</span>
+      <select className="input" value={status} onChange={(event) => onStatus(event.target.value as ReportStatus)}>
+        <option value="pending">{t('admin.reportStatus.pending')}</option>
+        <option value="resolved">{t('admin.reportStatus.resolved')}</option>
+        <option value="dismissed">{t('admin.reportStatus.dismissed')}</option>
+      </select>
+    </label>
+    <label className="admin-field"><span>{t('admin.reportAdminNote')}</span>
+      <textarea className="input" rows={3} maxLength={500} value={note} onChange={(event) => onNote(event.target.value)} placeholder={t('admin.reportAdminNotePlaceholder')} />
+    </label>
+  </>;
+}
+
 function BatchSelectedDialog({ reportIds, onClose, onSaved }: { reportIds: number[]; onClose: () => void; onSaved: () => void }) {
   const { t } = useTranslation();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
   const [status, setStatus] = useState<ReportStatus>('resolved');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => {
-    const oldOverflow = document.body.style.overflow;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.body.style.overflow = 'hidden';
-    const frame = window.requestAnimationFrame(() => {
-      const dialog = dialogRef.current;
-      if (!dialog || (document.activeElement instanceof Node && dialog.contains(document.activeElement))) return;
-      dialog.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus();
-    });
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        onCloseRef.current();
-      }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      document.body.style.overflow = oldOverflow;
-      document.removeEventListener('keydown', onKeyDown);
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, []);
   const save = async () => {
     setSaving(true);
     try {
@@ -248,20 +299,26 @@ function BatchSelectedDialog({ reportIds, onClose, onSaved }: { reportIds: numbe
       setSaving(false);
     }
   };
-  return <ModalPortal><div className="admin-player-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={dialogRef} className="admin-player-dialog admin-report-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-report-batch-title" tabIndex={-1}>
-    <div className="admin-player-dialog-heading"><div><h2 id="admin-report-batch-title"><ShieldCheck size={20} />{t('admin.processSelectedReports', { count: reportIds.length })}</h2></div><button className="confirm-close" type="button" aria-label={t('common.close')} onClick={onClose}><X size={18} /></button></div>
-    <div className="admin-report-detail">
-      <label><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => setStatus(event.target.value as ReportStatus)}><option value="pending">{t('admin.reportStatus.pending')}</option><option value="resolved">{t('admin.reportStatus.resolved')}</option><option value="dismissed">{t('admin.reportStatus.dismissed')}</option></select></label>
-      <label><span>{t('admin.reportAdminNote')}</span><textarea className="input" rows={4} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} placeholder={t('admin.reportAdminNotePlaceholder')} /></label>
-      <div className="confirm-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{t('common.cancel')}</button><button className="btn" type="button" disabled={saving} onClick={() => void save()}>{saving ? t('common.loading') : t('admin.saveReportBatch')}</button></div>
-    </div>
-  </div></div></ModalPortal>;
+  return (
+    <AdminDialog
+      title={t('admin.processSelectedReports', { count: reportIds.length })}
+      icon={<ShieldCheck size={19} aria-hidden="true" />}
+      onClose={onClose}
+      footer={<>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={onClose}>{t('common.cancel')}</button>
+        <button className="btn btn-sm" type="button" disabled={saving} onClick={() => void save()}>{saving ? t('common.loading') : t('admin.saveReportBatch')}</button>
+      </>}
+    >
+      <div className="admin-form-stack">
+        <StatusAndNote status={status} onStatus={setStatus} note={note} onNote={setNote} />
+      </div>
+    </AdminDialog>
+  );
 }
 
 function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClose: () => void; onSaved: (report: MatchReport, reload: boolean) => void }) {
   const { t } = useTranslation();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const onCloseRef = useRef(onClose);
+  const locale = currentLocale();
   const [status, setStatus] = useState<ReportStatus>(report.status);
   const [note, setNote] = useState(report.adminNote);
   const [saving, setSaving] = useState(false);
@@ -269,34 +326,6 @@ function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClo
   const [whitelisting, setWhitelisting] = useState(false);
   const [analysis, setAnalysis] = useState<ExternalAnalysisView | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => {
-    const oldOverflow = document.body.style.overflow;
-    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    document.body.style.overflow = 'hidden';
-    const frame = window.requestAnimationFrame(() => {
-      const dialog = dialogRef.current;
-      if (!dialog || (document.activeElement instanceof Node && dialog.contains(document.activeElement))) return;
-      dialog.querySelector<HTMLElement>('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')?.focus();
-    });
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onCloseRef.current(); return; }
-      if (event.key !== 'Tab') return;
-      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])');
-      if (!focusable?.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      document.body.style.overflow = oldOverflow;
-      document.removeEventListener('keydown', onKeyDown);
-      if (previousFocus?.isConnected) previousFocus.focus();
-    };
-  }, []);
   const save = async () => {
     setSaving(true);
     try {
@@ -339,24 +368,46 @@ function ReportDialog({ report, onClose, onSaved }: { report: MatchReport; onClo
     } catch (error) { toast.error(errMsg(error)); }
     finally { setWhitelisting(false); }
   };
-  const runAnalysis = async (locale: string) => {
+  const runAnalysis = async (analysisLocale: string) => {
     setAnalysisLoading(true);
     try {
-      const response = await api.post<ExternalAnalysisView>(`/admin/reports/${report.id}/analysis`, { locale });
+      const response = await api.post<ExternalAnalysisView>(`/admin/reports/${report.id}/analysis`, { locale: analysisLocale });
       setAnalysis(response.data);
     } catch (error) { toast.error(errMsg(error)); }
     finally { setAnalysisLoading(false); }
   };
-  return <ModalPortal><div className="admin-player-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><div ref={dialogRef} className="admin-player-dialog admin-report-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-report-title" tabIndex={-1}>
-    <div className="admin-player-dialog-heading"><div><h2 id="admin-report-title"><AlertTriangle size={20} />{t('admin.handleReport')}</h2><p>{report.reporter} → {report.reported}</p></div><button className="confirm-close" type="button" aria-label={t('common.close')} onClick={onClose}><X size={18} /></button></div>
-    <div className="admin-report-detail">
-      <dl><div><dt>{t('admin.reportMatch')}</dt><dd>{difficultyLabel(t, report.mode)} · BO{report.boType} · #{report.matchId}</dd></div><div><dt>{t('admin.reportCreatedAt')}</dt><dd>{formatDate(report.createdAt)}</dd></div><div><dt>{t('admin.reportDescription')}</dt><dd>{report.description || t('admin.reportNoDescription')}</dd></div></dl>
-      {report.whitelisted && <p className="admin-report-whitelist-state"><ShieldCheck size={17} />{t('admin.reportWhitelisted')}</p>}
-      <ExternalAnalysisPanel view={analysis} loading={analysisLoading} onAnalyze={(locale) => void runAnalysis(locale)} />
-      <label><span>{t('admin.reportStatusLabel')}</span><select className="input" value={status} onChange={(event) => setStatus(event.target.value as ReportStatus)}><option value="pending">{t('admin.reportStatus.pending')}</option><option value="resolved">{t('admin.reportStatus.resolved')}</option><option value="dismissed">{t('admin.reportStatus.dismissed')}</option></select></label>
-      <label><span>{t('admin.reportAdminNote')}</span><textarea className="input" rows={4} maxLength={500} value={note} onChange={(event) => setNote(event.target.value)} placeholder={t('admin.reportAdminNotePlaceholder')} /></label>
-      {report.pendingForReported > 1 && <label className="admin-report-batch-toggle"><input type="checkbox" checked={applyToPending} onChange={(event) => setApplyToPending(event.target.checked)} /><span>{t('admin.reportBatchSameReported', { count: report.pendingForReported })}</span></label>}
-      <div className="confirm-actions"><button className="btn btn-ghost" type="button" onClick={onClose}>{t('common.cancel')}</button><button className="btn btn-ghost" type="button" disabled={saving || whitelisting} onClick={() => void (report.whitelisted ? removeFromWhitelist() : addToWhitelist())}><ShieldCheck size={16} />{whitelisting ? t('common.loading') : report.whitelisted ? t('admin.removeReportWhitelist') : t('admin.addReportWhitelist')}</button><button className="btn" type="button" disabled={saving || whitelisting} onClick={() => void save()}>{saving ? t('common.loading') : applyToPending ? t('admin.saveReportBatch') : t('admin.saveReport')}</button></div>
-    </div>
-  </div></div></ModalPortal>;
+  return (
+    <AdminDialog
+      title={t('admin.handleReport')}
+      icon={<AlertTriangle size={19} aria-hidden="true" />}
+      subtitle={`${report.reporter} → ${report.reported}`}
+      size="lg"
+      onClose={onClose}
+      className="admin-report-dialog"
+      footer={<>
+        <button className="btn btn-ghost btn-sm admin-foot-start" type="button" disabled={saving || whitelisting} onClick={() => void (report.whitelisted ? removeFromWhitelist() : addToWhitelist())}>
+          <ShieldCheck size={15} />{whitelisting ? t('common.loading') : report.whitelisted ? t('admin.removeReportWhitelist') : t('admin.addReportWhitelist')}
+        </button>
+        <button className="btn btn-ghost btn-sm" type="button" onClick={onClose}>{t('common.cancel')}</button>
+        <button className="btn btn-sm" type="button" disabled={saving || whitelisting} onClick={() => void save()}>{saving ? t('common.loading') : applyToPending ? t('admin.saveReportBatch') : t('admin.saveReport')}</button>
+      </>}
+    >
+      <div className="admin-form-stack">
+        <dl className="admin-kv">
+          <dt>{t('admin.reportMatch')}</dt><dd>{difficultyLabel(t, report.mode)} · BO{report.boType} · #{report.matchId}</dd>
+          <dt>{t('admin.reportCreatedAt')}</dt><dd>{formatDateTime(report.createdAt, locale)}</dd>
+          <dt>{t('admin.reportDescription')}</dt><dd>{report.description || t('admin.reportNoDescription')}</dd>
+        </dl>
+        {report.whitelisted && <p className="admin-report-whitelist-state"><ShieldCheck size={17} />{t('admin.reportWhitelisted')}</p>}
+        <ExternalAnalysisPanel view={analysis} loading={analysisLoading} onAnalyze={(value) => void runAnalysis(value)} />
+        <StatusAndNote status={status} onStatus={setStatus} note={note} onNote={setNote} />
+        {report.pendingForReported > 1 && (
+          <label className="admin-check">
+            <input type="checkbox" checked={applyToPending} onChange={(event) => setApplyToPending(event.target.checked)} />
+            <span>{t('admin.reportBatchSameReported', { count: report.pendingForReported })}</span>
+          </label>
+        )}
+      </div>
+    </AdminDialog>
+  );
 }

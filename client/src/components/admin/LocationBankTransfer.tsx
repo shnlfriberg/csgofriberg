@@ -124,17 +124,17 @@ export default function LocationBankTransfer({
   };
   return (
     <section
-      className="location-bank-transfer"
+      className="admin-panel location-bank-transfer"
       aria-label={t('location.bankTransfer')}
     >
-      <header>
-        <Archive size={22} />
-        <div>
-          <h3>{t('location.bankTransfer')}</h3>
+      <header className="admin-panel-head">
+        <div className="admin-panel-title">
+          <h2><Archive size={18} aria-hidden="true" />{t('location.bankTransfer')}</h2>
           <p>{t('location.bankStorageHelp')}</p>
         </div>
       </header>
-      <p>{t('location.bankPackageHelp')}</p>
+      <div className="admin-panel-body">
+      <p className="admin-help">{t('location.bankPackageHelp')}</p>
       <div className="location-admin-actions">
         <button
           className="btn"
@@ -234,7 +234,7 @@ export default function LocationBankTransfer({
           )}
           <div className="location-admin-actions">
             <button
-              className="btn location-start"
+              className="btn"
               disabled={busy || !preview.canImport}
               onClick={() => void run(apply)}
             >
@@ -257,6 +257,7 @@ export default function LocationBankTransfer({
           </div>
         </div>
       )}
+      </div>
     </section>
   );
 }

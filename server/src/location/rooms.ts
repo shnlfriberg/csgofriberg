@@ -12,8 +12,6 @@ import { isGuestBanned } from '../services/guestAccounts';
 import { withKeyLock } from './lock';
 import { generateRoomId } from '../socket/roomFactory';
 import { socketAllowedWithIp } from '../socket/connection';
-import { getRequestPow } from '../services/pow';
-import { config } from '../config';
 import { redis, redisKey } from '../redis';
 import { randomSelection } from './games';
 import { assertGuess, DIFFICULTIES, score } from './rules';
@@ -357,15 +355,7 @@ export function setupLocationSocket(io: Server): () => Promise<void> {
           Number(socket.data.pendingLocationEvents || 0) + 1;
         const task = (async () => {
           await restore;
-          if (!socket.data.locationPowVerified) {
-            const proof = getRequestPow({
-              headers: socket.handshake.headers,
-              ip: socket.data.ip,
-            });
-            if (!proof || proof.difficulty < config.powDifficulty)
-              throw new HttpError(428, 'POW_REQUIRED');
-            socket.data.locationPowVerified = true;
-          }
+          // Sockets are not PoW-gated by design (HTTP API requests are); identity and rate limits apply.
           if (
             !(await socketAllowedWithIp(
               socket,

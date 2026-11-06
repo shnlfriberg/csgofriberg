@@ -44,6 +44,7 @@ describe('AdminApiTokens', () => {
     renderWithProviders(<AdminApiTokens />);
     expect(await screen.findByText('暂无有效 API Token')).toBeInTheDocument();
 
+    await user.click(screen.getByRole('button', { name: '新建令牌' }));
     await user.type(screen.getByPlaceholderText('例如：选手数据同步'), '选手同步');
     await user.click(screen.getByRole('button', { name: '生成 Token' }));
 

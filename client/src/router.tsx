@@ -78,7 +78,7 @@ export const router = createBrowserRouter([
       { path: '/announcement', element: <Announcements /> },
       {
         element: <RequireAdmin />,
-        children: [{ path: '/admin', element: <Admin /> }],
+        children: [{ path: '/admin/*', element: <Admin /> }],
       },
       { path: '*', element: <NotFound /> },
     ],

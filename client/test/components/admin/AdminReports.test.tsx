@@ -108,9 +108,9 @@ describe('AdminReports', () => {
     renderWithProviders(<AdminReports />);
 
     await screen.findByText('暂无符合条件的举报');
-    const quickAction = screen.getByLabelText('快速操作', { selector: 'select' });
+    const quickAction = screen.getByRole('button', { name: '驳回当前页单人举报' });
     expect(quickAction).not.toBeDisabled();
-    await user.selectOptions(quickAction, 'single');
+    await user.click(quickAction);
 
     expect(api.post).not.toHaveBeenCalled();
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
@@ -124,7 +124,7 @@ describe('AdminReports', () => {
     renderWithProviders(<AdminReports />);
 
     await screen.findByText('疑似自动化操作');
-    await user.selectOptions(screen.getByLabelText('快速操作', { selector: 'select' }), 'single');
+    await user.click(screen.getByRole('button', { name: '驳回当前页单人举报' }));
     const dialog = screen.getByRole('alertdialog', { name: '快速驳回当前页单人举报？' });
     await user.click(within(dialog).getByRole('button', { name: '驳回当前页单人举报' }));
 

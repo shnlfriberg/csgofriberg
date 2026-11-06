@@ -4,10 +4,12 @@ import { turtleSoupTranslations, turtleSoupErrors } from './turtleSoup';
 import { locationTranslations } from './location';
 import { presenceTranslations } from './presence';
 import { recoveryTranslations } from './recovery';
+import { adminUiTranslations } from './adminUi';
 export const resources = {
   zh: {
     translation: {
       recovery: recoveryTranslations.zh,
+      adminUi: adminUiTranslations.zh,
       soup: turtleSoupTranslations.zh,
       presence: presenceTranslations.zh,
       location: locationTranslations.zh,
@@ -298,6 +300,7 @@ export const resources = {
   en: {
     translation: {
       recovery: recoveryTranslations.en,
+      adminUi: adminUiTranslations.en,
       soup: turtleSoupTranslations.en,
       presence: presenceTranslations.en,
       location: locationTranslations.en,
@@ -511,6 +514,7 @@ export const resources = {
   ja: {
     translation: {
       recovery: recoveryTranslations.ja,
+      adminUi: adminUiTranslations.ja,
       soup: turtleSoupTranslations.ja,
       presence: presenceTranslations.ja,
       location: locationTranslations.ja,

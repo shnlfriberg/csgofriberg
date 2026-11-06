@@ -17,40 +17,24 @@ import DailyManager from './location/DailyManager';
 import ManifestImport from './location/ManifestImport';
 import SubmissionManager from './location/SubmissionManager';
 import { locationAdmin } from './location/api';
-import { captureImages, sameCapturePoint } from '@friberg/location-core';
+import { captureImages } from '@friberg/location-core';
+import type { LocationTab } from './nav';
 import '../../styles/location.css';
 import './location/admin.css';
-import { useAdminTab } from './useAdminTab';
 
-type Tab =
-  | 'capture'
-  | 'submissions'
-  | 'questions'
-  | 'maps'
-  | 'checks'
-  | 'daily'
-  | 'bankTransfer'
-  | 'operations';
 type Editor =
   | { kind: 'new' }
   | { kind: 'question'; value: Question; reference?: Question }
   | { kind: 'variant'; value: Question }
   | { kind: 'capture'; value: CaptureDraft; imageId: string };
-const tabs: Tab[] = [
-  'capture',
-  'submissions',
-  'questions',
-  'maps',
-  'checks',
-  'daily',
-  'bankTransfer',
-  'operations',
-];
 
-export default function AdminLocation({ visible = true }: { visible?: boolean }) {
+/**
+ * Location (图寻) administration. The active tool comes from the admin route; the
+ * capture workspace stays mounted while hidden so queued images and unsaved points survive.
+ */
+export default function AdminLocation({ visible = true, tab = 'capture' }: { visible?: boolean; tab?: LocationTab }) {
   const { t } = useTranslation();
   const [data, setData] = useState<AdminOverview | null>(null);
-  const [tab, setTab] = useAdminTab('location', tabs, 'capture');
   const [editor, setEditor] = useState<Editor | null>(null);
   const [error, setError] = useState('');
   const [revision, setRevision] = useState(0);
@@ -107,23 +91,7 @@ export default function AdminLocation({ visible = true }: { visible?: boolean })
   };
 
   return (
-    <section className="location-admin location-page">
-      <header className="location-admin-heading">
-        <h2>{t('location.admin')}</h2>
-        <p className="muted">{t('location.adminWorkflowHelp')}</p>
-      </header>
-      <nav className="location-admin-tabs" aria-label={t('location.admin')}>
-        {tabs.map((item) => (
-          <button
-            className={'btn ' + (tab === item ? '' : 'btn-ghost')}
-            aria-current={tab === item ? 'page' : undefined}
-            key={item}
-            onClick={() => setTab(item)}
-          >
-            {t('location.' + (item === 'capture' ? 'captureWorkspace' : item))}
-          </button>
-        ))}
-      </nav>
+    <section className="location-admin location-page" aria-label={t('location.admin')}>
       {error && (
         <div className="location-alert" role="alert">
           {error}
@@ -137,7 +105,7 @@ export default function AdminLocation({ visible = true }: { visible?: boolean })
           </button>
         </div>
       )}
-      {!data && !error && <p role="status">{t('location.loadingAdmin')}</p>}
+      {!data && !error && <p className="admin-loading" role="status">{t('location.loadingAdmin')}</p>}
       {data && (
         <>
           <div hidden={tab !== 'capture'}>
@@ -171,7 +139,7 @@ export default function AdminLocation({ visible = true }: { visible?: boolean })
           {tab === 'daily' && (
             <DailyManager days={data.daily} onChanged={reload} />
           )}
-          {tab === 'bankTransfer' && (
+          {tab === 'transfer' && (
             <>
               <LocationBankTransfer onImported={reload} />
               <ManifestImport onChanged={reload} />

@@ -20,20 +20,18 @@ beforeEach(async () => {
   vi.mocked(api.post).mockResolvedValue({ data: { ok: true } } as never);
 });
 it('shows database numeric flags and submits only the selected scene', async () => {
-  renderWithProviders(<AdminCardLink />);
-  fireEvent.click(screen.getByRole('button', { name: '关系版本' }));
+  renderWithProviders(<AdminCardLink tab="graphs" />);
   const ranked = await screen.findByRole('checkbox', { name: '天梯匹配' });
   expect(ranked).not.toBeChecked();
   fireEvent.click(ranked);
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/card-link/enabled', { scenes: { ranked: true } }));
 });
 it('requires a rollback reason, sends the current pointer, and never offers unpublished candidates for rollback', async () => {
-  renderWithProviders(<AdminCardLink />);
-  fireEvent.click(screen.getByRole('button', { name: '关系版本' }));
+  renderWithProviders(<AdminCardLink tab="graphs" />);
   const rollback = await screen.findByRole('button', { name: '回退到此版本' });
   expect(rollback).toBeDisabled();
   expect(screen.getAllByRole('button', { name: '回退到此版本' })).toHaveLength(1);
-  expect(within(screen.getByText(old.slice(0,16)).closest('article')!).getByRole('button', { name: '发布' })).toBeDisabled();
+  expect(within(screen.getByText(old.slice(0,16)).closest('tr')!).getByRole('button', { name: '发布' })).toBeDisabled();
   fireEvent.change(screen.getByRole('textbox', { name: '回退原因' }), { target: { value: '  核验后回退  ' } });
   fireEvent.click(rollback);
   await waitFor(() => expect(api.post).toHaveBeenCalledWith('/admin/card-link/rollback', { version: old, expectedVersion: current, reason: '核验后回退' }));

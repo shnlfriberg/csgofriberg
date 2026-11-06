@@ -9,7 +9,6 @@ import { db } from '../../src/db/knex';
 import { config } from '../../src/config';
 import { signToken } from '../../src/middleware/auth';
 import { initRedis, redis, redisKey } from '../../src/redis';
-import { browserFingerprint, POW_COOKIE } from '../../src/services/pow';
 import { getLocationRoom, saveRoom, flushResult } from '../../src/location/rooms';
 import { withKeyLock } from '../../src/location/lock';
 import { publicPlayerKey } from '../../src/location/publicIdentity';
@@ -24,8 +23,8 @@ describe('location multiplayer across two actual server processes', () => {
     const inserted = await db('users').insert({ username: `loc_${suffix}`, password_hash: 'unused', email: hasEmail ? `${suffix}@example.com` : null, email_verified_at: verified ? new Date().toISOString() : null }).returning('id');
     const id = Number(typeof inserted[0] === 'object' ? inserted[0].id : inserted[0]);
     userIds.push(id);
-    const proof = jwt.sign({ typ: 'pow', fp: browserFingerprint(agent, ip), jti: randomUUID(), difficulty: config.powDifficulty }, config.jwtSecret, { expiresIn: '1h' });
-    return { ...await connect(ports[1], ip, `csgofriberg_session=${signToken({ id, token_version: 0 })}; ${POW_COOKIE}=${proof}`), id };
+    // No PoW cookie: sockets are not PoW-gated by design.
+    return { ...await connect(ports[1], ip, `csgofriberg_session=${signToken({ id, token_version: 0 })}`), id };
   }
   async function instance() {
     const child = fork(path.resolve(__dirname, 'instance.ts'), [], { execArgv: ['--import', 'tsx'], env: { ...process.env, JWT_SECRET: config.jwtSecret, TRUST_PROXY: 'true' }, stdio: ['ignore', 'ignore', 'pipe', 'ipc'] }); children.push(child);
@@ -33,7 +32,7 @@ describe('location multiplayer across two actual server processes', () => {
     return new Promise<number>((resolve, reject) => { const timeout = setTimeout(() => reject(new Error('INSTANCE_START_TIMEOUT')), 15000); child.once('message', (message: any) => { clearTimeout(timeout); resolve(message.port); }); child.once('exit', code => { clearTimeout(timeout); if (code) reject(new Error(`INSTANCE_EXIT:${code}`)); }); });
   }
   async function connect(port: number, ip: string, cookie?: string) {
-    cookie ||= `csgofriberg_guest=${jwt.sign({ key: `location-test-socket-${randomUUID()}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' })}; ${POW_COOKIE}=${jwt.sign({ typ: 'pow', fp: browserFingerprint(agent, ip), jti: randomUUID(), difficulty: config.powDifficulty }, config.jwtSecret, { expiresIn: '1h' })}`;
+    cookie ||= `csgofriberg_guest=${jwt.sign({ key: `location-test-socket-${randomUUID()}`, typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' })}`;
     const socket = connectSocket(`http://127.0.0.1:${port}`, { transports: ['websocket'], reconnection: false, extraHeaders: { Cookie: cookie, 'User-Agent': agent, 'X-Forwarded-For': ip } }); sockets.push(socket);
     await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('connect_error', reject); });
     return { socket, cookie, ip };

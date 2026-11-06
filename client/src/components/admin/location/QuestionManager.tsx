@@ -6,6 +6,8 @@ import { useAdminTask } from './useAdminTask';
 import type { RadarSelection } from '../../../location/Radar';
 import QuestionAreaFilter from './QuestionAreaFilter';
 import PointMergePanel from './PointMergePanel';
+import { Combine, Plus, Search, Send } from 'lucide-react';
+import { Pagination, Panel, Toolbar } from '../ui';
 
 export default function QuestionManager({
   maps,
@@ -102,152 +104,122 @@ export default function QuestionManager({
   const pageCount = Math.max(1, Math.ceil(total / 40));
   const items = serverPaged ? remote?.items || [] : filtered.slice((page - 1) * 40, page * 40);
   const pointCounts = serverPaged ? remote?.pointCounts || {} : localPointCounts;
+  const mapName = (id: string) => maps.find((map) => map.id === id)?.name;
+  const filterSelect = (
+    label: string,
+    value: string,
+    onChange: (value: string) => void,
+    options: Array<[string, string]>,
+    disabled = false,
+  ) => (
+    <select className="input" aria-label={label} title={label} value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
+      {options.map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+    </select>
+  );
   return (
-    <>
-      <p className="muted">{t('location.samePointDrawHelp')}</p>
-      <div className="location-bulk-publish">
-        <button type="button" className="btn" disabled={task.busy || !pendingCount}
-          onClick={() => void publishAll()}>
-          {t(task.busy ? 'location.batchPublishing' : 'location.batchPublish', { count: pendingCount })}
-        </button>
-        <p className="muted">{t('location.batchPublishHelp')}</p>
-        {results.length > 0 && <p role="status">{t('location.batchPublishResult', {
-          published, failed: failures.length,
-        })}</p>}
-        {task.error && <p role="alert" className="location-alert">{task.error}</p>}
-        {failures.length > 0 && <div className="location-alert" role="alert">
-          <strong>{t('location.batchPublishFailures')}</strong>
-          <ul>{failures.map((result) => <li key={result.id}>
-            {result.capturePointId} · {result.id}：{t(`location.errors.${result.code}`, {
-              defaultValue: t(`errors.${result.code}`, { defaultValue: result.code }),
-            })}
-          </li>)}</ul>
-        </div>}
-      </div>
-      <div className="location-admin-actions">
-        <button className="btn" disabled={task.busy} onClick={onNew}>
-          {t('location.newQuestion')}
-        </button>
-        <input
-          className="input"
-          aria-label={t('location.searchQuestions')}
-          placeholder={t('location.searchQuestions')}
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select
-          className="input"
-          aria-label={t('location.mapName')}
-          value={mapId}
-          onChange={(e) => {
-            const next = maps.find((map) => map.id === e.target.value);
-            setMapId(e.target.value);
-            setFloorId(next?.floors.length === 1 ? next.floors[0].id : '');
-            setArea(null);
-          }}
-        >
-          <option value="">{t('location.allMaps')}</option>
-          {maps.map((map) => (
-            <option key={map.id} value={map.id}>
-              {map.name}
-            </option>
-          ))}
-        </select>
-        <select className="input" aria-label={t('location.submissionFloor')}
-          value={selectedFloor} disabled={!selectedMap}
-          onChange={(event) => { setFloorId(event.target.value); setArea(null); }}>
-          <option value="">{t('location.allQuestionFloors')}</option>
-          {selectedMap?.floors.map((floor) => <option key={floor.id} value={floor.id}>
-            {t(`location.floor.${floor.id}`, { defaultValue: floor.name })}
-          </option>)}
-        </select>
-        <select
-          className="input"
-          aria-label={t('location.questionStatus')}
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="">{t('location.allStatuses')}</option>
-          {['draft', 'review', 'published', 'disabled'].map((item) => (
-            <option key={item} value={item}>
-              {t(
-                item === 'review' ? 'location.reviewStatus' : `location.${item}`
-              )}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
-          aria-label={t('location.questionTier')}
-          value={tier}
-          onChange={(e) => setTier(e.target.value)}
-        >
-          <option value="">{t('location.allTiers')}</option>
-          {['easy', 'medium', 'hard'].map((item) => (
-            <option key={item} value={item}>
-              {t(`location.${item}`)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="location-admin-actions">
-        <button className="btn btn-ghost" disabled={!selectedMap || !selectedFloor} aria-pressed={merging}
-          onClick={() => setMerging(value => !value)}>{t(merging ? 'location.mergeClose' : 'location.mergeTitle')}</button>
-        <span className="muted">{t('location.mergeEntryHelp')}</span>
-      </div>
-      {merging && selectedMap && selectedFloor && <PointMergePanel
-        key={`${selectedMap.id}:${selectedMap.version}:${selectedFloor}`}
-        map={selectedMap} floorId={selectedFloor} onChanged={onChanged} />}
-      {selectedMap && selectedFloor ? <QuestionAreaFilter
-        key={`${selectedMap.id}:${selectedMap.version}:${selectedFloor}`}
-        map={selectedMap} floorId={selectedFloor} selection={selectedArea}
-        onChange={(next) => setArea(next ? { ...next, mapId, floorId: selectedFloor, mapVersion: selectedMap.version } : null)}
-      /> : <p className="muted">{t('location.questionAreaChooseFloor')}</p>}
-      <p role="status">{t('location.questionFilterCount', { count: total, total: serverPaged ? remote?.totalAll ?? total : questions.length })}</p>
-      {loading && <p role="status">{t('location.loadingAdmin')}</p>}
-      {queryError && <p role="alert">{queryError}</p>}
-      {pageCount > 1 && <div className="location-admin-actions">
-        <button className="btn btn-ghost" disabled={page <= 1 || loading} onClick={() => setPage(p => p - 1)}>{t('location.previousPage')}</button>
-        <span>{page} / {pageCount}</span>
-        <button className="btn btn-ghost" disabled={page >= pageCount || loading} onClick={() => setPage(p => p + 1)}>{t('location.nextPage')}</button>
-      </div>}
-      {!items.length && !loading && (
-        <p className="location-admin-empty">{t('location.noQuestions')}</p>
+    <Panel flush className="admin-list-panel location-question-panel">
+      <Toolbar
+        end={(
+          <>
+            <button className="btn btn-ghost btn-sm" disabled={!selectedMap || !selectedFloor} aria-pressed={merging}
+              title={t('location.mergeEntryHelp')} onClick={() => setMerging(value => !value)}>
+              <Combine size={15} aria-hidden="true" />{t(merging ? 'location.mergeClose' : 'location.mergeTitle')}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={task.busy || !pendingCount}
+              title={t('location.batchPublishHelp')} onClick={() => void publishAll()}>
+              <Send size={15} aria-hidden="true" />
+              {t(task.busy ? 'location.batchPublishing' : 'location.batchPublish', { count: pendingCount })}
+            </button>
+            <button className="btn btn-sm" disabled={task.busy} onClick={onNew}>
+              <Plus size={15} aria-hidden="true" />{t('location.newQuestion')}
+            </button>
+          </>
+        )}
+      >
+        <span className="admin-search">
+          <Search size={15} aria-hidden="true" />
+          <input
+            className="input"
+            aria-label={t('location.searchQuestions')}
+            placeholder={t('location.searchQuestions')}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </span>
+        {filterSelect(t('location.mapName'), mapId, (value) => {
+          const next = maps.find((map) => map.id === value);
+          setMapId(value);
+          setFloorId(next?.floors.length === 1 ? next.floors[0].id : '');
+          setArea(null);
+        }, [['', t('location.allMaps')], ...maps.map((map): [string, string] => [map.id, map.name])])}
+        {filterSelect(t('location.submissionFloor'), selectedFloor, (value) => { setFloorId(value); setArea(null); },
+          [['', t('location.allQuestionFloors')], ...(selectedMap?.floors ?? []).map((floor): [string, string] => [floor.id, t(`location.floor.${floor.id}`, { defaultValue: floor.name })])],
+          !selectedMap)}
+        {filterSelect(t('location.questionStatus'), status, setStatus,
+          [['', t('location.allStatuses')], ...['draft', 'review', 'published', 'disabled'].map((item): [string, string] => [item, t(item === 'review' ? 'location.reviewStatus' : `location.${item}`)])])}
+        {filterSelect(t('location.questionTier'), tier, setTier,
+          [['', t('location.allTiers')], ...['easy', 'medium', 'hard'].map((item): [string, string] => [item, t(`location.${item}`)])])}
+      </Toolbar>
+      {(results.length > 0 || task.error || failures.length > 0) && (
+        <div className="admin-panel-body location-question-notices">
+          {results.length > 0 && <p role="status">{t('location.batchPublishResult', { published, failed: failures.length })}</p>}
+          {task.error && <p role="alert" className="location-alert">{task.error}</p>}
+          {failures.length > 0 && <div className="location-alert" role="alert">
+            <strong>{t('location.batchPublishFailures')}</strong>
+            <ul>{failures.map((result) => <li key={result.id}>
+              {result.capturePointId} · {result.id}：{t(`location.errors.${result.code}`, {
+                defaultValue: t(`errors.${result.code}`, { defaultValue: result.code }),
+              })}
+            </li>)}</ul>
+          </div>}
+        </div>
       )}
-      <div className="location-admin-question-list">
-        {items.map((item) => (
-          <div className="location-question-card" key={item.id}>
-          <button disabled={task.busy} onClick={() => onEdit(item)}>
-            <img
-              loading="lazy"
-              src={item.thumbnailUrl}
-              alt={item.capturePointId}
-            />
-            <span>
-              {maps.find((map) => map.id === item.mapId)?.name} ·{' '}
-              {t(`location.${item.tier}`)}
-            </span>
-            <span>{item.capturePointId}</span>
-            <span>{t('location.samePointQuestions', { count: pointCounts[JSON.stringify([item.mapId, item.capturePointId])] || 1 })}</span>
-            <span>
-              {t(
-                item.status === 'review'
-                  ? 'location.reviewStatus'
-                  : `location.${item.status}`
-              )}{' '}
-              · v{item.version}
-            </span>
-            {maps.find((map) => map.id === item.mapId)?.version !==
-              item.mapVersion && (
-              <span className="location-error">
-                {t('location.captureMapChanged')}
-              </span>
-            )}
-          </button>
-          {onAddVariant && <button className="btn btn-ghost" disabled={task.busy} onClick={() => onAddVariant(item)}>{t('location.addPointVariant')}</button>}
+      {merging && selectedMap && selectedFloor && <div className="admin-panel-body location-question-merge">
+        <PointMergePanel
+          key={`${selectedMap.id}:${selectedMap.version}:${selectedFloor}`}
+          map={selectedMap} floorId={selectedFloor} onChanged={onChanged} />
+      </div>}
+      <div className={`admin-panel-body location-question-layout${selectedMap && selectedFloor ? ' has-area' : ''}`}>
+        {selectedMap && selectedFloor && <aside className="location-question-aside">
+          <QuestionAreaFilter
+            key={`${selectedMap.id}:${selectedMap.version}:${selectedFloor}`}
+            map={selectedMap} floorId={selectedFloor} selection={selectedArea}
+            onChange={(next) => setArea(next ? { ...next, mapId, floorId: selectedFloor, mapVersion: selectedMap.version } : null)}
+          />
+        </aside>}
+        <div className="location-question-results">
+          <div className="location-question-meta">
+            <strong role="status">{t('location.questionFilterCount', { count: total, total: serverPaged ? remote?.totalAll ?? total : questions.length })}</strong>
+            {!(selectedMap && selectedFloor) && <span>{t('location.questionAreaChooseFloor')}</span>}
+            <span>{t('location.samePointDrawHelp')}</span>
           </div>
-        ))}
+          {loading && <p role="status" className="admin-help">{t('location.loadingAdmin')}</p>}
+          {queryError && <p role="alert" className="location-alert">{queryError}</p>}
+          {!items.length && !loading && (
+            <p className="admin-empty">{t('location.noQuestions')}</p>
+          )}
+          <div className="location-admin-question-list">
+            {items.map((item) => (
+              <div className="location-question-card" key={item.id}>
+                <button disabled={task.busy} onClick={() => onEdit(item)}>
+                  <img loading="lazy" src={item.thumbnailUrl} alt={item.capturePointId} />
+                  <span className="location-question-card-title">{mapName(item.mapId)} · {t(`location.${item.tier}`)}</span>
+                  <span className="location-question-card-id">{item.capturePointId}</span>
+                  <span>{t('location.samePointQuestions', { count: pointCounts[JSON.stringify([item.mapId, item.capturePointId])] || 1 })}</span>
+                  <span className={`location-question-status is-${item.status}`}>
+                    {t(item.status === 'review' ? 'location.reviewStatus' : `location.${item.status}`)} · v{item.version}
+                  </span>
+                  {maps.find((map) => map.id === item.mapId)?.version !== item.mapVersion && (
+                    <span className="location-error">{t('location.captureMapChanged')}</span>
+                  )}
+                </button>
+                {onAddVariant && <button className="admin-action" disabled={task.busy} onClick={() => onAddVariant(item)}>{t('location.addPointVariant')}</button>}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
-    </>
+      {pageCount > 1 && <Pagination page={page} totalPages={pageCount} total={total} pageSize={40} loading={loading} onPage={setPage} />}
+    </Panel>
   );
 }

@@ -36,6 +36,16 @@ export const addAnnouncement = asyncHandler(async (req, res) => {
     res.json({ id });
   });
 
+export const updateAnnouncement = asyncHandler(async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
+    const { title, content, is_popup } = req.body;
+    // Keeps the id: players who already acknowledged a popup are not prompted again for an edit.
+    const count = await db('announcements').where({ id }).update({ title, content, is_popup });
+    if (!count) throw new HttpError(404, 'NOT_FOUND');
+    await invalidateCached('announcements');
+    res.json({ ok: true });
+  });
+
 export const deleteAnnouncement = asyncHandler(async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamsSchema>;
     const count = await db('announcements').where({ id }).del();

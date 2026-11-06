@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Command } from "@friberg/card-link-core";
 import { api, errMsg } from "../api/client";
 import { getSocket } from "../api/socket";
-import { ensurePow } from '../api/pow';
 import { refreshAuthenticatedSession } from '../api/authSession';
 import type { Directory, View } from "./types";
 type Pending = {
@@ -84,8 +83,6 @@ export function useCardGame(id: string | null) {
       clearTimeout(retryTimer);
       setRealtimeReady(false);
       void (async () => {
-        await ensurePow();
-        if (!current() || request !== sequence) return;
         const response = await new Promise<{ ok: boolean; data?: View; code?: string }>((resolve, reject) => {
           socket.timeout(10000).emit('card-link:watch', { id },
             (error: unknown, result: { ok: boolean; data?: View; code?: string }) => error ? reject(error) : resolve(result));
@@ -106,10 +103,9 @@ export function useCardGame(id: string | null) {
         if (attempts > 3) return;
         const code = error?.response?.data?.code;
         try {
-          if (code === 'POW_REQUIRED') await ensurePow(true);
-          else if (code === 'AUTH_EXPIRED') await refreshAuthenticatedSession();
+          if (code === 'AUTH_EXPIRED') await refreshAuthenticatedSession();
           if (!current() || request !== sequence) return;
-          if (code === 'POW_REQUIRED' || code === 'AUTH_EXPIRED') {
+          if (code === 'AUTH_EXPIRED') {
             socket.disconnect().connect();
           } else retryTimer = setTimeout(watch, 1000 * attempts);
         } catch {

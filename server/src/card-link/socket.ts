@@ -5,8 +5,6 @@ import type { Server } from "socket.io";
 import { authenticateCookie, getGuestFromCookie } from "../middleware/auth";
 import { isGuestBanned } from "../services/guestAccounts";
 import { socketAllowedWithIp } from "../socket/connection";
-import { getRequestPow } from "../services/pow";
-import { config } from "../config";
 import { HttpError } from "../middleware/common";
 import {
   readView,
@@ -117,12 +115,6 @@ export function setupCardSocket(server: Server) {
           ))
         )
           throw new HttpError(429, "RATE_LIMITED");
-        const proof = getRequestPow({
-          headers: socket.handshake.headers,
-          ip: socket.data.ip,
-        });
-        if (!proof || proof.difficulty < config.powDifficulty)
-          throw new HttpError(428, "POW_REQUIRED");
         if (me.userId) {
           if (
             (await authenticateCookie(socket.handshake.headers.cookie))?.id !==

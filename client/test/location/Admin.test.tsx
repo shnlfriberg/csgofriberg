@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import Admin from '../../src/pages/Admin';
 import AdminLocation from '../../src/components/admin/AdminLocation';
@@ -8,6 +8,8 @@ import { useAuth } from '../../src/store/auth';
 
 vi.mock('../../src/api/socket', () => ({ getSocket: () => ({ on() {}, off() {}, emit() {}, connected: false }) }));
 vi.mock('../../src/components/admin/AdminPlayers', () => ({ default: () => <div>Players placeholder</div> }));
+// Dashboard counters and other admin lists use the shared client; keep them offline.
+vi.mock('../../src/api/client', () => ({ api: { get: vi.fn(async () => ({ data: {} })) }, errMsg: () => '操作失败' }));
 
 const { get, post, put } = vi.hoisted(() => ({
   get: vi.fn(),
@@ -65,47 +67,61 @@ beforeEach(() => {
 });
 
 describe('location administration workspace', () => {
-  it('restores both levels after remount and mounts the restored location workspace', async () => {
-    const first = renderAtRoute(<Admin />);
-    fireEvent.click(screen.getByRole('button', { name: '图寻管理' }));
+  const renderAdmin = (route = '/admin') => renderAtRoute(<Admin />, { route, path: '/admin/*' });
+  const openLocationGroup = () => {
+    const toggle = screen.getByRole('button', { name: '图寻' });
+    if (toggle.getAttribute('aria-expanded') === 'false') fireEvent.click(toggle);
+  };
+
+  it('navigates by URL and reopens the last location tool after remount', async () => {
+    const first = renderAdmin();
+    openLocationGroup();
+    fireEvent.click(screen.getByRole('link', { name: '采集工作台' }));
     await screen.findByRole('heading', { name: '批量标点与配图' });
-    fireEvent.click(screen.getByRole('button', { name: '题目管理' }));
+    fireEvent.click(screen.getByRole('link', { name: '题目管理' }));
     await screen.findByText(/当前没有符合条件的题目/);
+    expect(screen.getByRole('link', { name: '题目管理' })).toHaveAttribute('aria-current', 'page');
     first.unmount();
 
-    renderAtRoute(<Admin />);
+    renderAdmin('/admin/location');
     await waitFor(() => expect(screen.getByText(/当前没有符合条件的题目/)).toBeVisible());
-    expect(screen.getByRole('button', { name: '题目管理' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: '题目管理' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByText('Players placeholder')).not.toBeInTheDocument();
   });
 
   it('ignores invalid saved navigation and isolates navigation by account', async () => {
-    const key = `admin-tab:${useAuth.getState().user?.id ?? 'local'}:main`;
+    const key = `admin-tab:${useAuth.getState().user?.id ?? 'local'}:location`;
     sessionStorage.setItem(key, 'removed-tab');
-    sessionStorage.setItem('admin-tab:another-account:main', 'location');
-    const first = renderAtRoute(<Admin />);
-    expect(screen.getByText('Players placeholder')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: '图寻管理' }));
-    await screen.findByRole('heading', { name: '批量标点与配图' });
-    expect(sessionStorage.getItem(key)).toBe('location');
+    sessionStorage.setItem('admin-tab:another-account:location', 'questions');
+    const first = renderAdmin('/admin/location');
+    expect(await screen.findByRole('heading', { name: '批量标点与配图' })).toBeVisible();
+    fireEvent.click(screen.getByRole('link', { name: '题目管理' }));
+    await screen.findByText(/当前没有符合条件的题目/);
+    expect(sessionStorage.getItem(key)).toBe('questions');
     first.unmount();
     sessionStorage.removeItem(key);
-    renderAtRoute(<Admin />);
-    expect(screen.getByText('Players placeholder')).toBeVisible();
+    renderAdmin('/admin/location');
+    expect(await screen.findByRole('heading', { name: '批量标点与配图' })).toBeVisible();
+  });
+
+  it('redirects unknown admin routes to the dashboard', async () => {
+    renderAdmin('/admin/not-a-page');
+    expect(await screen.findByRole('heading', { name: '仪表盘', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '实时在线与各模式对局' })).toBeInTheDocument();
   });
 
   it('still permits navigation when browser session storage is unavailable', async () => {
     vi.spyOn(sessionStorage, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
     vi.spyOn(sessionStorage, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
-    renderAtRoute(<Admin />);
-    fireEvent.click(screen.getByRole('button', { name: '图寻管理' }));
+    renderAdmin();
+    openLocationGroup();
+    fireEvent.click(screen.getByRole('link', { name: '采集工作台' }));
     expect(await screen.findByRole('heading', { name: '批量标点与配图' })).toBeVisible();
   });
 
-  it('preserves queued image Files across top-level admin tabs and pauses hidden workspace reads', async () => {
+  it('preserves queued image Files across admin pages and pauses hidden workspace reads', async () => {
     URL.createObjectURL = vi.fn(() => 'blob:queued'); URL.revokeObjectURL = vi.fn();
-    const { container } = renderAtRoute(<Admin />);
-    fireEvent.click(screen.getByRole('button', { name: '图寻管理' }));
+    const { container } = renderAdmin('/admin/location/capture');
     await screen.findByRole('heading', { name: '批量标点与配图' });
     fireEvent.change(screen.getByLabelText('采集批次名称'), { target: { value: '保留此批次' } });
     const input = container.querySelector('input[type="file"][multiple]')!;
@@ -113,14 +129,17 @@ describe('location administration workspace', () => {
     fireEvent.change(input, { target: { files: [new File(['pending'], 'pending.png', { type: 'image/png' })] } });
     await screen.findByText('pending.png');
     const before = get.mock.calls.length;
-    fireEvent.click(screen.getByRole('button', { name: '选手管理' }));
+    fireEvent.click(screen.getByRole('link', { name: '选手库' }));
+    expect(await screen.findByText('Players placeholder')).toBeVisible();
     await new Promise(resolve => setTimeout(resolve, 20));
     expect(get.mock.calls).toHaveLength(before);
     expect(URL.revokeObjectURL).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole('button', { name: '图寻管理' }));
+    openLocationGroup();
+    fireEvent.click(screen.getByRole('link', { name: '采集工作台' }));
     expect(screen.getByLabelText('采集批次名称')).toHaveValue('保留此批次');
     expect(screen.getByText('pending.png')).toBeVisible();
   });
+
 
   it('opens a new independent image question from an existing point without copying its question identity', async () => {
     HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
@@ -139,9 +158,9 @@ describe('location administration workspace', () => {
     post.mockImplementation(async (url: string) => ({ data: url.endsWith('/assets')
       ? { url: '/new.webp', thumbnailUrl: '/new-thumb.webp', hash: 'new-hash' }
       : { ...original, id: 'new-photo' } }));
-    renderWithProviders(<AdminLocation />);
+    const view = renderWithProviders(<AdminLocation />);
     await screen.findByRole('heading', { name: '批量标点与配图' });
-    fireEvent.click(screen.getByRole('button', { name: '题目管理' }));
+    view.rerender(<AdminLocation tab="questions" />);
     fireEvent.click(await screen.findByRole('button', { name: '同点位新增图片题' }));
     expect(screen.getByLabelText('世界坐标 X')).toHaveValue(-223.2);
     expect(screen.getByLabelText('世界坐标 X')).toHaveAttribute('readonly');
@@ -160,38 +179,35 @@ describe('location administration workspace', () => {
     expect(input).not.toHaveProperty('id'); expect(input).not.toHaveProperty('version');
   });
   it('starts with capture and loads image checks only when requested', async () => {
-    renderWithProviders(<AdminLocation />);
+    const view = renderWithProviders(<AdminLocation />);
     expect(
       await screen.findByRole('heading', { name: '批量标点与配图' })
     ).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '采集工作台' })).toHaveAttribute(
-      'aria-current',
-      'page'
-    );
     expect(get).not.toHaveBeenCalledWith('/admin/location/checks');
-    fireEvent.click(screen.getByRole('button', { name: '题库检查' }));
+    view.rerender(<AdminLocation tab="checks" />);
     await waitFor(() =>
       expect(get).toHaveBeenCalledWith('/admin/location/checks')
     );
-    expect(await screen.findByText('缺失图片: 0')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '题目管理' }));
+    const missing = await screen.findByText('缺失图片');
+    expect(within(missing.closest('li')!).getByText('0')).toBeInTheDocument();
+    view.rerender(<AdminLocation tab="questions" />);
     expect(await screen.findByText(/当前没有符合条件的题目/)).toBeInTheDocument();
   });
 
   it('keeps capture work mounted across tabs and offers structured map controls', async () => {
-    const { container } = renderWithProviders(<AdminLocation />);
+    const { container, rerender } = renderWithProviders(<AdminLocation />);
     await screen.findByRole('heading', { name: '批量标点与配图' });
     fireEvent.change(screen.getByLabelText('采集批次名称'), {
       target: { value: '我的采集' },
     });
-    fireEvent.click(screen.getByRole('button', { name: '地图管理' }));
+    rerender(<AdminLocation tab="maps" />);
     expect(screen.queryByLabelText('雷达原点 X')).not.toBeInTheDocument();
     expect(screen.getByText('自动计算的原点与比例（只读）')).toBeInTheDocument();
     expect(screen.getAllByText('等待基准点：至少需要三个分散、不共线的点。').length).toBeGreaterThan(0);
     expect(
       container.querySelector('.location-batch-capture')
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: '采集工作台' }));
+    rerender(<AdminLocation tab="capture" />);
     expect(screen.getByLabelText('采集批次名称')).toHaveValue('我的采集');
   });
 });

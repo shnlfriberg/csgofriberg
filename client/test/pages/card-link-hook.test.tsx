@@ -45,16 +45,18 @@ beforeEach(() => {
 });
 afterEach(() => { vi.useRealTimers(); });
 describe("card command recovery", () => {
-  it('refreshes expired PoW, reconnects and resubscribes instead of silently losing live updates', async () => {
+  it('refreshes an expired session, reconnects and resubscribes without any socket PoW step', async () => {
     mocks.socket.connected = true;
+    mocks.auth.mockResolvedValue(true);
     let watches = 0;
     mocks.socket.emit.mockImplementation((event, _body, ack) => {
       if (event === 'card-link:watch') ack(null, ++watches === 1
-        ? { ok: false, code: 'POW_REQUIRED' } : { ok: true, data: snapshot('a', 2) });
+        ? { ok: false, code: 'AUTH_EXPIRED' } : { ok: true, data: snapshot('a', 2) });
     });
     const hook = renderHook(() => useCardGame('a'));
     await waitFor(() => expect(mocks.socket.connect).toHaveBeenCalledTimes(1));
-    expect(mocks.pow).toHaveBeenCalledWith(true);
+    expect(mocks.auth).toHaveBeenCalled();
+    expect(mocks.pow).not.toHaveBeenCalled();
     const onConnect = mocks.socket.on.mock.calls.find(([name]) => name === 'connect')![1];
     await act(async () => onConnect());
     await waitFor(() => expect(hook.result.current.realtimeReady).toBe(true));

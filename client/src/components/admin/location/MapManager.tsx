@@ -5,6 +5,7 @@ import type { Guess, MapDefinition } from '../../../location/types';
 import { locationAdmin } from './api';
 import { useAdminTask } from './useAdminTask';
 import PositionCodeInput from './PositionCodeInput';
+import { Save } from 'lucide-react';
 import { parseWorldPosition } from '../../../location/positionCode';
 import {
   fitCalibration,
@@ -45,19 +46,44 @@ export default function MapManager({
   }, [draft]);
   return (
     <div className="location-admin-grid">
-      <div className="location-admin-list">
+      <nav className="admin-panel location-map-list" aria-label={t('location.maps')}>
         {maps.map((map) => (
           <button
-            className={`btn ${map.id === draft.id ? '' : 'btn-ghost'}`}
+            type="button"
+            className="location-map-item"
+            aria-pressed={map.id === draft.id}
             key={map.id}
             disabled={task.busy}
             onClick={() => choose(map)}
           >
-            {map.name} · {map.enabled ? '●' : '○'}
+            <span className="location-map-item-name">{map.name}</span>
+            <span className={`location-map-item-state${map.enabled ? ' is-on' : ''}`}>
+              {map.enabled ? t('adminUi.mapOpen') : t('adminUi.mapClosed')} · v{map.version}
+            </span>
           </button>
         ))}
-      </div>
+      </nav>
       <div className="location-admin-editor">
+        <header className="admin-panel location-map-head">
+          <div>
+            <h2>{draft.name} <small>v{draft.version}</small></h2>
+            <p>{t('location.mapVersionHelp')}</p>
+          </div>
+          <button
+            className="btn btn-sm"
+            disabled={task.busy}
+            onClick={() =>
+              void task.run(async () => {
+                const saved = await locationAdmin.saveMap(calibrated);
+                setDraft(saved);
+                await onChanged();
+                task.setNotice(t('location.saved'));
+              })
+            }
+          >
+            <Save size={15} aria-hidden="true" />{t('location.save')}
+          </button>
+        </header>
         {task.error && (
           <p className="location-alert" role="alert">
             {task.error}
@@ -315,21 +341,6 @@ export default function MapManager({
             {t('location.applyMapConfig')}
           </button>
         </details>
-        <p className="muted">{t('location.mapVersionHelp')}</p>
-        <button
-          className="btn"
-          disabled={task.busy}
-          onClick={() =>
-            void task.run(async () => {
-              const saved = await locationAdmin.saveMap(calibrated);
-              setDraft(saved);
-              await onChanged();
-              task.setNotice(t('location.saved'));
-            })
-          }
-        >
-          {t('location.save')}
-        </button>
       </div>
     </div>
   );
