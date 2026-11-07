@@ -66,7 +66,11 @@ x-app-service: &app-service
   environment: *app-environment
   read_only: true
   volumes:
-    - location-assets:/app/location-assets
+    - type: bind
+      source: ./data/location-assets
+      target: /app/location-assets
+      bind:
+        create_host_path: false
   tmpfs:
     - /tmp:size=16m,mode=1777
   mem_limit: 512m
@@ -124,7 +128,11 @@ services:
     command: ["server/dist/location/importBank.js", "/release/initial-bank.zip"]
     read_only: true
     volumes:
-      - location-assets:/app/location-assets
+      - type: bind
+        source: ./data/location-assets
+        target: /app/location-assets
+        bind:
+          create_host_path: false
       - type: bind
         source: ${LOCATION_BANK_FILE:-./.local-data/location-release/initial-bank.zip}
         target: /release/initial-bank.zip
@@ -195,4 +203,3 @@ services:
 
 volumes:
   redis-data:
-  location-assets:
