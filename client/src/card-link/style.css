@@ -1,6 +1,6 @@
+/* Same entertainment content width as 图寻 and 海龟汤; the header spans the window. */
 .cl-page {
-  max-width: 1280px;
-  margin: auto;
+  --content-max: 80rem;
 }
 .cl-toolbar,
 .cl-players {
@@ -15,8 +15,8 @@
 .cl-toolbar select,
 .cl-search {
   padding: 9px 12px;
-  border: 1px solid #8886;
-  border-radius: 9px;
+  border: 1px solid var(--border-strong, var(--border));
+  border-radius: var(--radius);
   background: var(--input-bg, var(--card));
   color: var(--text);
 }
@@ -24,9 +24,9 @@
   width: min(100%, 450px);
 }
 /* Lobby entries are home-style menu cards (see .ent-menu-grid) under the page subtitle. */
-.cl-modes.ent-menu-grid { margin: 0; }
+
 .cl-page .single-lobby-subtitle { margin-bottom: 4px; }
-.cl-mode { font: inherit; cursor: pointer; text-align: center; }
+.cl-mode { font: inherit; cursor: pointer; text-align: left; }
 .cl-mode:disabled { opacity: 0.45; }
 .cl-rules-entry { display: flex; justify-content: center; margin-top: 16px; }
 .cl-game-page .cl-rules-entry { margin-top: 8px; }
@@ -106,9 +106,9 @@
 }
 .cl-error {
   padding: 12px;
-  background: #a5313126;
-  border: 1px solid #c45555;
-  border-radius: 8px;
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
 }
 .cl-insert-control { display: flex; align-items: center; gap: 8px; }
 .cl-results { margin-top: 8px; }
@@ -138,12 +138,6 @@
   .cl-game-page .cl-toolbar,
   .cl-game-page .cl-players { margin-block: 3px; }
 }
-.cl-history {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-}
 .cl-admin textarea {
   width: 100%;
   min-height: 320px;
@@ -168,9 +162,6 @@
   .cl-board {
     padding: 18px 8px;
   }
-  .cl-history {
-    flex-wrap: wrap;
-  }
 }
 /* Phones/tablets in a round: one-line header and rules, smaller toolbars, cards sized by CSS below. */
 @media (max-width: 899px) {
@@ -189,3 +180,32 @@
   .cl-game-page summary { font-size: 12px; }
   .cl-game-page .cl-slot { width: 24px; }
 }
+/* Ranked leaderboard: a compact ranked list instead of loose paragraphs. */
+.cl-rankings { padding: 14px 16px; }
+.cl-rankings-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cl-rankings-heading h3 { margin: 0; font-size: 15px; }
+.cl-rankings-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+.cl-rankings-list li {
+  display: grid;
+  grid-template-columns: 3rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.cl-rankings-list li:last-child { border-bottom: 0; }
+.cl-rankings-list strong { overflow-wrap: anywhere; }
+.cl-rankings-rank { color: var(--text-light); }
+.cl-rankings-rating { color: var(--primary-strong); font-weight: 700; }
+/* Multiplayer page: create / random match / join, laid out like the 图寻 and classic lobbies. */
+.cl-multi { display: grid; gap: 10px; min-width: 0; }
+.cl-multi > .cl-setup-heading { width: min(61.25rem, 100%); margin-inline: auto; }
+.cl-lobby-grid { width: 100%; }
+.cl-lobby-grid .card { margin: 0; }
+.cl-lobby-grid .card > h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; }
+.cl-lobby-grid .card > .muted { margin: 0 0 8px; }
+.cl-match-action { flex-wrap: wrap; align-items: center; gap: 10px; }
+.cl-searching,
+.cl-queued-status { display: flex; align-items: center; gap: 8px; margin: 0; }
+.cl-queued-status { flex-wrap: wrap; justify-content: center; }

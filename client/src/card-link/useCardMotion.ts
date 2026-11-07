@@ -3,8 +3,11 @@ import { getMotionEnabled, subscribeMotion } from "../store/motion";
 
 type Snapshot = { rect: DOMRect; node: HTMLElement; area: string };
 const reducedQuery = "(prefers-reduced-motion: reduce)";
+// One shared MediaQueryList instead of a new matchMedia() call on every render.
+let reducedMedia: MediaQueryList | null = null;
+const reducedList = () => (reducedMedia ??= window.matchMedia(reducedQuery));
 const subscribeReduced = (listener: () => void) => {
-  const media = window.matchMedia(reducedQuery);
+  const media = reducedList();
   media.addEventListener("change", listener);
   return () => media.removeEventListener("change", listener);
 };
@@ -24,7 +27,7 @@ export function useCardMotion(roundKey: string, layoutKey: string) {
   );
   const reduced = useSyncExternalStore(
     subscribeReduced,
-    () => window.matchMedia(reducedQuery).matches,
+    () => reducedList().matches,
     () => true,
   );
 
@@ -39,6 +42,12 @@ export function useCardMotion(roundKey: string, layoutKey: string) {
     const container = root.current;
     if (!container) return;
     cancel();
+    // Animations off: skip measuring every card (forced layout) on each render.
+    if (!enabled || reduced) {
+      previous.current = new Map();
+      previousRound.current = roundKey;
+      return;
+    }
     const fresh = new Map<string, Snapshot>();
     for (const node of container.querySelectorAll<HTMLElement>(
       "[data-cl-card]",

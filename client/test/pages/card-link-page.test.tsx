@@ -8,6 +8,11 @@ import type { View } from '../../src/card-link/types';
 const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn(), reload: vi.fn(), game: vi.fn(), setError: vi.fn() }));
 vi.mock('../../src/api/client', () => ({ api: mocks, errMsg: () => 'Failed' }));
 vi.mock('../../src/card-link/useCardGame', () => ({ useCardGame: mocks.game }));
+const socketMock = vi.hoisted(() => ({ handlers: new Map<string, (...args: any[]) => void>() }));
+vi.mock('../../src/api/socket', () => ({ getSocket: () => ({
+  on: (event: string, fn: (...args: any[]) => void) => socketMock.handlers.set(event, fn),
+  off: (event: string) => socketMock.handlers.delete(event),
+}) }));
 vi.mock('../../src/card-link/useCardMotion', () => ({ useCardMotion: () => ({ current: null }) }));
 const route = (suffix = '') => renderAtRoute(<CardLink />, { route: `/entertainment/card-link${suffix}`, path: '/entertainment/card-link' });
 let game: View;
@@ -37,14 +42,24 @@ describe('card page resume and clock isolation', () => {
     mocks.post.mockImplementation(() => new Promise(resolve => { release = resolve; }));
     const page = route('?menu=ranked');
     await act(async () => {});
+    // The pairing is pushed; the heartbeat only renews the lease every 5 seconds.
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
+    expect(mocks.post).not.toHaveBeenCalled();
+    await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
     expect(mocks.post).toHaveBeenCalledWith('/card-link/queue/heartbeat', { ticket: 'queue-ticket-1' });
-    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(12000); });
     expect(mocks.post).toHaveBeenCalledTimes(1);
     page.unmount();
     expect(mocks.delete).toHaveBeenCalledWith('/card-link/queue', { data: { ticket: 'queue-ticket-1' } });
     await act(async () => { release({ data: { queued: true } }); await vi.advanceTimersByTimeAsync(10000); });
     expect(mocks.post).toHaveBeenCalledTimes(1);
+  });
+  it('enters a ranked match pushed by the server without polling for it', async () => {
+    mocks.get.mockImplementation(async path => ({ data: path.endsWith('/config') ? { enabled: true } : { queued: true, ticket: 'queue-ticket-2', id: null } }));
+    route('?menu=ranked');
+    await waitFor(() => expect(socketMock.handlers.has('room-kernel:found')).toBe(true));
+    act(() => socketMock.handlers.get('room-kernel:found')!({ game: 'card-link', roomId: 'pushed-room' }));
+    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('pushed-room'));
   });
   it('shows ranked ready confirmation without a host start button and displays the offline grace countdown', async () => {
     vi.useFakeTimers();
