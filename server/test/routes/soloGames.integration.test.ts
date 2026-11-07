@@ -15,7 +15,7 @@ import { loadGame } from '../../src/location/store';
 import { seedLocationFixtures } from '../location/database';
 
 /**
- * 图寻 单人 on the shared single-player API: classic-style start
+ * 图寻 单人 and 海龟汤 on the shared single-player API: classic-style start
  * (create or resume per identity, mode and variant), dispatch of /:id routes by
  * the owning variant, and the compact response formats.
  */
@@ -127,6 +127,24 @@ describe('single-player API for entertainment variants', () => {
     expect((await request(cookie, `/game/${daily.id}/state`)).data.code).toBe('GAME_NOT_FOUND');
     const started = await request(cookie, '/game/start', { variant: 'location', mode: 'normal' });
     expect((await request(cookie, `/game/${started.data.gameId}/guess`, { playerId: 1 })).status).toBe(400);
+  });
+
+  it('answers every new 海龟汤 write with a delta and replays with the full view', async () => {
+    const { cookie } = guest();
+    const game = (await request(cookie, '/game/start', { mode: 'beginner', variant: 'turtle-soup' })).data;
+    const body = { field: 'age', value: 25, version: 0, requestId: randomUUID() };
+    const delta = await request(cookie, `/game/${game.gameId}/question`, body);
+    expect(delta.data).toMatchObject({ gameId: game.gameId, variant: 'turtle-soup', base: 0, version: 1, questionCount: 1,
+      remainingQuestions: 23, event: { type: 'question', field: 'age', requestId: body.requestId } });
+    expect(delta.data.events).toBeUndefined();
+    const replay = await request(cookie, `/game/${game.gameId}/question`, body);
+    expect(replay.data.base).toBeUndefined();
+    expect(replay.data.events).toHaveLength(1);
+    const next = await request(cookie, `/game/${game.gameId}/question`, { field: 'age', value: 30, version: 1, requestId: randomUUID() });
+    expect(next.data).toMatchObject({ gameId: game.gameId, base: 1, version: 2, event: { value: 30 } });
+    const state = await request(cookie, `/game/${game.gameId}/state`);
+    expect(state.data.events).toHaveLength(2);
+    await request(cookie, `/game/${game.gameId}/exit`, {});
   });
 
 });

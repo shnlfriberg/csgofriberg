@@ -3,7 +3,7 @@ import axios from 'axios';
 import { api, errMsg } from '../api/client';
 import { useAuth } from '../store/auth';
 import { ensureGuestSession } from '../api/session';
-import type { SoupGame, SoupOptions } from '../turtleSoup';
+import { mergeSoup, type SoupGame, type SoupOptions, type SoupResponse } from '../turtleSoup';
 
 type Pending = { gameId: string; action: 'question' | 'guess' | 'giveup'; body: Record<string, unknown> };
 type Session = { gameId?: string; pending?: Pending };
@@ -68,7 +68,8 @@ export function useTurtleSoup(mode: string) {
       if (stored.pending) {
         if (!next.events.some((event) => event.requestId === stored.pending!.body.requestId)) {
           try {
-            next = (await api.post<SoupGame>(`/game/${stored.pending.gameId}/${stored.pending.action}`, stored.pending.body)).data;
+            const res = await api.post<SoupResponse>(`/game/${stored.pending.gameId}/${stored.pending.action}`, stored.pending.body);
+            next = mergeSoup(next, res.data) ?? (await api.get<SoupGame>(`/game/${stored.gameId}/state`)).data;
           } catch (err) {
             if (!alive()) return;
             if (uncertain(err)) { accept(next, true); throw err; }
@@ -114,9 +115,13 @@ export function useTurtleSoup(mode: string) {
     const operation: Pending = { gameId: current.gameId, action, body: { ...body, requestId: crypto.randomUUID(), version: current.version } };
     save({ gameId: current.gameId, pending: operation });
     try {
-      const res = await api.post<SoupGame>(`/game/${current.gameId}/${action}`, operation.body);
+      const res = await api.post<SoupResponse>(`/game/${current.gameId}/${action}`, operation.body);
       if (!alive()) return false;
-      accept(res.data);
+      // A delta that does not follow the held version (another tab or device
+      // moved the game on) is replaced by the authoritative state.
+      const next = mergeSoup(current, res.data) ?? (await api.get<SoupGame>(`/game/${current.gameId}/state`)).data;
+      if (!alive()) return false;
+      accept(next);
       setError(null);
       return true;
     } catch (err) {

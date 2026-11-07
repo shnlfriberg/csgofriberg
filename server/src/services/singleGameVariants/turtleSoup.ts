@@ -9,7 +9,7 @@ import { invalidateCached } from '../queryCache';
 import { deleteSingleGame, saveSingleGame, type SingleGameState } from '../singleGameStore';
 import { shouldPersistSingleSettlement } from '../singleSettlementLimit';
 import { globalStatsCacheKeysForDifficulty, personalStatsCacheKeysForDifficulty } from '../statsCache';
-import { askSoup, createSoup, guessSoup, soupAnswer, soupMutationSchema, soupQuestionSchema, soupView } from '../turtleSoup';
+import { askSoup, createSoup, guessSoup, soupAnswer, soupDelta, soupMutationSchema, soupQuestionSchema, soupView } from '../turtleSoup';
 import type { SingleGameVariantHandler } from './types';
 
 const soupGuessSchema = soupMutationSchema.extend({ playerId: z.number().int().positive() });
@@ -78,7 +78,9 @@ async function mutateSoup(game: SingleGameState, action: 'question' | 'guess' | 
   soup.requests[input.requestId] = fingerprint;
   await saveSingleGame(game);
   if (soup.status !== 'playing') await settleSoup(game);
-  return soupView(game);
+  // Only a newly applied write answers with a delta on its version; replays
+  // above (and start/state) return the full view.
+  return soupDelta(game, input.version);
 }
 
 export const turtleSoupSingleGameHandler: SingleGameVariantHandler = {

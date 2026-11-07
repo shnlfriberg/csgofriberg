@@ -93,8 +93,8 @@ describe('turtle soup API, persistence and isolation', () => {
     expect((await request(`/game/${game.gameId}/giveup`, cookie, {})).data.code).toBe('VALIDATION_FAILED');
     expect((await request(`/game/${game.gameId}/state`, cookie)).data.version).toBe(0);
     const asked = await request(`/game/${game.gameId}/question`, cookie, mutation(0, { field: 'age', value: stored.soup.target.age }));
-    expect(asked.data.events[0]).toMatchObject({ level: 'correct', type: 'question' });
-    expect(asked.data.events[0]).not.toHaveProperty('hint');
+    expect(asked.data).toMatchObject({ base: 0, version: 1, event: { level: 'correct', type: 'question' } });
+    expect(asked.data.event).not.toHaveProperty('hint');
     expect((await request(`/game/${game.gameId}/guess`, cookie, { playerId: stored.targetPlayerId })).data.code).toBe('VALIDATION_FAILED');
     const otherId = getEnabledPlayers().find((p) => p.id !== stored.targetPlayerId)!.id;
     const wrong = await request(`/game/${game.gameId}/guess`, cookie, mutation(1, { playerId: otherId }));
@@ -120,8 +120,10 @@ describe('turtle soup API, persistence and isolation', () => {
     const { cookie } = guest(); const game = await start(cookie); const stored = await state(game.gameId);
     const body = mutation(0, { playerId: stored.targetPlayerId });
     const result = await request(`/game/${game.gameId}/guess`, cookie, body);
-    expect(result.data).toMatchObject({ status: 'won', questionCount: 0, guessCount: 1, remainingQuestions: 23 });
-    expect((await request(`/game/${game.gameId}/guess`, cookie, body)).data).toEqual(result.data);
+    expect(result.data).toMatchObject({ status: 'won', questionCount: 0, guessCount: 1, remainingQuestions: 23, base: 0 });
+    const replayed = (await request(`/game/${game.gameId}/guess`, cookie, body)).data;
+    expect(replayed).toMatchObject({ status: 'won', questionCount: 0, guessCount: 1, version: 1, answer: result.data.answer });
+    expect(replayed.events).toEqual([result.data.event]);
     const stats = await request('/stats/me?variant=turtle-soup', cookie);
     expect(stats.data.countMetric).toBe('attempts');
     expect(stats.data.personal).toMatchObject({ wins: 1, avgGuesses: 1, bestGuesses: 1 });
@@ -142,7 +144,8 @@ describe('turtle soup API, persistence and isolation', () => {
     const final = await request(`/game/${game.gameId}/question`, cookie, finalQuestion);
     expect(final.data).toMatchObject({ status: 'lost', questionCount: 1, guessCount: 23, remainingQuestions: 0, recorded: true });
     expect(final.data.answer.id).toBe(stored.targetPlayerId);
-    expect((await request(`/game/${game.gameId}/question`, cookie, finalQuestion)).data).toEqual(final.data);
+    expect((await request(`/game/${game.gameId}/question`, cookie, finalQuestion)).data)
+      .toMatchObject({ status: 'lost', questionCount: 1, guessCount: 23, recorded: true, answer: final.data.answer });
     expect((await request(`/game/${game.gameId}/guess`, cookie, mutation(24, { playerId: stored.targetPlayerId }))).data.code).toBe('GAME_FINISHED');
     expect(await db('games').where({ session_id: game.gameId })).toHaveLength(1);
   });
@@ -158,8 +161,10 @@ describe('turtle soup API, persistence and isolation', () => {
     const final = await request(`/game/${game.gameId}/guess`, cookie, body);
     expect(final.data).toMatchObject({ status: correct ? 'won' : 'lost', remainingQuestions: 0, questionCount: 23, guessCount: 1, recorded: true });
     expect(final.data.answer.nickname).toBe(stored.soup.target.nickname);
-    expect((await request(`/game/${game.gameId}/guess`, cookie, body)).data).toEqual(final.data);
-    expect((await request(`/game/${game.gameId}/state`, cookie)).data).toEqual(final.data);
+    const replayed = (await request(`/game/${game.gameId}/guess`, cookie, body)).data;
+    expect(replayed).toMatchObject({ status: final.data.status, questionCount: 23, guessCount: 1, recorded: true, answer: final.data.answer });
+    expect(replayed.events.at(-1)).toEqual(final.data.event);
+    expect((await request(`/game/${game.gameId}/state`, cookie)).data).toEqual(replayed);
     expect((await request(`/game/${game.gameId}/guess`, guest().cookie, body)).status).toBe(404);
     const rows = await db('games').where({ session_id: game.gameId });
     expect(rows).toHaveLength(1); expect(rows[0].question_count).toBe(23); expect(rows[0].guess_count).toBe(1);
@@ -173,13 +178,13 @@ describe('turtle soup API, persistence and isolation', () => {
     try {
       player.age += 40;
       const asked = await request(`/game/${game.gameId}/question`, cookie, mutation(0, { field: 'age', value: originalAge - 1 }));
-      expect(asked.data.events[0]).toMatchObject({ level: 'close', hint: 'higher' });
+      expect(asked.data.event).toMatchObject({ level: 'close', hint: 'higher' });
       const win = await request(`/game/${game.gameId}/guess`, cookie, mutation(1, { playerId: player.id }));
       expect(win.data.answer.age).toBe(originalAge);
       const row = await db('games').where({ session_id: game.gameId }).first();
       const replay = await request(`/stats/games/${row.id}/replay`, cookie);
       expect(replay.data.answer.age).toBe(originalAge);
-      expect(replay.data.events).toEqual(win.data.events);
+      expect(replay.data.events).toEqual((await request(`/game/${game.gameId}/state`, cookie)).data.events);
       expect((await request(`/stats/games/${row.id}/replay`, guest().cookie)).status).toBe(404);
       const stats = await request('/stats/me?variant=turtle-soup&difficulties=beginner', cookie);
       expect(stats.data.personal).toMatchObject({ totalGames: 1, wins: 1, avgGuesses: 2, bestGuesses: 2 });
@@ -235,7 +240,8 @@ describe('turtle soup API, persistence and isolation', () => {
       const body = mutation(0);
       const result = await request(`/game/${game.gameId}/giveup`, cookie, body);
       expect(result.data).toMatchObject({ status: 'lost', recorded: index < 4 });
-      expect((await request(`/game/${game.gameId}/giveup`, cookie, body)).data).toEqual(result.data);
+      expect((await request(`/game/${game.gameId}/giveup`, cookie, body)).data)
+        .toMatchObject({ status: 'lost', recorded: index < 4, answer: result.data.answer });
     }
     expect(await db('games').where({ guest_key: key })).toHaveLength(4);
   });

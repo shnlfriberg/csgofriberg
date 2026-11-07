@@ -161,6 +161,35 @@ describe('Turtle Soup interactions', () => {
     expect(document.querySelector('.soup-counter')).toHaveTextContent('21 / 24');
   });
 
+  it('merges write deltas without re-reading the game', async () => {
+    renderGame(); await ready();
+    const reads = get.mock.calls.length;
+    post.mockResolvedValueOnce({ data: { gameId: 'soup1', variant: 'turtle-soup', base: 0, version: 1, status: 'playing',
+      remainingQuestions: 23, questionCount: 1, guessCount: 0, guessUnlocked: true,
+      event: { type: 'question', field: 'age', value: 25, level: 'close', requestId: 'q', elapsedMs: 1 } } });
+    await ask(); await ready();
+    expect(screen.getByText('接近')).toBeInTheDocument();
+    expect(document.querySelector('.soup-counter')).toHaveTextContent('23 / 24');
+    post.mockResolvedValueOnce({ data: { gameId: 'soup1', variant: 'turtle-soup', base: 1, version: 2, status: 'won',
+      remainingQuestions: 22, questionCount: 1, guessCount: 1, guessUnlocked: false, answer, recorded: true,
+      event: { type: 'guess', playerId: 2, nickname: 'Snapshot Answer', correct: true, requestId: 'g', elapsedMs: 2 } } });
+    await guess();
+    expect(await screen.findByRole('heading', { name: 'Snapshot Answer' })).toBeInTheDocument();
+    expect(post.mock.calls.at(-1)![1].version).toBe(1);
+    expect(get.mock.calls.length).toBe(reads);
+  });
+
+  it('reads the authoritative state when a delta does not follow the version on screen', async () => {
+    renderGame(); await ready();
+    state = { ...base, version: 5, questionCount: 5, remainingQuestions: 19 };
+    post.mockResolvedValueOnce({ data: { gameId: 'soup1', variant: 'turtle-soup', base: 4, version: 5, status: 'playing',
+      remainingQuestions: 19, questionCount: 5, guessCount: 0, guessUnlocked: true,
+      event: { type: 'question', field: 'age', value: 25, level: 'close', requestId: 'late', elapsedMs: 1 } } });
+    await ask(); await ready();
+    expect(get).toHaveBeenLastCalledWith('/game/soup1/state');
+    expect(document.querySelector('.soup-counter')).toHaveTextContent('19 / 24');
+  });
+
   it('prepends new feedback with its original number and scrolls only the history window', async () => {
     const savedEvents: SoupGame['events'] = [
       { type: 'question', field: 'age', value: 25, level: 'close', requestId: 'q1', elapsedMs: 1 },

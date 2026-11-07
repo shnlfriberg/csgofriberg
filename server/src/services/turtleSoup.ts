@@ -81,6 +81,29 @@ export function soupView(game: { id: string; mode: string; soup?: SoupState }) {
   };
 }
 
+/**
+ * Game protocol v2 response for one accepted write: the new event and counters
+ * on top of version `base`, instead of the whole event log. The answer and the
+ * recorded flag are included once the game ends.
+ */
+export function soupDelta(game: { id: string; soup?: SoupState }, base: number) {
+  const soup = game.soup!;
+  const view = soupView({ ...game, mode: '' });
+  return {
+    gameId: game.id,
+    variant: 'turtle-soup' as const,
+    base,
+    version: soup.version,
+    status: soup.status,
+    remainingQuestions: view.remainingQuestions,
+    questionCount: soup.questionCount,
+    guessCount: soup.guessCount,
+    guessUnlocked: view.guessUnlocked,
+    event: soup.events[soup.events.length - 1],
+    ...(soup.status === 'playing' ? {} : { answer: view.answer, recorded: soup.recorded }),
+  };
+}
+
 export function soupReplay(game: {
   id: number; mode: string; status: string; question_count: number; guess_count: number;
   created_at: string; finished_at: string; answer_snapshot: string; soup_events: string;
