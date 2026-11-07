@@ -37,3 +37,6 @@ integration/source-archives/
 
 # Internal handoff and implementation notes stay local (not tracked).
 docs/*.md
+
+# Release content snapshots (ZIP/SQLite archives) are distributed outside Git.
+release-data/
