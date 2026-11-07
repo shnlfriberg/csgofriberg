@@ -334,6 +334,7 @@ const words = {
   pendingAnswer: ['答案尚未确认送达，可重试提交同一答案。', 'Your answer was not confirmed. Retry sending the same answer.', '回答の送信を確認できません。同じ回答を再送できます。'],
 } as const;
 const errors = {
+  LOCATION_SUBMISSIONS_DISABLED: ['图寻投稿暂未开放。', 'Tuxun submissions are currently closed.', '图寻の投稿は現在受け付けていません。'],
   LOCATION_SUBMISSION_NOT_FOUND: ['投稿已不存在，可能已被审核，请刷新列表。', 'Submission no longer exists. It may have been reviewed; refresh the list.', '投稿は存在しません。審査済みの場合があります。更新してください。'],
   LOCATION_SUBMISSION_REVIEWED: ['投稿已被采纳，不能再拒绝；请到题目管理中操作。', 'Already accepted. Manage the question in the question bank.', '採用済みです。問題管理で操作してください。'],
   LOCATION_SUBMISSION_LIMIT: ['你的待审核投稿已达 100 条，请等待审核后再投稿。', 'You have 100 pending submissions. Wait for review before adding more.', '審査待ちが100件に達しています。審査をお待ちください。'],

@@ -10,6 +10,7 @@ const LocationHistory = lazy(() => import('./pages/LocationHistory'));
 const LocationSubmission = lazy(() => import('./pages/LocationSubmission'));
 const TurtleSoupGame = lazy(() => import('./pages/TurtleSoupGame'));
 import { createBrowserRouter, Navigate, Outlet } from 'react-router-dom';
+import { LOCATION_SUBMISSIONS_ENABLED } from './config/features';
 import { useAuth } from './store/auth';
 import Home from './pages/Home';
 import Login from './pages/Login';
@@ -62,7 +63,8 @@ export const router = createBrowserRouter([
       { path: '/entertainment', element: <Entertainment /> },
       { path: '/entertainment/location', element: <LocationMenu /> },
       { path: '/entertainment/card-link', element: <CardLink /> },
-      { path: '/entertainment/location/submit', element: <LocationSubmission /> },
+      // 图寻 submissions are disabled; the page is kept and the route returns to the 图寻 menu.
+      { path: '/entertainment/location/submit', element: LOCATION_SUBMISSIONS_ENABLED ? <LocationSubmission /> : <Navigate to="/entertainment/location" replace /> },
       { path: '/entertainment/location/random', element: <LocationGame mode="random" /> },
       { path: '/entertainment/location/daily', element: <LocationGame mode="daily" /> },
       { path: '/entertainment/location/multi', element: <LocationMulti /> },

@@ -35,9 +35,9 @@ beforeEach(() => {
 });
 
 describe('community question UI', () => {
-  it('places a small submission link below location modes', () => {
+  it('hides the submission entry while submissions are disabled (the page itself is kept)', () => {
     renderAtRoute(<LocationMenu />);
-    expect(screen.getByRole('link', { name: '图寻题目投稿' })).toHaveAttribute('href', '/entertainment/location/submit');
+    expect(screen.queryByRole('link', { name: '图寻题目投稿' })).toBeNull();
   });
   it('shows persistent rules for guests and requires a cropped image and object pin before submission', async () => {
     class PreviewImage {

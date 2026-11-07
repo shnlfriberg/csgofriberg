@@ -145,7 +145,8 @@ describe('location pages', () => {
       .toEqual(['/entertainment/location/daily', '/entertainment/location/random', '/entertainment/location/multi']);
     expect(screen.getByRole('link', { name: /娱乐模式/ })).toHaveAttribute('href', '/entertainment');
     expect(container.querySelector('a[href="/entertainment/location/history"]')).not.toBeInTheDocument();
-    expect(container.querySelector('a[href="/entertainment/location/submit"]')).toBeInTheDocument();
+    // Submissions are disabled; the entry is hidden while the page code is kept.
+    expect(container.querySelector('a[href="/entertainment/location/submit"]')).not.toBeInTheDocument();
   });
   it('keeps the location rules trigger inside each single-player mode page', async () => {
     renderAtRoute(<LocationGame mode="random" />);

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Page from '../components/Page';
 import MenuCard from '../components/MenuCard';
 import '../styles/location.css';
+import { LOCATION_SUBMISSIONS_ENABLED } from '../config/features';
 
 export default function LocationMenu() {
   const { t } = useTranslation();
@@ -20,7 +21,7 @@ export default function LocationMenu() {
       {items.map((item) => <MenuCard key={item.path} to={`/entertainment/location/${item.path}`} className="location-mode-card"
         icon={<item.icon size={22} />} label={t(`location.${item.title}`)} description={t(`location.${item.description}`)} color={item.accent} />)}
     </div>
-    <div className="location-submission-entry"><Link className="btn btn-ghost btn-sm" to="/entertainment/location/submit"><UploadCloud size={15} aria-hidden="true" /><span>{t('location.submissionTitle')}</span></Link></div>
+    {LOCATION_SUBMISSIONS_ENABLED && <div className="location-submission-entry"><Link className="btn btn-ghost btn-sm" to="/entertainment/location/submit"><UploadCloud size={15} aria-hidden="true" /><span>{t('location.submissionTitle')}</span></Link></div>}
     <p className="muted location-footer-note">{t('location.officialGuest')}</p>
   </Page>;
 }

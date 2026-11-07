@@ -103,6 +103,8 @@ export const config = {
   powChallengeTtlSeconds: Number(process.env.POW_CHALLENGE_TTL_SECONDS || 120),
   powTokenTtlSeconds: Number(process.env.POW_TOKEN_TTL_SECONDS || 600),
   showLeaderboard: process.env.SHOW_LEADERBOARD !== 'false',
+  /** 图寻 player submissions are disabled unless explicitly enabled (code kept). */
+  locationSubmissionsEnabled: process.env.LOCATION_SUBMISSIONS_ENABLED === 'true',
   umami: resolveUmamiConfig({
     websiteId: process.env.UMAMI_WEBSITE_ID,
     scriptUrl: process.env.UMAMI_SCRIPT_URL,

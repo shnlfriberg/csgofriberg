@@ -22,6 +22,11 @@ router.get('/leaderboard',
     res.json(await contributorLeaderboard(requestOwner(req), Number(req.query.page)));
   }));
 router.post('/',
+  // Submissions are switched off by default; existing pending items stay reviewable by admins.
+  (_req, _res, next) => {
+    if (!config.locationSubmissionsEnabled) throw new HttpError(403, 'LOCATION_SUBMISSIONS_DISABLED');
+    next();
+  },
   rateLimit({ name: 'location-submission-ip', limit: SUBMISSION_LIMITS.ipPerHour, windowSeconds: 3600, failClosed: true }),
   rateLimit({ name: 'location-submission-identity', limit: SUBMISSION_LIMITS.identityPerHour, windowSeconds: 3600, key: requestIdentity, failClosed: true }),
   validateQuery(submissionInput),

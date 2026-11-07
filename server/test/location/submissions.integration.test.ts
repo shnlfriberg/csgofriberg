@@ -40,6 +40,8 @@ describe('community question submissions', () => {
   }
   function cookie(owner: Identity) { return `csgofriberg_guest=${jwt.sign({ typ: 'guest', key: owner.key.slice(2) }, config.jwtSecret, { expiresIn: '1h' })}`; }
   beforeAll(async () => {
+    // The feature is disabled by default; these tests exercise the kept code path.
+    config.locationSubmissionsEnabled = true;
     await initDb(); await initRedis();
     await db('location_maps').insert({ id: map.id, payload: JSON.stringify(map) });
     for (const role of ['admin', 'user']) {
@@ -68,6 +70,20 @@ describe('community question submissions', () => {
     await db('location_maps').where({ id: map.id }).delete();
     await db('users').whereIn('id', users).delete();
     await Promise.all([...assets].map(url => fs.rm(assetPath(url), { force: true })));
+  });
+  it('rejects new uploads while submissions are disabled', async () => {
+    config.locationSubmissionsEnabled = false;
+    try {
+      const data = input();
+      const image = await sharp({ create: { width: 360, height: 360, channels: 3, background: '#335577' } }).png().toBuffer();
+      const response = await fetch(base + '/api/location/submissions?' + new URLSearchParams(Object.entries(data).map(([k, v]) => [k, String(v)])), {
+        method: 'POST', headers: { Cookie: cookie(guest), 'Content-Type': 'image/png' }, body: image,
+      });
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ code: 'LOCATION_SUBMISSIONS_DISABLED' });
+    } finally {
+      config.locationSubmissionsEnabled = true;
+    }
   });
   it('allows guest uploads larger than the generic body limit, crops them and isolates pending submissions', async () => {
     const data = input();
