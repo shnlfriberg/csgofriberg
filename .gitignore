@@ -34,3 +34,6 @@ server/scripts/connect-local-scraper.ts
 爬取并提交审核.cmd
 爬虫预览.cmd
 integration/source-archives/
+
+# Internal handoff and implementation notes stay local (not tracked).
+docs/*.md
