@@ -4,6 +4,8 @@ import fs from 'fs/promises';
 import { randomUUID, createHash } from 'crypto';
 import { HttpError } from '../middleware/common';
 import { processLocationImage, type AssetPurpose } from './imageProcessing';
+import { withKeyLock } from './lock';
+import { assertStorageRoom, chargeImageInput, storageLimits } from './storageQuota';
 
 export const assetDirectory = path.resolve(
   process.env.LOCATION_ASSET_DIR ||
@@ -34,26 +36,26 @@ export async function verifyAsset(url: string): Promise<string> {
 }
 export async function uploadAsset(
   input: Buffer,
-  purpose: AssetPurpose = 'question'
+  purpose: AssetPurpose = 'question',
+  owner?: string
 ) {
   const id = randomUUID();
   const created: string[] = [];
   try {
+    if (owner && Buffer.isBuffer(input) && input.length) await chargeImageInput(owner, input.length);
     const { full, thumbnail, width, height } = await processLocationImage(
       input,
       purpose
     );
-    await fs.mkdir(assetDirectory, { recursive: true });
-    const fullPath = path.join(assetDirectory, `${id}.webp`);
-    const thumbPath = path.join(assetDirectory, `${id}-thumb.webp`);
-    await fs.writeFile(fullPath, full, {
-      flag: 'wx',
+    await withKeyLock('location:asset-storage', async () => {
+      await assertStorageRoom(assetDirectory, full.length + thumbnail.length, storageLimits.assets);
+      const fullPath = path.join(assetDirectory, `${id}.webp`);
+      const thumbPath = path.join(assetDirectory, `${id}-thumb.webp`);
+      await fs.writeFile(fullPath, full, { flag: 'wx' });
+      created.push(fullPath);
+      await fs.writeFile(thumbPath, thumbnail, { flag: 'wx' });
+      created.push(thumbPath);
     });
-    created.push(fullPath);
-    await fs.writeFile(thumbPath, thumbnail, {
-      flag: 'wx',
-    });
-    created.push(thumbPath);
     return {
       url: `/location-assets/${id}.webp`,
       thumbnailUrl: `/location-assets/${id}-thumb.webp`,
@@ -64,6 +66,8 @@ export async function uploadAsset(
   } catch (error) {
     await Promise.allSettled(created.map((filename) => fs.unlink(filename)));
     if (error instanceof HttpError) throw error;
+    if (error instanceof Error && error.message === 'REDIS_UNAVAILABLE') throw error;
+    if (error instanceof Error && error.message === 'RESOURCE_BUSY') throw new HttpError(429, 'LOCATION_BUSY');
     if (
       error instanceof Error &&
       error.message === 'LOCATION_CAPTURE_TOO_SMALL'

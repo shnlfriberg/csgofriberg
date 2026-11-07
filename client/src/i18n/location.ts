@@ -354,6 +354,8 @@ const errors = {
   LOCATION_BANK_CHANGED: ['预览后题库已变化，请点击重新检查再导入。', 'The bank changed after preview. Recheck before applying.', 'プレビュー後に問題集が変更されました。再確認してください。'],
   LOCATION_BANK_CONFLICT: ['题库存在冲突，请重新检查并处理后导入。', 'Resolve package conflicts after rechecking.', '競合を再確認し、解消してから読込してください。'],
   LOCATION_BANK_QUESTION_CONFLICT: ['同编号题目内容不同；需要勾选允许更新，或修改题库包。', 'The same question ID has different content. Allow updates or revise the package.', '同じIDの内容が異なります。更新を許可するかZIPを修正してください。'],
+  LOCATION_STORAGE_LIMIT: ['上传存储空间或暂存额度不足，请联系管理员处理后重试。', 'Upload storage or staging quota is full. Contact an administrator.', '保存領域または一時保存の上限です。管理者にお問い合わせください。'],
+  LOCATION_UPLOAD_LIMIT: ['本小时上传的数据量已达上限，请稍后再试。', 'The hourly upload data limit has been reached. Try again later.', '1時間のアップロード容量の上限です。しばらくしてから再試行してください。'],
   LOCATION_COORDINATE_REQUIRED: ['发布前必须记录真实拍摄世界坐标。', 'Record the measured world position before publication.', '公開前に撮影時のワールド座標を記録してください。'],
   LOCATION_CAPTURE_DETAILS_REQUIRED: ['发布前请补齐拍摄视角和视野。', 'Record camera angles and FOV before publication.', '公開前に撮影角度とFOVを入力してください。'],
   LOCATION_POOL_INSUFFICIENT: ['已审核题库不足以满足五轮难度配比，请等待补充素材。', 'Reviewed questions cannot satisfy the five-round mix yet.', '審査済み問題が5ラウンドの難易度構成を満たしていません。'],

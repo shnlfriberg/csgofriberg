@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../middleware/auth';
 import { validateBody, validateParams, validateQuery } from '../middleware/common';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
+import { trafficMetrics } from '../services/trafficMetrics';
 import { playerImportSchema, playerSchema, playerUpdateSchema } from '../services/playerMutations';
 import {
   playerListQuerySchema, userListQuerySchema, userGameListQuerySchema, idParamsSchema,
@@ -72,6 +73,10 @@ const adminResourceBroadcastLimit = rateLimit({
   windowSeconds: 60,
   key: requestIdentity,
   failClosed: true,
+});
+
+router.get('/traffic', adminReadLimit, (_req, res) => {
+  res.set('Cache-Control', 'no-store').json(trafficMetrics());
 });
 
 router.get(

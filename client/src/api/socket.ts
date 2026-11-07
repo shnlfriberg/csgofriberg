@@ -106,6 +106,9 @@ export function getSocket(): Socket {
   });
   const target = socket;
   target.on('connect', () => noteSocketConnected(target));
+  target.on('disconnect', (reason) => {
+    if (reason === 'io server disconnect' && socket === target) recoverSocketIdentity(target);
+  });
   target.on('connect_error', (error) => {
     if (error.message === 'AUTH_EXPIRED') {
       recoverSocketIdentity(target);

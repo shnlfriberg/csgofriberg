@@ -1,4 +1,4 @@
-import { compareResults, type Variant } from '@friberg/card-link-core';
+import { type Variant } from '@friberg/card-link-core';
 import { z } from 'zod';
 import { db } from '../db/knex';
 import { HttpError } from '../middleware/common';
@@ -10,6 +10,7 @@ import { decodeReplay } from './replay';
 import { seatId } from './views';
 import type { Owner } from './types';
 import { variantSchema } from './validation';
+import { replaySummary, replaySummarySchema } from './replaySummary';
 
 export const statsQuery = z.object({ variant: variantSchema.default('unlimited') }).strict();
 export const replaysQuery = statsQuery.extend({
@@ -47,19 +48,22 @@ export async function cardReplays(owner: Owner, options: z.infer<typeof replaysQ
   if (options.scene !== 'all') query.where('p.scene', options.scene);
   const rows = await query.orderBy('r.created_at', 'desc').orderBy('p.match_id').orderBy('p.identity_key')
     .offset((options.page - 1) * 15).limit(16)
-    .select('p.match_id', 'p.identity_key', 'p.variant', 'p.scene', 'p.solved', 'p.hops', 'p.elapsed', 'r.created_at', 'r.payload');
-  return { hasNext: rows.length > 15, items: rows.slice(0, 15).map(row => {
-    const replay = decodeReplay(row.payload);
-    const me = replay.players.find(player => player.id === seatId(row.identity_key));
-    const rank = me ? 1 + replay.players.filter(player =>
-      (Number(player.retired) - Number(me.retired) || compareResults(player.results, me.results)) < 0
-    ).length : null;
+    .select('p.match_id', 'p.identity_key', 'p.variant', 'p.scene', 'p.solved', 'p.hops', 'p.elapsed', 'r.created_at', 'p.replay_summary');
+  const visible = rows.slice(0, 15);
+  const summaries = visible.map(row => {
+    try { return replaySummarySchema.safeParse(JSON.parse(row.replay_summary)); } catch { return null; }
+  });
+  const legacyIds = visible.filter((_row, index) => !summaries[index]?.success).map(row => row.match_id);
+  const legacy = legacyIds.length ? await db('card_results').whereIn('match_id', legacyIds).select('match_id', 'payload') : [];
+  const oldPayloads = new Map(legacy.map(row => [String(row.match_id), row.payload]));
+  return { hasNext: rows.length > 15, items: visible.map((row, index) => {
+    const parsed = summaries[index];
+    const summary = parsed?.success ? parsed.data : replaySummary(decodeReplay(oldPayloads.get(String(row.match_id))!), row.identity_key);
     // No identity keys or stored payloads are exposed by the list endpoint.
     return { id: String(row.match_id), variant: row.variant, scene: row.scene,
-      dailyPractice: replay.match.dailyPractice === true,
-      solved: Number(row.solved), rounds: replay.match.questions.length, hops: Number(row.hops),
-      elapsed: Number(row.elapsed), finishedAt: Number(row.created_at), retired: me?.retired ?? false,
-      rank: ['friend', 'ranked'].includes(row.scene) ? rank : null };
+      ...summary,
+      solved: Number(row.solved), hops: Number(row.hops),
+      elapsed: Number(row.elapsed), finishedAt: Number(row.created_at) };
   }) };
 }
 

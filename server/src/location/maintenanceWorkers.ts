@@ -1,6 +1,8 @@
 import { observeMetric } from './metrics';
 import { flushAssetRemovals } from './assetTasks';
 import { archiveExpiredProgress } from './progressArchive';
+import { expireLegacyCacheGenerations } from '../services/queryCache';
+import { cleanupBankStages } from './bank';
 
 /** Independent, non-overlapping workers; shutdown drains the actual running jobs. */
 export function startWorker(name: string, interval: number, action: () => Promise<unknown>): () => Promise<void> {
@@ -25,6 +27,8 @@ export function startMaintenanceWorkers(): () => Promise<void> {
   const stops = [
     startWorker('asset-removals', 10000, flushAssetRemovals),
     startWorker('progress-archive', 60000, archiveExpiredProgress),
+    startWorker('cache-metadata', 60000, expireLegacyCacheGenerations),
+    startWorker('bank-stages', 60000, cleanupBankStages),
   ];
   return async () => { await Promise.all(stops.map(stop => stop())); };
 }

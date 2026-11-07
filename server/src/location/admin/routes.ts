@@ -75,6 +75,7 @@ adminLocationRoutes.post(
 );
 adminLocationRoutes.post(
   '/assets',
+  rateLimit({ name: 'location-admin-assets', limit: 60, windowSeconds: 60, key: requestIdentity, failClosed: true }),
   imageRequestBudget,
   express.raw({
     type: ['image/png', 'image/jpeg', 'image/webp', 'application/octet-stream'],
@@ -86,7 +87,7 @@ adminLocationRoutes.post(
       .default('question')
       .safeParse(req.query.purpose);
     if (!purpose.success) throw new HttpError(400, 'VALIDATION_FAILED');
-    res.json(await uploadAsset(req.body, purpose.data));
+    res.json(await uploadAsset(req.body, purpose.data, `u:${req.user!.id}`));
   })
 );
 adminLocationRoutes.use(express.json({ limit: '2mb' }));

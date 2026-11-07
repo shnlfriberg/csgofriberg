@@ -5,6 +5,7 @@ $env:PATH = (Join-Path $root '.tools/node-v26.10.0-win-x64') + ';' + $env:PATH
 $run = Join-Path $root ('.local-data/verification/' + [guid]::NewGuid().ToString('N'))
 [void](New-Item -ItemType Directory -Path $run -Force)
 $env:DB_CLIENT = 'sqlite'
+$env:NODE_ENV = 'test'
 $env:DB_URL = Join-Path $run 'tests.sqlite3'
 $profile = Get-Content -LiteralPath (Join-Path $root 'config/local-profile.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 $env:REDIS_URL = if ($RedisUrl) { $RedisUrl } else { $profile.redisUrl + '/15' }
@@ -13,6 +14,18 @@ $env:REDIS_PREFIX = 'integration-tests:' + [guid]::NewGuid().ToString('N') + ':'
 # Integration tests still connect to the isolated Redis database below.
 $env:REDIS_REQUIRED = 'false'
 $env:LOCATION_ASSET_DIR = Join-Path $run 'assets'
+$env:TEMP = $run
+$env:TMP = $run
+# Never let an integration fixture use the real mailbox/verification service or
+# inherit production credentials while its database is deliberately disposable.
+$env:JWT_SECRET = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+$env:GUEST_ID_SALT = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
+$env:GEETEST_CAPTCHA_ID = ''
+$env:GEETEST_PRIVATE_KEY = ''
+$env:EMAIL_SMTP_HOST = ''
+$env:EMAIL_FROM = ''
+$env:CHEAT_ANALYSIS_API_URL = ''
+$env:CHEAT_ANALYSIS_API_TOKEN = ''
 $env:NODE_OPTIONS = '--require="' + (Join-Path $root '.tools/sqlite-shim.cjs').Replace('\', '/') + '"'
 $env:PYTHONIOENCODING = 'utf-8'
 $env:PYTHONUTF8 = '1'

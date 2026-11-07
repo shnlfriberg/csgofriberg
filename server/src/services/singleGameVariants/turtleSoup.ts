@@ -8,7 +8,7 @@ import { getEnabledPlayer, getEnabledPlayers } from '../playerCache';
 import { invalidateCached } from '../queryCache';
 import { deleteSingleGame, saveSingleGame, type SingleGameState } from '../singleGameStore';
 import { shouldPersistSingleSettlement } from '../singleSettlementLimit';
-import { globalStatsCacheKeysForDifficulty, personalStatsCacheKeysForDifficulty } from '../statsCache';
+import { personalStatsCacheKeysForDifficulty } from '../statsCache';
 import { askSoup, createSoup, guessSoup, soupAnswer, soupDelta, soupMutationSchema, soupQuestionSchema, soupView } from '../turtleSoup';
 import type { SingleGameVariantHandler } from './types';
 
@@ -39,7 +39,6 @@ async function settleSoup(game: SingleGameState): Promise<void> {
     await invalidateCached(
       leaderboardCacheKey('turtle-soup', game.mode),
       ...personalStatsCacheKeysForDifficulty(game.identityKey, game.mode, 'turtle-soup'),
-      ...globalStatsCacheKeysForDifficulty(game.mode, 'turtle-soup'),
     );
     soup.recorded = recorded;
   }

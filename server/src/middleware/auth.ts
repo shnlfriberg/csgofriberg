@@ -4,9 +4,10 @@ import jwt from 'jsonwebtoken';
 import { config } from '../config';
 import { db } from '../db/knex';
 import { User } from '../types';
-import { redis, redisKey } from '../redis';
+import { redisKey } from '../redis';
 import { guestNameFromKey } from '../services/identityDisplay';
 import { isGuestBanned } from '../services/guestAccounts';
+import { invalidateCacheAt } from '../services/queryCache';
 
 export { guestNameFromKey, userNameFromUsername } from '../services/identityDisplay';
 
@@ -29,6 +30,7 @@ interface AuthTokenPayload {
   sub: string;
   ver: number;
   typ: 'auth';
+  exp?: number;
 }
 
 interface RefreshTokenPayload {
@@ -43,12 +45,9 @@ interface GuestTokenPayload {
   typ: 'guest';
 }
 
-interface CachedAuthUser extends AuthPayload {
-  tokenVersion: number;
-}
-
 export interface ResolvedAuthUser extends AuthPayload {
   tokenVersion: number;
+  sessionExpiresAt?: number;
 }
 
 export interface AuthPayload {
@@ -181,51 +180,19 @@ async function resolveTokenUser(
 ): Promise<ResolvedAuthUser | null> {
   if (!/^\d+$/.test(payload.sub)) return null;
   const userId = Number(payload.sub);
-  const client = redis();
-  const cacheKey = redisKey(`auth:user:${userId}`);
-  if (client) {
-    try {
-      const cached = await client.get(cacheKey);
-      if (cached) {
-        const user = JSON.parse(cached) as CachedAuthUser;
-        if (user.tokenVersion !== Number(payload.ver)) return null;
-        return {
-          id: user.id,
-          username: user.username,
-          role: user.role,
-          email: user.email ?? null,
-          emailVerified: Boolean(user.emailVerified),
-          tokenVersion: user.tokenVersion,
-        };
-      }
-    } catch (err) {
-      console.warn('[auth:cache-read]', err instanceof Error ? err.message : err);
-    }
-  }
-  const user = await db<User>('users').where({ id: userId }).first();
-  if (!user || Number(user.token_version) !== Number(payload.ver) || user.banned_at) return null;
-  if (client) {
-    const cached: CachedAuthUser = {
-      id: user.id,
-      username: user.username,
-      role: user.role,
-      email: user.email ?? null,
-      emailVerified: Boolean(user.email_verified_at),
-      tokenVersion: Number(user.token_version),
-    };
-    try {
-      await client.set(cacheKey, JSON.stringify(cached), { EX: 300 });
-    } catch (err) {
-      console.warn('[auth:cache-write]', err instanceof Error ? err.message : err);
-    }
-  }
+  // Revocation is authoritative in SQL, including while Redis is unavailable
+  // or reconnects with an older cache value. Keep JWT verification caching,
+  // but never cache mutable privileges / login versions across requests.
+  const user = await db<User>('users').where({ id: userId })
+    .first('id', 'username', 'role', 'email', 'email_verified_at', 'token_version', 'banned_at');
+  if (!user || user.banned_at || Number(user.token_version) !== Number(payload.ver)) return null;
   return {
     id: user.id,
     username: user.username,
     role: user.role,
-    tokenVersion: Number(user.token_version),
     email: user.email ?? null,
     emailVerified: Boolean(user.email_verified_at),
+    tokenVersion: Number(user.token_version),
   };
 }
 
@@ -264,7 +231,8 @@ export async function authenticateCookie(
     }
   }
   if (payload.typ !== 'auth') return null;
-  return resolveTokenUser(payload);
+  const user = await resolveTokenUser(payload);
+  return user ? { ...user, sessionExpiresAt: payload.exp ? payload.exp * 1000 : undefined } : null;
 }
 
 export async function authenticateRefreshCookie(
@@ -305,9 +273,7 @@ export async function restoreAuthSession(
 }
 
 export async function invalidateAuthUser(userId: number): Promise<void> {
-  const client = redis();
-  if (!client) return;
-  await client.del(redisKey(`auth:user:${userId}`));
+  await invalidateCacheAt(redisKey(`auth:user:${userId}`));
 }
 
 async function attachIdentity(

@@ -1,4 +1,4 @@
-import { Server } from 'socket.io';
+import { Server, Socket } from 'socket.io';
 import { config } from '../config';
 import {
   authenticateCookie,
@@ -10,6 +10,16 @@ import { consumeRateLimit } from '../middleware/rateLimit';
 import { isGuestBanned, recordGuestSeen } from '../services/guestAccounts';
 import { StoredIdentity } from '../services/roomStore';
 import { acquireConnectionSlot, resolveSocketIp } from './connection';
+
+async function currentIdentity(socket: Socket): Promise<string | null> {
+  const me = socket.data.identity as StoredIdentity;
+  if (me.userId) {
+    const user = await authenticateCookie(socket.handshake.headers.cookie);
+    return user?.id === me.userId ? null : 'AUTH_EXPIRED';
+  }
+  return getGuestFromCookie(socket.handshake.headers.cookie)?.key === me.key.slice(2) &&
+    !(await isGuestBanned(me.key.slice(2))) ? null : 'USER_BANNED';
+}
 
 export function registerSocketMiddleware(io: Server): void {
   io.use(async (socket, next) => {
@@ -65,6 +75,7 @@ export function registerSocketMiddleware(io: Server): void {
       socket.data.identity = identity;
       socket.data.ip = ip;
       socket.data.connectionSlot = true;
+      socket.data.authExpiresAt = user?.sessionExpiresAt;
       next();
     } catch (err) {
       console.error('[socket:connect]', err);
@@ -72,5 +83,36 @@ export function registerSocketMiddleware(io: Server): void {
         ? 'REDIS_UNAVAILABLE'
         : 'INTERNAL_ERROR'));
     }
+  });
+  io.on('connection', (socket) => {
+    let checking = 0;
+    let count = 0;
+    let until = Date.now() + 10_000;
+    let ordered = Promise.resolve();
+    socket.use((packet, next) => {
+      if (until <= Date.now()) { count = 0; until = Date.now() + 10_000; }
+      const ack = typeof packet.at(-1) === 'function' ? packet.at(-1) as (value: unknown) => void : null;
+      const reject = (code: string) => ack?.({ ok: false, code });
+      if (++count > 200 || checking >= 8) { reject('RATE_LIMITED'); return; }
+      checking++;
+      ordered = ordered.then(() => currentIdentity(socket)).then(code => {
+        if (code) { reject(code); socket.disconnect(true); }
+        else if (socket.connected) next();
+      }).catch(() => reject('REDIS_UNAVAILABLE')).finally(() => { checking--; });
+    });
+    // Revoke passive subscriptions too; packets alone would leave an idle,
+    // expired connection receiving private pushes indefinitely.
+    let auditing = false;
+    const timer = setInterval(() => {
+      if (auditing) return;
+      auditing = true;
+      void currentIdentity(socket).then(code => { if (code) socket.disconnect(true); })
+        .catch(() => socket.disconnect(true)).finally(() => { auditing = false; });
+    }, 60_000);
+    timer.unref();
+    const deadline = Number(socket.data.authExpiresAt);
+    const expiry = deadline > 0 ? setTimeout(() => socket.disconnect(true), Math.max(1, deadline - Date.now())) : null;
+    expiry?.unref();
+    socket.once('disconnect', () => { clearInterval(timer); if (expiry) clearTimeout(expiry); });
   });
 }

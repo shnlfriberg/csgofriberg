@@ -2,6 +2,7 @@ import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import { createAdapter } from "@socket.io/redis-adapter";
+import { socketAdapterOptions, socketServerOptions } from '../../src/socket/options';
 import { initRedis, duplicateRedisClient, closeRedis } from "../../src/redis";
 import { initPlayerCache } from "../../src/services/playerCache";
 import { setupSocket } from "../../src/socket";
@@ -23,8 +24,8 @@ async function main() {
   app.use("/api/card-link", requirePow, cardRoutes);
   app.use(errorHandler);
   const server = http.createServer(app),
-    io = new Server(server);
-  io.adapter(createAdapter(publisher, subscriber));
+    io = new Server(server, socketServerOptions());
+  io.adapter(createAdapter(publisher, subscriber, socketAdapterOptions()));
   const stopCommon = setupSocket(io),
     stopCard = setupCardSocket(io);
   server.listen(0, "127.0.0.1", () =>

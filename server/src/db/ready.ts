@@ -54,6 +54,7 @@ const REQUIRED_COLUMNS: Record<string, string[]> = {
     'finish_reason',
     'forfeited_key',
     'replay',
+    'team_scores',
   ],
   match_players: [
     'id',

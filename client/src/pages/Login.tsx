@@ -10,6 +10,7 @@ import { toast } from '../components/Toast';
 import { useTranslation } from 'react-i18next';
 import { getPowProgress, subscribePowProgress } from '../api/pow';
 import { requestGeeTest } from '../api/geetest';
+import { validNewPassword } from '../utils/password';
 
 const INACTIVE_POW_PROGRESS = { active: false, percent: 0 };
 const USERNAME_PATTERN = /^[\w一-龥-]+$/;
@@ -52,7 +53,7 @@ export default function Login() {
       else if (username.length < 2 || username.length > 20) errors.username = t('auth.usernameLength');
       else if (!USERNAME_PATTERN.test(username)) errors.username = t('auth.usernameCharacters');
       if (!password) errors.password = t('auth.passwordRequired');
-      else if (password.length < 10 || password.length > 128) errors.password = t('auth.passwordLength');
+      else if (!validNewPassword(password)) errors.password = t('auth.passwordLength');
       if (password !== confirmPassword) errors.confirmPassword = t('auth.mismatch');
       if (email && (email.length > 320 || !EMAIL_PATTERN.test(email.trim()))) {
         errors.email = t('auth.emailInvalid');

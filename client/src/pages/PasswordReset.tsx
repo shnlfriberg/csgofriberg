@@ -8,6 +8,7 @@ import { requestGeeTest } from '../api/geetest';
 import { clearAuthenticated } from '../api/authSession';
 import { closeSocket } from '../api/socket';
 import { useAuth } from '../store/auth';
+import { validNewPassword } from '../utils/password';
 
 export default function PasswordReset() {
   const { t } = useTranslation();
@@ -56,7 +57,7 @@ export default function PasswordReset() {
     event.preventDefault();
     if (!validEmail()) { setError(t('auth.emailInvalid')); return; }
     if (!/^\d{6}$/.test(code)) { setError(t('recovery.codeFormat')); return; }
-    if (password.length < 10 || password.length > 128) { setError(t('auth.passwordLength')); return; }
+    if (!validNewPassword(password)) { setError(t('auth.passwordLength')); return; }
     if (password !== confirmation) { setError(t('auth.mismatch')); return; }
     void run(async () => {
       const response = await api.post('/auth/password/reset', { email: email.trim(), code, password });

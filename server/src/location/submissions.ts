@@ -48,7 +48,7 @@ export async function createSubmission(owner: Identity, input: z.infer<typeof su
     const map = (await maps()).find(item => item.id === input.mapId && item.enabled);
     if (!map || !map.floors.some(f => f.id === input.floorId && f.radarUrl)) throw new HttpError(400, 'LOCATION_INVALID_GUESS');
     if (map.version !== input.mapVersion) throw new HttpError(409, 'LOCATION_CAPTURE_MAP_CHANGED');
-    const asset = await uploadAsset(bytes);
+    const asset = await uploadAsset(bytes, 'question', owner.key);
     // Never accept a catalog point ID from a public client. Persist the group now
     // so guest-to-account claims do not split images submitted in the same batch.
     const { pointId, ...details } = input;

@@ -49,6 +49,7 @@ export const CARD_REQUIRED_COLUMNS: Record<string, string[]> = {
     "solved",
     "hops",
     "elapsed",
+    "replay_summary",
   ],
   card_ratings: ["user_id", "variant", "rating"],
   card_rating_ledger: ["match_id", "user_id", "before", "after"],
@@ -254,5 +255,7 @@ export async function ensureCardSchema(k: Knex): Promise<void> {
     }
     for (const version of versions) await k('card_graphs').where({ version }).whereNull('published_at').update({ published_at: k.ref('created_at') });
   }
+  if (!(await k.schema.hasColumn('card_participants', 'replay_summary')))
+    await k.schema.alterTable('card_participants', t => t.text('replay_summary').nullable());
   await backfillCareerTenures(k);
 }

@@ -613,6 +613,8 @@ export async function ensureSchema(instance: Knex = db): Promise<void> {
     'create unique index if not exists "daily_attempts_solve_order_unique" on "daily_challenge_attempts" ("challenge_id", "solve_order") where "solve_order" is not null'
   );
   await ensureExternalSubmissionSchema(instance);
+  if (!(await instance.schema.hasColumn('match_records', 'team_scores')))
+    await instance.schema.alterTable('match_records', t => t.text('team_scores').nullable());
   await ensureLocationSchema(instance);
   await ensureCardSchema(instance);
 }

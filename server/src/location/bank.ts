@@ -17,6 +17,7 @@ import { captureDraftSchema, mapSchema, questionSchema } from './validation';
 import { mapGeometry } from './coordinates';
 import { captureImages, sameCapturePoint, sameWorldPosition } from './capturePoints';
 import type { CaptureDraft, MapDefinition, Question } from './types';
+import { assertStorageRoom, directoryBytes, storageLimits } from './storageQuota';
 
 const transferRoot = path.join(assetDirectory, '.bank-transfer');
 const maxBytes = 1024 * 1024 * 1024;
@@ -423,11 +424,33 @@ async function cleanupStages() {
     }
   }
 }
+export async function cleanupBankStages(): Promise<void> {
+  await withKeyLock('location:bank-stage', cleanupStages);
+}
 export async function stageBank(
   input: Readable,
   owner: number
 ): Promise<BankPreview> {
+  try { return await withKeyLock('location:bank-stage', () => stageBankExclusive(input, owner)); }
+  catch (error) {
+    if (error instanceof Error && error.message === 'RESOURCE_BUSY') throw new HttpError(429, 'LOCATION_BUSY');
+    throw error;
+  }
+}
+async function stageBankExclusive(input: Readable, owner: number): Promise<BankPreview> {
   await cleanupStages();
+  const declared = Number((input as Readable & { headers?: Record<string, unknown> }).headers?.['content-length']);
+  const reserve = (Number.isFinite(declared) && declared > 0 ? Math.min(maxBytes, declared) : maxBytes) + maxBytes;
+  await assertStorageRoom(transferRoot, reserve, storageLimits.stages, true);
+  let ownedBytes = 0;
+  for (const entry of await fs.readdir(transferRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !z.string().uuid().safeParse(entry.name).success) continue;
+    try {
+      const stage = JSON.parse(await fs.readFile(path.join(folder(entry.name), 'stage.json'), 'utf8')) as Stage;
+      if (stage.owner === owner) ownedBytes += await directoryBytes(folder(entry.name), true);
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  }
+  if (ownedBytes + reserve > storageLimits.ownerStages) throw new HttpError(429, 'LOCATION_STORAGE_LIMIT');
   const token = randomUUID();
   const destination = folder(token);
   await fs.mkdir(path.join(destination, 'assets'), { recursive: true });
@@ -436,7 +459,8 @@ export async function stageBank(
     await pipeline(
       input,
       limitBytes(maxBytes),
-      createWriteStream(filename, { flags: 'wx' })
+      createWriteStream(filename, { flags: 'wx' }),
+      { signal: AbortSignal.timeout(10 * 60_000) }
     );
     const names = await extractPackage(filename, destination);
     const raw = manifestSchema.safeParse(
@@ -702,6 +726,13 @@ export async function importBank(
   const urls = await resolveUrls(stage);
   // Materialize immutable files before taking the short catalog lock. Failed DB
   // commits may leave unreferenced files, but never a question with a missing image.
+  await withKeyLock('location:asset-storage', async () => {
+  let incoming = 0;
+  for (const asset of stage.manifest.assets) {
+    try { await fs.stat(assetPath(urls.get(asset.url)!)); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; incoming += asset.size; }
+  }
+  await assertStorageRoom(assetDirectory, incoming, storageLimits.assets);
   for (const asset of stage.manifest.assets) {
     const filename = assetPath(urls.get(asset.url)!);
     try {
@@ -715,6 +746,7 @@ export async function importBank(
     }
     if ((await hashFile(filename)) !== asset.sha256) throw bundleError();
   }
+  });
   return withKeyLock('location:catalog', async () => {
     const receipt = await db('location_versions')
       .where({ key: receiptKey })

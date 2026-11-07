@@ -3,6 +3,7 @@ import { db } from '../db/knex';
 import { difficultySchema } from './validation';
 import type { Difficulty, LocationReplayPage, LocationStatsResponse, LocationStatsSummary } from './types';
 import { acceptedSubmissionCount } from './submissions';
+import { cached } from '../services/queryCache';
 
 export const locationStatsQuery = z.object({
   difficulties: z.string().default('easy,normal,hard')
@@ -48,18 +49,14 @@ async function summary(difficulties: Difficulty[], owner?: string): Promise<Loca
 }
 
 export async function locationStatistics(owner: string, difficulties: Difficulty[]): Promise<LocationStatsResponse> {
-  const revision = String((await db('location_catalog_revision').where({ id: 2 }).first())?.revision ?? -1);
   const key = [...difficulties].sort().join(',');
-  let cached = globalSummaries.get(key);
-  if (!cached || cached.revision !== revision || revision === '-1') {
-    cached = { revision, value: summary(difficulties) };
-    globalSummaries.set(key, cached);
-    void cached.value.catch(() => { if (globalSummaries.get(key) === cached) globalSummaries.delete(key); });
-  }
-  const [personal, global] = await Promise.all([summary(difficulties, owner), cached.value]);
+  // Global totals may lag by ten seconds; personal results remain current.
+  // Do not invalidate on every settlement or each read repeats a history scan.
+  const [personal, global] = await Promise.all([
+    summary(difficulties, owner), cached(`location:stats:global:v2:${key}`, 10, () => summary(difficulties)),
+  ]);
   return { difficulties, personal, global };
 }
-const globalSummaries = new Map<string, { revision: string; value: Promise<LocationStatsSummary> }>();
 
 export async function locationReplays(owner: string, query: z.infer<typeof locationReplaysQuery>): Promise<LocationReplayPage> {
   const request = db('location_results').where({ identity_key: owner }).whereIn('difficulty', query.difficulties);

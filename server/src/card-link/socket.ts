@@ -332,6 +332,8 @@ export function setupCardSocket(server: Server) {
     handle('card-link:queue:heartbeat', z.object({ ticket: requestId }).strict(), data => heartbeatQueue(owner(), data.ticket));
     handle('card-link:queue:cancel', z.object({ ticket: requestId.optional() }).strict(), data => cancelQueue(owner(), data.ticket));
     let watchRevision = 0;
+    let pendingWatches = 0;
+    let leaving: Promise<void> | null = null;
     /** Leave the watched match: presence detaches; the kernel reports offline transitions. */
     const unwatch = async () => {
       const previousId = socket.data.cardMatchId as string | undefined;
@@ -345,6 +347,11 @@ export function setupCardSocket(server: Server) {
       }
     };
     socket.on("card-link:watch", (raw, ack) => {
+      if (pendingWatches >= 8) {
+        if (typeof ack === 'function') ack({ ok: false, code: 'RATE_LIMITED' });
+        return;
+      }
+      pendingWatches++;
       const revision = ++watchRevision;
       const current = () => revision === watchRevision && socket.connected;
       let responded = false;
@@ -367,6 +374,7 @@ export function setupCardSocket(server: Server) {
           ))
         )
           throw new HttpError(429, "RATE_LIMITED");
+        if (!current()) return;
         if (me.userId) {
           if (
             (await authenticateCookie(socket.handshake.headers.cookie))?.id !==
@@ -411,6 +419,7 @@ export function setupCardSocket(server: Server) {
             code: e instanceof HttpError ? e.code : "INTERNAL_ERROR",
           });
       }).finally(() => {
+        pendingWatches--;
         // Even a superseded request must release Socket.IO's client-side ack
         // callback; silently abandoning it leaks one callback per quick switch.
         if (!responded) respond({ ok: false, code: 'CARD_WATCH_SUPERSEDED' });
@@ -419,7 +428,10 @@ export function setupCardSocket(server: Server) {
     });
     socket.on("card-link:unwatch", () => {
       watchRevision++;
-      track(unwatch());
+      if (!leaving) {
+        leaving = unwatch().finally(() => { leaving = null; });
+        track(leaving);
+      }
     });
     socket.on('disconnect', () => { watchRevision++; });
   });

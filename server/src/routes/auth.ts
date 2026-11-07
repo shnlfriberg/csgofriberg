@@ -26,7 +26,7 @@ import {
 } from '../middleware/rateLimit';
 import { invalidateCached } from '../services/queryCache';
 import { leaderboardCacheKey } from '../services/leaderboardCache';
-import { hashPassword, passwordNeedsRehash, verifyPassword } from '../services/password';
+import { hashPassword, passwordFitsBcrypt, passwordNeedsRehash, verifyPassword } from '../services/password';
 import { DIFFICULTY_LEVELS } from '../difficulties';
 import { allGlobalStatsCacheKeys, allPersonalStatsCacheKeys } from '../services/statsCache';
 import {
@@ -67,7 +67,8 @@ const geeTestFields = {
   pass_token: z.string().trim().optional(),
   gen_time: z.string().trim().optional(),
 };
-const registerSchema = credentialsSchema.extend({ email: z.string().trim().email().max(320).optional().or(z.literal('')), ...geeTestFields });
+const newPasswordSchema = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH).refine(passwordFitsBcrypt);
+const registerSchema = credentialsSchema.extend({ password: newPasswordSchema, email: z.string().trim().email().max(320).optional().or(z.literal('')), ...geeTestFields });
 const emailSchema = z.object({ email: z.string().trim().email().max(320), ...geeTestFields });
 const emailCodeSchema = z.object({ code: z.string().trim().regex(/^\d{6}$/) });
 // Recovery is keyed by the verified (unique) email; an older client's username field is stripped.
@@ -75,7 +76,7 @@ const passwordRequestSchema = emailSchema;
 const passwordResetSchema = z.object({
   email: z.string().trim().email().max(320),
   code: z.string().trim().regex(/^\d{6}$/),
-  password: z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH),
+  password: newPasswordSchema,
 });
 
 function validateRegisterBody(req: Request, res: Response, next: NextFunction) {
@@ -95,7 +96,7 @@ function validateRegisterBody(req: Request, res: Response, next: NextFunction) {
       code = 'REGISTER_USERNAME_CHARACTERS';
     } else if (typeof password !== 'string' || password.length === 0) {
       code = 'REGISTER_PASSWORD_REQUIRED';
-    } else if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH) {
+    } else if (password.length < PASSWORD_MIN_LENGTH || password.length > PASSWORD_MAX_LENGTH || !passwordFitsBcrypt(password)) {
       code = 'REGISTER_PASSWORD_LENGTH';
     } else if (body.email != null && body.email !== '') {
       code = 'INVALID_EMAIL';
@@ -209,7 +210,7 @@ router.post(
       throw new HttpError(401, 'INVALID_CREDENTIALS');
     }
     if (user.banned_at) throw new HttpError(403, 'USER_BANNED');
-    if (passwordNeedsRehash(user.password_hash)) {
+    if (passwordFitsBcrypt(password) && passwordNeedsRehash(user.password_hash)) {
       const previousHash = user.password_hash;
       const passwordHash = await hashPassword(password);
       await db('users')
@@ -307,6 +308,8 @@ router.post(
   asyncHandler(async (req, res) => {
     await db('users').where({ id: req.user!.id }).increment('token_version', 1);
     await invalidateAuthUser(req.user!.id);
+    const io = req.app.get('io') as Server | undefined;
+    io?.in(`identity:u:${req.user!.id}`).disconnectSockets(true);
     clearAuthCookies(res);
     ensureGuestCookie(req, res);
     res.json({ ok: true });

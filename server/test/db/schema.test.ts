@@ -19,6 +19,19 @@ function createInstance() {
 }
 
 describe('database schema initialization', () => {
+  it('adds list projections while preserving historical payloads on repeated migration', async () => {
+    const instance = createInstance(); await ensureSchema(instance);
+    await instance.schema.alterTable('match_records', t => t.dropColumn('team_scores'));
+    await instance.schema.alterTable('card_participants', t => t.dropColumn('replay_summary'));
+    await instance('match_records').insert({ room_id: 'projection-legacy', replay: '[{"keep":"original"}]' });
+    await instance('card_results').insert({ match_id: 'projection-card', created_at: 1, payload: '{"keep":"immutable"}' });
+    await instance('card_participants').insert({ match_id: 'projection-card', identity_key: 'g:legacy',
+      variant: 'unlimited', scene: 'practice', solved: 0, hops: 0, elapsed: 0 });
+    await ensureSchema(instance); await ensureSchema(instance);
+    expect(await instance('match_records').first('replay', 'team_scores')).toEqual({ replay: '[{"keep":"original"}]', team_scores: null });
+    expect((await instance('card_results').first()).payload).toBe('{"keep":"immutable"}');
+    expect((await instance('card_participants').first()).replay_summary).toBeNull();
+  });
   it('adds recovery storage idempotently while preserving accounts and binding codes', async () => {
     const instance = createInstance(); await ensureSchema(instance);
     await instance.schema.dropTable('password_resets');

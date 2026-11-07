@@ -23,7 +23,7 @@ function allSelections(): string[][] {
 }
 
 export function globalStatsCacheKey(difficulties: readonly string[], variant: SingleGameVariant = 'classic'): string {
-  return `stats:global:v3:${variant}:${selectionKey(difficulties)}`;
+  return `stats:global:v4:${variant}:${selectionKey(difficulties)}`;
 }
 
 export function personalStatsCacheKey(identityKey: string, difficulties: readonly string[], variant: SingleGameVariant = 'classic'): string {

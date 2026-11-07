@@ -5,7 +5,6 @@ import { invalidateCached } from './queryCache';
 import { logTransientError } from './transientLog';
 import { leaderboardCacheKey } from './leaderboardCache';
 import {
-  globalStatsCacheKeysForDifficulty,
   personalStatsCacheKeysForDifficulty,
 } from './statsCache';
 import { winningGuessMetricsByPlayer } from './matchGuessMetrics';
@@ -76,6 +75,8 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
   const totalRounds = payload.totalRounds ?? payload.boType;
   const relaySolvedRounds = payload.relaySolvedRounds ?? 0;
   const winnerKeys = normalizeWinnerKeys(payload.winnerKeys);
+  const lastScores = [...payload.rounds].reverse().find(round => round.teamScores)?.teamScores;
+  const teamScores = lastScores ? JSON.stringify(lastScores) : null;
   const winner = payload.participants.find((player) => player.key === payload.winnerKey);
   const guessMetrics = winningGuessMetricsByPlayer(payload.rounds);
   const participantUserIds = [...new Set(
@@ -144,6 +145,7 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
         finish_reason: payload.reason,
         forfeited_key: payload.forfeitedKey,
         replay: JSON.stringify(payload.rounds),
+        team_scores: teamScores,
       })
       .onConflict('room_id')
       .ignore()
@@ -156,7 +158,7 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
       if (payload.rounds.length) {
         await trx('match_records')
           .where({ id: existing.id })
-          .update({ replay: JSON.stringify(payload.rounds) });
+          .update({ replay: JSON.stringify(payload.rounds), team_scores: teamScores });
         for (const player of payload.participants) {
           const values = participantValues(player);
           await trx('match_players')
@@ -195,7 +197,6 @@ export async function persistMatchResult(payload: MatchResultPayload): Promise<v
     await invalidateCached(
       ...(gameMode === 'classic' ? [
         leaderboardCacheKey('multi', payload.dbType),
-        ...globalStatsCacheKeysForDifficulty(payload.dbType),
       ] : []),
       ...payload.participants.flatMap((player) => [
         ...personalStatsCacheKeysForDifficulty(player.key, payload.dbType),

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { evalCommandScript, redis, redisKey } from '../redis';
+import { config } from '../config';
 
 interface RateLimitOptions {
   name: string;
@@ -28,6 +29,15 @@ const HASH_RATE_LIMIT_RELEASE_SCRIPT = [
   "return 1",
 ].join('\n');
 const localCounters = new Map<string, { count: number; expiresAt: number }>();
+let lastLocalSweep = 0;
+function localCapacity(key: string): boolean {
+  const now = Date.now();
+  if (localCounters.size >= 10_000 && now - lastLocalSweep >= 1000) {
+    lastLocalSweep = now;
+    for (const [identity, item] of localCounters) if (item.expiresAt <= now) localCounters.delete(identity);
+  }
+  return localCounters.has(key) || localCounters.size < 10_000;
+}
 const HASH_RATE_LIMIT_SCRIPT = `local count = redis.call('HINCRBY', KEYS[1], ARGV[1], 1)
 if count == 1 then
   redis.call('HEXPIRE', KEYS[1], ARGV[2], 'FIELDS', '1', ARGV[1])
@@ -60,6 +70,8 @@ export async function consumeRateLimit(
     ));
     return count <= limit;
   }
+  if (config.redisRequired) throw new Error('REDIS_UNAVAILABLE');
+  if (!localCapacity(localKey)) return false;
   const now = Date.now();
   const current = localCounters.get(localKey);
   const item = !current || current.expiresAt <= now
@@ -88,6 +100,8 @@ export async function reserveRateLimit(
     ));
     return acquired === 1 ? { backend: 'redis', key, identity, localKey } : null;
   }
+  if (config.redisRequired) throw new Error('REDIS_UNAVAILABLE');
+  if (!localCapacity(localKey)) return null;
   const now = Date.now();
   const current = localCounters.get(localKey);
   if (current && current.expiresAt > now && current.count >= limit) return null;

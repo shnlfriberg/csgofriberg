@@ -5,7 +5,9 @@ import { resolveUmamiConfig } from './services/umami';
 
 const repoEnvPath = path.resolve(__dirname, '../../.env');
 
-dotenv.config({ path: repoEnvPath });
+// Vitest and isolated runners supply their own storage and credentials. Never
+// fill their missing SMTP/API settings from a maintainer's real .env file.
+if (process.env.NODE_ENV !== 'test') dotenv.config({ path: repoEnvPath });
 
 const configuredJwtSecret = process.env.JWT_SECRET?.trim();
 const configuredGuestIdSalt = process.env.GUEST_ID_SALT?.trim();

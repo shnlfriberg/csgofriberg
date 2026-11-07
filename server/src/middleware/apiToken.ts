@@ -33,6 +33,7 @@ export async function requireApiToken(req: Request, res: Response, next: NextFun
     const row = await db('api_tokens as token')
       .join('users as owner', 'owner.id', 'token.created_by_user_id')
       .where({ 'token.token_hash': hashApiToken(match[1]), 'owner.role': 'admin' })
+      .whereNull('owner.banned_at')
       .first(
         'token.id',
         'token.name',

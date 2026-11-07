@@ -8,6 +8,8 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { Server } from 'socket.io';
+import { socketAdapterOptions, socketServerOptions } from './socket/options';
+import { recordHttpTraffic, recordSocketTraffic } from './services/trafficMetrics';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { config, validateProductionConfig } from './config';
 import { assertDatabaseReady } from './db/ready';
@@ -103,6 +105,7 @@ async function main() {
   const stopMatchWorker = redisReady ? await initMatchResultWorker() : async () => undefined;
 
   const app = express();
+  app.use(recordHttpTraffic);
   app.set('trust proxy', config.trustProxy ? 1 : false);
 
   // index.html 含内联脚本(主题开关、启动屏进度),CSP 不放开 unsafe-inline,
@@ -238,12 +241,8 @@ async function main() {
   app.use(errorHandler);
 
   const server = http.createServer(app);
-  const io = new Server(server, {
-    cors: { origin: config.corsOrigins, credentials: true },
-    // Keep WebSocket extensions disabled until compression can be gated before
-    // the Engine.IO handshake. Namespace middleware runs too late for this.
-    perMessageDeflate: false,
-  });
+  const io = new Server(server, socketServerOptions());
+  const stopSocketTraffic = recordSocketTraffic(io);
   app.set('io', io);
   let shuttingDown = false;
   let shutdownPromise: Promise<void> | null = null;
@@ -258,7 +257,7 @@ async function main() {
     adapterSubClient = duplicateRedisClient('socket-adapter-sub');
     if (adapterPubClient && adapterSubClient) {
       await Promise.all([adapterPubClient.connect(), adapterSubClient.connect()]);
-      io.adapter(createAdapter(adapterPubClient, adapterSubClient));
+      io.adapter(createAdapter(adapterPubClient, adapterSubClient, socketAdapterOptions()));
     }
   }
   const stopSocket = setupSocket(io);
@@ -277,6 +276,7 @@ async function main() {
       shuttingDown = true;
       console.log(`[server] 收到 ${signal},开始优雅退出`);
       stopRuntimeMonitor();
+      stopSocketTraffic();
       await withTimeout(stopLocationDailyScheduler(), SHUTDOWN_TIMEOUT_MS, () => undefined)
         .catch((err) => console.error('[shutdown:location-daily]', err));
       await stopLocationSocket();

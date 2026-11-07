@@ -7,7 +7,7 @@ import { getEnabledPlayer, getPlayer } from '../playerCache';
 import { invalidateCached } from '../queryCache';
 import { deleteSingleGame, saveSingleGame, type SingleGameState } from '../singleGameStore';
 import { shouldPersistSingleSettlement } from '../singleSettlementLimit';
-import { globalStatsCacheKeysForDifficulty, personalStatsCacheKeysForDifficulty } from '../statsCache';
+import { personalStatsCacheKeysForDifficulty } from '../statsCache';
 import type { SingleGameVariantHandler } from './types';
 
 function answerView(target: Player) {
@@ -59,7 +59,6 @@ async function settleGame(game: SingleGameState, status: 'won' | 'lost'): Promis
   await invalidateCached(
     leaderboardCacheKey('single', game.mode),
     ...personalStatsCacheKeysForDifficulty(identityKey, game.mode),
-    ...globalStatsCacheKeysForDifficulty(game.mode),
     `room-player-performance:${identityKey}`
   );
   return true;

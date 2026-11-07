@@ -4,6 +4,7 @@ import tls from 'tls';
 import { db } from '../db/knex';
 import { config } from '../config';
 import { redis, redisKey } from '../redis';
+import { invalidateAuthUser } from '../middleware/auth';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+$/;
 const EMAIL_VERIFICATION_COOLDOWN_SECONDS = 30;
@@ -200,8 +201,7 @@ export async function issueEmailVerification(
   try {
     const retryAt = options.enforceCooldown ? await claimEmailVerificationCooldown(userId) : null;
     await db('users').where({ id: userId }).update({ email, email_verified_at: null });
-    const authCache = redis();
-    if (authCache) await authCache.del(redisKey(`auth:user:${userId}`)).catch(() => undefined);
+    await invalidateAuthUser(userId);
     const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
     await db('email_verifications').where({ user_id: userId }).del();
     await db('email_verifications').insert({
@@ -248,8 +248,7 @@ export async function verifyEmailCode(userId: number, code: string): Promise<boo
     return true;
   });
   if (!verified) return false;
-  const authCache = redis();
-  if (authCache) await authCache.del(redisKey(`auth:user:${userId}`)).catch(() => undefined);
+  await invalidateAuthUser(userId);
   return true;
 }
 
@@ -264,7 +263,6 @@ export async function verifyEmailToken(token: string): Promise<boolean> {
     return true;
   });
   if (!verified) return false;
-  const authCache = redis();
-  if (authCache) await authCache.del(redisKey(`auth:user:${row.user_id}`)).catch(() => undefined);
+  await invalidateAuthUser(row.user_id);
   return true;
 }

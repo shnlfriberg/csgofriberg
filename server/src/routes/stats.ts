@@ -130,7 +130,7 @@ function answerView(target: Player) {
 }
 
 async function globalStats(difficulties: string[], variant: SingleGameVariant) {
-  return cached(globalStatsCacheKey(difficulties, variant), 60, async () => {
+  return cached(globalStatsCacheKey(difficulties, variant), 10, async () => {
     const [single, multi, multiGuesses, users, firstGuess] = await Promise.all([
       singleAggregate(db('games').where('variant', variant).whereIn('mode', difficulties), variant),
       db('match_records').whereIn('db_type', difficulties).where('game_mode', 'classic').count({ total: 'id' }).first(),
@@ -388,7 +388,8 @@ router.get(
         'm.total_rounds as totalRounds',
         'm.relay_solved_rounds as relaySolvedRounds',
         'm.winner_team as winnerTeam',
-        'm.replay',
+        'm.team_scores',
+        db.raw("case when m.game_mode = 'relay2v2' and m.team_scores is null then m.replay else null end as replay"),
         'm.created_at as finishedAt',
         'me.score as meScore',
         'me.is_winner as meWinner',
@@ -426,7 +427,8 @@ router.get(
       pageSize,
       hasNext: rows.length > pageSize,
       items: visibleRows.map((row) => {
-        const teamScores = row.gameMode === 'relay2v2' ? replayTeamScores(row.replay) : null;
+        const teamScores = row.gameMode === 'relay2v2'
+          ? row.team_scores ? JSON.parse(row.team_scores) : replayTeamScores(row.replay) : null;
         return {
         type: 'multi',
         id: Number(row.id),

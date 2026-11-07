@@ -5,6 +5,7 @@ import { rowsFor } from "./matches";
 import { seatId } from "./views";
 import type { Match, Seat } from "./types";
 import { observe } from './metrics';
+import { replaySummary } from './replaySummary';
 export async function settle(id: string) {
   return transaction(async (trx) => {
     await lockRow(trx, "card_catalog", { id: 1 });
@@ -67,6 +68,7 @@ export async function settle(id: string) {
         solved: solved.length,
         hops: solved.reduce((n, r) => n + r!.path.length - 1, 0),
         elapsed: solved.reduce((n, r) => n + r!.elapsed, 0),
+        replay_summary: JSON.stringify(replaySummary(result, s.owner.key)),
       });
     }
     if (

@@ -37,7 +37,7 @@ describe('registration validation', () => {
     await user.click(screen.getByRole('button', { name: '注册' }));
 
     expect(screen.getByText('用户名只能包含字母、数字、下划线、连字符和中文')).toBeInTheDocument();
-    expect(screen.getByText('密码长度必须为 10-128 个字符')).toBeInTheDocument();
+    expect(screen.getByText('密码至少 10 个字符，且不超过 72 字节（中文通常每字 3 字节）')).toBeInTheDocument();
     expect(screen.getByText('两次输入的密码不一致')).toBeInTheDocument();
     expect(screen.getByText('请输入有效的邮箱地址，例如 name@example.com')).toBeInTheDocument();
     expect(username).toHaveFocus();

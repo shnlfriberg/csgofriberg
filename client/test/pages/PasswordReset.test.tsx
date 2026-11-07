@@ -53,7 +53,7 @@ describe('password recovery form', () => {
     const user = userEvent.setup(); renderAtRoute(<PasswordReset />);
     await user.type(screen.getByLabelText('绑定邮箱'), 'bound@example.com');
     await user.type(screen.getByLabelText('邮箱验证码'), '012345');
-    await user.type(screen.getByLabelText('新密码（10–128 位）'), 'New-strong-password');
+    await user.type(screen.getByLabelText('新密码（至少 10 位，最多 72 字节）'), 'New-strong-password');
     await user.type(screen.getByLabelText('确认密码'), 'wrong');
     await user.click(screen.getByRole('button', { name: '重置密码' }));
     expect(screen.getByRole('alert')).toHaveTextContent('两次输入的密码不一致'); expect(mocks.post).not.toHaveBeenCalled();
@@ -63,7 +63,7 @@ describe('password recovery form', () => {
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('账号 test-user 的密码重置成功'));
     expect(mocks.clear).toHaveBeenCalledOnce(); expect(mocks.close).toHaveBeenCalledOnce();
     expect(screen.getByRole('link', { name: '返回登录' })).toHaveAttribute('href', '/login');
-    expect(screen.queryByLabelText('新密码（10–128 位）')).toBeNull();
+    expect(screen.queryByLabelText('新密码（至少 10 位，最多 72 字节）')).toBeNull();
   });
   it('retains input and allows retry on failure', async () => {
     mocks.post.mockRejectedValue(new Error('failed'));

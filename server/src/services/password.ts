@@ -111,7 +111,12 @@ function submit(
   });
 }
 
+export function passwordFitsBcrypt(password: string): boolean {
+  return Buffer.byteLength(password, 'utf8') <= 72;
+}
+
 export async function hashPassword(password: string, rounds = config.bcryptRounds): Promise<string> {
+  if (!passwordFitsBcrypt(password)) throw new Error('REGISTER_PASSWORD_LENGTH');
   return submit('hash', password, { rounds }) as Promise<string>;
 }
 
