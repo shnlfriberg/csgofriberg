@@ -6,6 +6,7 @@ import Page from '../components/Page';
 import CaptureImagePreview from '../components/admin/location/CaptureImagePreview';
 import Radar from '../location/Radar';
 import { api, message } from '../location/api';
+import { loadEnabledMaps } from '../location/mapCatalog';
 import { useSubmissionBatch } from '../location/useSubmissionBatch';
 import type { MapDefinition, SubmissionPage } from '../location/types';
 import '../styles/location.css';
@@ -40,7 +41,7 @@ export default function LocationSubmission() {
   };
   useEffect(() => {
     let alive = true; setMapsLoading(true);
-    void api.get<MapDefinition[]>('/location/maps').then(({ data }) => {
+    void loadEnabledMaps(mapsRevision > 0).then((data) => {
       if (!alive) return;
       const available = data.filter(item => item.enabled && item.floors.some(f => f.radarUrl));
       setMaps(available);

@@ -6,6 +6,12 @@ export function setClientAssetCacheHeaders(res: Response, filePath: string): voi
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     return;
   }
+  // Radar images (~1 MB in total) are reused on every 图寻 round: cache them for a
+  // day and let the browser revalidate in the background after that.
+  if (filePath.includes(`${path.sep}location-radars${path.sep}`)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400, stale-while-revalidate=604800');
+    return;
+  }
   if (path.basename(filePath) === 'index.html') {
     res.setHeader('Cache-Control', 'no-cache');
   }

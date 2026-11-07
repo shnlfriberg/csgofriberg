@@ -32,11 +32,27 @@ export function useRadarGestures({ map, floorId, onChange, onSelectArea, failed 
       v: Math.max(0, Math.min(1, (event.clientY - rect.top - current.y) / (rect.height * current.zoom))),
     };
   };
-  const update = (value: typeof view) => {
+  // Pointer moves and wheel ticks can fire far more often than the screen
+  // refreshes: keep the ref exact, but render at most once per animation frame.
+  const frame = useRef<number | null>(null);
+  const update = (value: typeof view, batch = false) => {
     viewRef.current = value;
-    setView(value);
+    if (!batch || typeof requestAnimationFrame !== 'function') {
+      if (frame.current !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame.current);
+      frame.current = null;
+      setView(value);
+      return;
+    }
+    if (frame.current !== null) return;
+    frame.current = requestAnimationFrame(() => {
+      frame.current = null;
+      setView(viewRef.current);
+    });
   };
-  const zoom = (factor: number, x?: number, y?: number) => {
+  useEffect(() => () => {
+    if (frame.current !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame.current);
+  }, []);
+  const zoom = (factor: number, x?: number, y?: number, batch = false) => {
     const current = viewRef.current;
     const next = Math.max(1, Math.min(6, current.zoom * factor));
     const rect = area.current?.getBoundingClientRect();
@@ -49,7 +65,8 @@ export function useRadarGestures({ map, floorId, onChange, onSelectArea, failed 
             zoom: next,
             x: anchorX - ((anchorX - current.x) * next) / current.zoom,
             y: anchorY - ((anchorY - current.y) * next) / current.zoom,
-          }
+          },
+      batch
     );
   };
   useEffect(() => {
@@ -65,7 +82,8 @@ export function useRadarGestures({ map, floorId, onChange, onSelectArea, failed 
       zoom(
         Math.exp(-event.deltaY * 0.002),
         event.clientX - rect.left,
-        event.clientY - rect.top
+        event.clientY - rect.top,
+        true
       );
     };
     element.addEventListener('wheel', wheel, { passive: false });
@@ -102,7 +120,8 @@ export function useRadarGestures({ map, floorId, onChange, onSelectArea, failed 
         zoom(
           distance / initial,
           (after[0].x + after[1].x) / 2 - rect.left,
-          (after[0].y + after[1].y) / 2 - rect.top
+          (after[0].y + after[1].y) / 2 - rect.top,
+          true
         );
     } else if (
       Math.hypot(
@@ -117,7 +136,7 @@ export function useRadarGestures({ map, floorId, onChange, onSelectArea, failed 
         ...current,
         x: current.x + event.clientX - previous.x,
         y: current.y + event.clientY - previous.y,
-      });
+      }, true);
     }
   };
   const release = (event: PointerEvent<HTMLDivElement>, cancelled = false) => {

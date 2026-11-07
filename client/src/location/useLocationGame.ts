@@ -65,8 +65,13 @@ export function useLocationGame(mode: 'random' | 'daily') {
           );
         })
         .catch((e) => alive && setError(message(e)));
+    // Returning to the tab re-reads the daily state at most once a minute
+    // (the midnight timer already handles the rollover).
+    let lastRefresh = Date.now();
     const visible = () => {
-      if (document.visibilityState === 'visible') refresh();
+      if (document.visibilityState !== 'visible' || Date.now() - lastRefresh < 60_000) return;
+      lastRefresh = Date.now();
+      refresh();
     };
     refresh();
     document.addEventListener('visibilitychange', visible);
@@ -258,12 +263,14 @@ export function useLocationGame(mode: 'random' | 'daily') {
       );
     }
   };
+  // Retrying after an error only re-reads an existing game; it never starts a
+  // new one (an error in the lobby used to create a game by accident).
   const synchronize = () =>
     game
       ? run(async () =>
           accept((await api.get<GameView>(`/location/games/${game.id}`)).data)
         )
-      : start();
+      : Promise.resolve(setError(''));
   return {
     difficulty,
     setDifficulty,

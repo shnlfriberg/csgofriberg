@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { memo, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, GripHorizontal, MapPin, Maximize2, PictureInPicture2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -131,14 +131,26 @@ function PhotoPip({ url, onExpand, onClose }: { url: string; onExpand: () => voi
     drag.current = { pointerId: event.pointerId, dx: event.clientX - rect.left, dy: event.clientY - rect.top };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
+  // Move the element directly while dragging; commit to React state once at the end.
+  const live = useRef<PipPosition | null>(position);
   const move = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (drag.current?.pointerId !== event.pointerId) return;
-    setPosition(clamp(event.clientX - drag.current.dx, event.clientY - drag.current.dy));
+    const next = clamp(event.clientX - drag.current.dx, event.clientY - drag.current.dy);
+    live.current = next;
+    const element = box.current;
+    if (element) {
+      element.style.left = `${next.x}px`;
+      element.style.top = `${next.y}px`;
+      element.style.right = 'auto';
+    }
   };
   const end = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (drag.current?.pointerId !== event.pointerId) return;
     drag.current = null;
-    try { if (position) sessionStorage.setItem(PIP_POSITION_KEY, JSON.stringify(position)); } catch { /* optional */ }
+    const next = live.current;
+    if (!next) return;
+    setPosition(next);
+    try { sessionStorage.setItem(PIP_POSITION_KEY, JSON.stringify(next)); } catch { /* optional */ }
   };
   return createPortal(
     <div
@@ -223,7 +235,9 @@ export function Photo({ url, pip = false, onPipClose }: { url: string; pip?: boo
           <img
             key={`${url}:${retry}`}
             src={url}
-            alt={t('location.title')}
+            alt={t('location.questionPhoto')}
+            decoding="async"
+            fetchPriority="high"
             onError={() => setFailed(true)}
           />
         )}
@@ -252,17 +266,20 @@ export function Photo({ url, pip = false, onPipClose }: { url: string; pip?: boo
         >
           <X />
         </button>
-        <img src={url} alt={t('location.title')} />
+        {/* The enlarged copy is decoded only when the dialog is opened. */}
+        {expanded && <img src={url} alt={t('location.questionPhoto')} decoding="async" />}
       </dialog>
     </>
   );
 }
-export function QuestionPanel({
+const NO_BANS: string[] = [];
+/** Memoized: multiplayer room patches must not re-render the radar unless its inputs change. */
+export const QuestionPanel = memo(function QuestionPanel({
   imageUrl,
   maps,
   onSubmit,
   disabled = false,
-  bannedMapIds = [],
+  bannedMapIds = NO_BANS,
 }: {
   imageUrl: string;
   maps: MapDefinition[];
@@ -395,7 +412,7 @@ export function QuestionPanel({
       </section>
     </div>
   );
-}
+});
 export function RoundReview({
   result,
   playerName,
@@ -431,7 +448,7 @@ export function RoundReview({
         </div>
         <strong className="location-round-score">
           {result.score.toLocaleString()}
-          <small>/ 5,000</small>
+          <small>/ {(5000).toLocaleString()}</small>
         </strong>
         {action && <div className="location-review-action">{action}</div>}
       </div>
@@ -517,7 +534,7 @@ export function Results({
           <span className="location-eyebrow">{t('location.result')}</span>
           <h1>
             {score.toLocaleString()}
-            <small>/ 25,000</small>
+            <small>/ {(25000).toLocaleString()}</small>
           </h1>
         </div>
         <div className="location-result-bars">

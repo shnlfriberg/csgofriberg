@@ -86,19 +86,20 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
       icon={<MapPin size={18} />}
       statusBar={statusBar}
       actions={
-        <Link className="btn btn-ghost btn-sm" to="/entertainment/location" aria-label={t('location.title')}>
-          <ArrowLeft size={16} />
+        <Link className="btn btn-ghost btn-sm" to="/entertainment/location">
+          <ArrowLeft size={16} aria-hidden="true" />
+          <span className="btn-text">{t('location.title')}</span>
         </Link>
       }
     >
       {error && (
         <div className="location-alert" role="alert">
-          {error}
+          <span>{error}</span>
           <button
             className="btn btn-ghost btn-sm"
             onClick={() => void synchronize()}
           >
-            {t('location.retry')}
+            {t(game ? 'location.retry' : 'common.close')}
           </button>
         </div>
       )}
@@ -137,10 +138,11 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
       )}
       {game && (
         <>
-          {pending && (
-            <div className="location-alert">
+          {pending && !busy && (
+            <div className="location-alert" role="status">
+              <span>{t('location.pendingAnswer')}</span>
               <button
-                className="btn"
+                className="btn btn-sm"
                 disabled={busy}
                 onClick={() => void send(pending)}
               >

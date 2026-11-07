@@ -6,6 +6,7 @@ import LocationMenu from '../../src/pages/LocationMenu';
 import { useAuth } from '../../src/store/auth';
 import { renderAtRoute } from '../render';
 import type { GameView, MapDefinition } from '../../src/location/types';
+import { resetMapCatalogCache } from '../../src/location/mapCatalog';
 
 const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('../../src/location/api', () => ({
@@ -43,6 +44,7 @@ const ready: GameView = {
   expiresAt: Date.now() + 3600000,
 };
 beforeEach(() => {
+  resetMapCatalogCache();
   get.mockReset();
   post.mockReset();
   useAuth.setState({ user: null, initialized: true });

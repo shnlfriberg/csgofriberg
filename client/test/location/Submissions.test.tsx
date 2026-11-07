@@ -7,6 +7,7 @@ import LocationSubmission from '../../src/pages/LocationSubmission';
 import SubmissionManager from '../../src/components/admin/location/SubmissionManager';
 import Leaderboard from '../../src/pages/Leaderboard';
 import type { MapDefinition } from '../../src/location/types';
+import { resetMapCatalogCache } from '../../src/location/mapCatalog';
 
 const { get, post } = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('../../src/api/client', () => ({ api: { get, post }, errMsg: () => '请求失败' }));
@@ -28,6 +29,7 @@ function uploadFile(name: string) {
   return file;
 }
 beforeEach(() => {
+  resetMapCatalogCache();
   get.mockReset(); post.mockReset();
   get.mockImplementation(async (url: string) => ({ data: url === '/location/maps' ? [map] : { items: [], total: 0, page: 1, pageSize: 12 } }));
 });

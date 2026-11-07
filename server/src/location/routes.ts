@@ -32,9 +32,12 @@ router.use((_req, res, next) => {
 });
 router.get(
   '/maps',
-  asyncHandler(async (_req, res) =>
-    res.json((await maps()).filter((map) => map.enabled))
-  )
+  asyncHandler(async (_req, res) => {
+    // Public map catalogue: a short private cache plus Express's ETag lets
+    // repeated lobby visits revalidate with a 304 instead of a fresh body.
+    res.set('Cache-Control', 'private, max-age=60');
+    res.json((await maps()).filter((map) => map.enabled));
+  })
 );
 router.post(
   '/games',

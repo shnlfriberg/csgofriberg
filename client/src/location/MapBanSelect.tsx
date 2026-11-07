@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from './api';
+import { loadEnabledMaps } from './mapCatalog';
 import type { MapDefinition } from './types';
 
 export default function MapBanSelect({ value, onChange, disabled }: {
@@ -11,14 +11,14 @@ export default function MapBanSelect({ value, onChange, disabled }: {
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [retry, setRetry] = useState(0);
   useEffect(() => {
-    const controller = new AbortController();
+    let alive = true;
     setStatus('loading');
-    void api.get<MapDefinition[]>('/location/maps', { signal: controller.signal }).then(response => {
-      if (controller.signal.aborted) return;
-      setMaps(response.data);
+    void loadEnabledMaps(retry > 0).then(data => {
+      if (!alive) return;
+      setMaps(data);
       setStatus('ready');
-    }).catch(() => { if (!controller.signal.aborted) setStatus('error'); });
-    return () => controller.abort();
+    }).catch(() => { if (alive) setStatus('error'); });
+    return () => { alive = false; };
   }, [retry]);
   return <details className="location-ban-select">
     <summary><span>{t('location.banMaps')}</span> <span className="location-ban-count">{value.length} / 2</span></summary>
