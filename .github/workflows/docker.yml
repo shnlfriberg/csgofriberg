@@ -45,7 +45,9 @@ jobs:
           DB_CLIENT: sqlite
           DB_URL: /tmp/friberg-verification/ci.sqlite3
           LOCATION_ASSET_DIR: /tmp/friberg-ci-assets
-          REDIS_PREFIX: 'friberg-ci:'
+          # Same isolated-prefix convention as scripts/test-integrated.ps1; Redis
+          # integration suites refuse any other prefix.
+          REDIS_PREFIX: 'integration-tests:ci-${{ github.run_id }}-${{ github.run_attempt }}:'
           NODE_ENV: test
       - run: pnpm build
 
