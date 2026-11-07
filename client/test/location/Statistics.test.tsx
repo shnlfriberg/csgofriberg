@@ -38,9 +38,9 @@ beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
   get.mockImplementation(async (url: string, options?: { params?: { type?: string } }) => {
-    if (url === '/location/stats') return { data: { difficulties: ['easy', 'normal', 'hard'], personal: summary,
+    if (url === '/stats/me') return { data: { difficulties: ['easy', 'normal', 'hard'], personal: summary,
       global: { ...summary, multiGames: 10, multiEntries: 25 } } };
-    if (url === '/location/replays') return { data: { page: 1, pageSize: 15, hasNext: true,
+    if (url === '/stats/replays') return { data: { page: 1, pageSize: 15, hasNext: true,
       items: [{ ...item, mode: options?.params?.type === 'multi' ? 'multiplayer' : 'random' }] } };
     if (url.endsWith('/replay')) return { data: replay };
     throw new Error(`Unexpected URL ${url}`);
@@ -52,27 +52,29 @@ describe('integrated location statistics', () => {
     renderAtRoute(<Stats />, { route: '/stats?variant=location', path: '/stats' });
     expect(screen.getByRole('tab', { name: '图寻' })).toHaveAttribute('aria-selected', 'true');
     await screen.findAllByText('15,000');
-    expect(get).toHaveBeenCalledWith('/location/stats', { params: { difficulties: 'easy,normal,hard' } });
-    expect(get.mock.calls.some(([url]) => url.startsWith('/stats/'))).toBe(false);
+    expect(get).toHaveBeenCalledWith('/stats/me', { params: { variant: 'location', difficulties: 'easy,normal,hard' } });
+    // Only 图寻 statistics are requested on this tab, never the classic ones.
+    expect(get.mock.calls.filter(([url]) => url.startsWith('/stats/'))
+      .every(([, options]) => options?.params?.variant === 'location')).toBe(true);
     const personal = screen.getByRole('heading', { name: '个人统计' }).closest('.card')!;
     expect(within(personal as HTMLElement).getByText('题目被采纳数（累计）').closest('tr')).toHaveTextContent('3');
     expect(within(personal as HTMLElement).getByText('4 / 2')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '下一页' }));
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/location/replays', { params: {
-      difficulties: 'easy,normal,hard', type: 'single', mode: 'all', page: 2, pageSize: 15,
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stats/replays', { params: {
+      variant: 'location', difficulties: 'easy,normal,hard', type: 'single', mode: 'all', page: 2, pageSize: 15,
     } }));
     fireEvent.click(screen.getByText('全部分级', { selector: '.difficulty-multi-select-summary' }));
     fireEvent.click(within(screen.getByRole('group', { name: '统计难度' })).getByRole('checkbox', { name: /^简单$/ }));
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/location/replays', { params: {
-      difficulties: 'normal,hard', type: 'single', mode: 'all', page: 1, pageSize: 15,
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stats/replays', { params: {
+      variant: 'location', difficulties: 'normal,hard', type: 'single', mode: 'all', page: 1, pageSize: 15,
     } }));
     fireEvent.change(screen.getByRole('combobox', { name: '模式' }), { target: { value: 'daily' } });
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/location/replays', { params: {
-      difficulties: 'normal,hard', type: 'single', mode: 'daily', page: 1, pageSize: 15,
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stats/replays', { params: {
+      variant: 'location', difficulties: 'normal,hard', type: 'single', mode: 'daily', page: 1, pageSize: 15,
     } }));
     fireEvent.click(screen.getByRole('tab', { name: /^多人$/ }));
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/location/replays', { params: {
-      difficulties: 'normal,hard', type: 'multi', mode: 'daily', page: 1, pageSize: 15,
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stats/replays', { params: {
+      variant: 'location', difficulties: 'normal,hard', type: 'multi', mode: 'daily', page: 1, pageSize: 15,
     } }));
   });
   it('opens a screenshot replay with answer/guess overlays, round thumbnails and image enlargement', async () => {
@@ -111,7 +113,7 @@ describe('integrated location statistics', () => {
     const original = get.getMockImplementation()!;
     let fail = true;
     get.mockImplementation((url, options) => {
-      if (url === '/location/stats' && fail) { fail = false; return Promise.reject(new Error('offline')); }
+      if (url === '/stats/me' && fail) { fail = false; return Promise.reject(new Error('offline')); }
       return original(url, options);
     });
     renderAtRoute(<LocationHistory />, { route: '/entertainment/location/history', path: '/entertainment/location/history',
@@ -120,7 +122,7 @@ describe('integrated location statistics', () => {
     fireEvent.click(screen.getByRole('button', { name: '重试' }));
     await screen.findAllByText('15,000');
     expect(screen.getByRole('tab', { name: '图寻' })).toHaveAttribute('aria-selected', 'true');
-    expect(get.mock.calls.filter(([url]) => url === '/location/stats')).toHaveLength(2);
+    expect(get.mock.calls.filter(([url]) => url === '/stats/me')).toHaveLength(2);
   });
   it('discards a late replay response after the selected mode changes', async () => {
     const original = get.getMockImplementation()!;

@@ -5,14 +5,13 @@ import {
   optionalAuth,
   userNameFromUsername,
 } from '../middleware/auth';
-import { asyncHandler, HttpError, validateBody, validateQuery } from '../middleware/common';
+import { asyncHandler, HttpError, validateBody } from '../middleware/common';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import {
   abandonGame,
   answerGame,
   ensureDaily,
   readGame,
-  replay,
   startGame,
   submitDaily,
 } from './games';
@@ -23,9 +22,8 @@ import { requestOwner } from './identity';
 export { requestOwner } from './identity';
 import { config } from '../config';
 
-/** 图寻 daily. 单人 (random) runs on /api/game. */
+/** 图寻 daily. 单人 (random) runs on /api/game; statistics and replays on /api/stats. */
 const dailyStartSchema = z.object({ mode: z.literal('daily'), difficulty: difficultySchema }).strict();
-import { locationStatistics, locationStatsQuery, locationReplays, locationReplaysQuery } from './statistics';
 
 const router = Router();
 router.use(optionalAuth);
@@ -83,12 +81,6 @@ router.post(
   )
 );
 router.get(
-  '/games/:id/replay',
-  asyncHandler(async (req, res) =>
-    res.json(await replay(req.params.id, requestOwner(req)))
-  )
-);
-router.get(
   '/daily',
   asyncHandler(async (req, res) => {
     const owner = requestOwner(req);
@@ -127,72 +119,6 @@ router.get(
             ? 'playing'
             : 'not_started',
       })),
-    });
-  })
-);
-router.get(
-  '/stats',
-  rateLimit({ name: 'location-stats', limit: 30, windowSeconds: 60, key: requestIdentity, failClosed: true }),
-  validateQuery(locationStatsQuery),
-  asyncHandler(async (req, res) => {
-    const query = req.query as unknown as z.infer<typeof locationStatsQuery>;
-    res.json(await locationStatistics(requestOwner(req).key, query.difficulties));
-  })
-);
-router.get(
-  '/replays',
-  rateLimit({ name: 'location-replays', limit: 60, windowSeconds: 60, key: requestIdentity, failClosed: true }),
-  validateQuery(locationReplaysQuery),
-  asyncHandler(async (req, res) => res.json(await locationReplays(
-    requestOwner(req).key, req.query as unknown as z.infer<typeof locationReplaysQuery>
-  )))
-);
-router.get(
-  '/history',
-  asyncHandler(async (req, res) => {
-    const owner = requestOwner(req);
-    const difficulty = difficultySchema
-      .catch('normal')
-      .parse(req.query.difficulty);
-    const page = Math.max(1, Math.min(10000, Number(req.query.page) || 1));
-    const rows = await db('location_results')
-      .where({ identity_key: owner.key })
-      .orderBy('finished_at', 'desc')
-      .limit(15)
-      .offset((page - 1) * 15);
-    const stats = await db('location_results')
-      .where({ identity_key: owner.key, mode: 'random', difficulty })
-      .select('score', 'payload');
-    const results = stats.flatMap((row) => JSON.parse(row.payload).results);
-    res.json({
-      items: rows.map((row) => {
-        const payload = JSON.parse(row.payload);
-        return {
-          gameId: row.game_id,
-          mode: row.mode,
-          difficulty: row.difficulty,
-          date: row.date,
-          totalScore: Number(row.score),
-          finishedAt: Number(row.finished_at),
-          rank: payload.rank ?? null,
-          retired: payload.retired ?? false,
-        };
-      }),
-      page,
-      stats: {
-        difficulty,
-        games: stats.length,
-        best: Math.max(0, ...stats.map((row) => Number(row.score))),
-        average: stats.length
-          ? Math.round(
-              stats.reduce((sum, row) => sum + Number(row.score), 0) /
-                stats.length
-            )
-          : 0,
-        mapAccuracy: results.length
-          ? results.filter((r: any) => r.mapCorrect).length / results.length
-          : 0,
-      },
     });
   })
 );

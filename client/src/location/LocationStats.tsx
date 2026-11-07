@@ -34,7 +34,7 @@ export default function LocationStats() {
   useEffect(() => {
     let alive = true;
     setSummaryLoading(true); setSummaryError('');
-    void api.get<LocationStatsResponse>('/location/stats', { params: { difficulties: difficultyKey } })
+    void api.get<LocationStatsResponse>('/stats/me', { params: { variant: 'location', difficulties: difficultyKey } })
       .then(({ data }) => { if (alive) setSummary(data); })
       .catch((error) => { if (alive) setSummaryError(message(error)); })
       .finally(() => { if (alive) setSummaryLoading(false); });
@@ -44,8 +44,8 @@ export default function LocationStats() {
     let alive = true;
     detailRequest.current++; setReplay(null); setOpening('');
     setLoading(true); setListError(''); setItems([]); setHasNext(false);
-    void api.get<LocationReplayPage>('/location/replays', { params: {
-      difficulties: difficultyKey, type, mode, page, pageSize: 15,
+    void api.get<LocationReplayPage>('/stats/replays', { params: {
+      variant: 'location', difficulties: difficultyKey, type, mode, page, pageSize: 15,
     } })
       .then(({ data }) => { if (alive) { setItems(data.items); setHasNext(data.hasNext); } })
       .catch((error) => { if (alive) setListError(message(error)); })
@@ -56,7 +56,7 @@ export default function LocationStats() {
     const request = ++detailRequest.current;
     setOpening(item.gameId); setListError('');
     try {
-      const { data } = await api.get<ReplayRecord>(`/location/games/${item.gameId}/replay`);
+      const { data } = await api.get<ReplayRecord>(`/stats/games/${item.gameId}/replay`, { params: { variant: 'location' } });
       if (request === detailRequest.current) setReplay({ record: data, item });
     } catch (error) {
       if (request === detailRequest.current) setListError(message(error));

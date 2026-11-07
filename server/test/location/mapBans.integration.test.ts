@@ -14,6 +14,7 @@ import { ensureDaily } from '../../src/location/games';
 import { MIX } from '../../src/location/rules';
 import { seedLocationFixtures } from './database';
 import gameRoutes from '../../src/routes/game';
+import statsRoutes from '../../src/routes/stats';
 import { testMap, testPool } from './fixtures';
 
 describe('solo map bans', () => {
@@ -39,7 +40,7 @@ describe('solo map bans', () => {
         await db('location_questions').insert({ id, image_hash: q.imageHash, payload: JSON.stringify(q) });
       }
     }
-    const app = express(); app.use(express.json()); app.use('/game', gameRoutes);
+    const app = express(); app.use(express.json()); app.use('/game', gameRoutes); app.use('/stats', statsRoutes);
     app.use(locationRoutes); app.use(errorHandler);
     server = app.listen(0); await new Promise<void>(resolve => server.once('listening', resolve));
     base = `http://127.0.0.1:${(server.address() as any).port}`;
@@ -79,7 +80,7 @@ describe('solo map bans', () => {
       expect(response.status).toBe(200); game = response.data;
     }
     expect(game.status).toBe('finished');
-    expect((await req(`/games/${id}/replay`)).data.game.bannedMapIds).toEqual([...bans].sort());
+    expect((await req(`/stats/games/${id}/replay?variant=location`)).data.game.bannedMapIds).toEqual([...bans].sort());
     const next = (await req('/game/start', { variant: 'location', mode: 'hard', bannedMapIds: bans })).data;
     expect(next.gameId).not.toBe(id); expect(next.bannedMapIds).toEqual([...bans].sort());
     await req(`/game/${next.gameId}/exit`, {});

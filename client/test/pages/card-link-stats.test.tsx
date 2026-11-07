@@ -8,9 +8,9 @@ const summary = { games: 2, entries: 2, rounds: 2, solved: 1, modes: { practice:
 beforeEach(() => {
   get.mockReset();
   HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', ''); });
-  get.mockImplementation(async (path: string) => ({ data: path === '/card-link/stats'
+  get.mockImplementation(async (path: string) => ({ data: path === '/stats/me'
     ? { personal: summary, global: summary, rating: 1200 }
-    : path.startsWith('/card-link/history/') ? { playersDirectory: [{ id: 1, nickname: 'A' }, { id: 2, nickname: 'B' }], players: [{ id: 'me', name: 'Player', retired: false, results: [{ path: [1, 2], elapsed: 1000 }] }], evidence: [] }
+    : path.startsWith('/stats/games/') ? { playersDirectory: [{ id: 1, nickname: 'A' }, { id: 2, nickname: 'B' }], players: [{ id: 'me', name: 'Player', retired: false, results: [{ path: [1, 2], elapsed: 1000 }] }], evidence: [] }
     : { hasNext: true, items: [{ id: 'game-1', scene: 'practice', variant: 'unlimited', solved: 1, rounds: 1, hops: 3, elapsed: 2500, finishedAt: 1700000000000, retired: false, rank: null }] } }));
 });
 describe('card career page', () => {
@@ -20,12 +20,12 @@ describe('card career page', () => {
     expect(await screen.findByText('1200')).toBeInTheDocument();
     expect(screen.getAllByText('50.0%')).toHaveLength(2);
     fireEvent.change(screen.getByLabelText('手牌模式'), { target: { value: 'limited' } });
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/card-link/stats', { params: { variant: 'limited' } }));
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stats/me', { params: { variant: 'card-link', hand: 'limited' } }));
     fireEvent.change(screen.getByRole('combobox', { name: '模式' }), { target: { value: 'friend' } });
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/card-link/replays', { params: { variant: 'limited', scene: 'friend', page: 1 } }));
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stats/replays', { params: { variant: 'card-link', hand: 'limited', scene: 'friend', page: 1 } }));
     await waitFor(() => expect(screen.getByRole('button', { name: '下一页' })).toBeEnabled());
     fireEvent.click(screen.getByRole('button', { name: '下一页' }));
-    await waitFor(() => expect(get).toHaveBeenCalledWith('/card-link/replays', { params: { variant: 'limited', scene: 'friend', page: 2 } }));
+    await waitFor(() => expect(get).toHaveBeenCalledWith('/stats/replays', { params: { variant: 'card-link', hand: 'limited', scene: 'friend', page: 2 } }));
   });
   it('opens an authorized historical replay in the common dialog layout', async () => {
     renderAtRoute(<Stats />, { route: '/stats?variant=card-link', path: '/stats' });
@@ -34,7 +34,7 @@ describe('card career page', () => {
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByRole('article', { name: 'A' })).toBeInTheDocument();
     expect(within(dialog).getByRole('article', { name: 'B' })).toBeInTheDocument();
-    expect(get).toHaveBeenCalledWith('/card-link/history/game-1');
+    expect(get).toHaveBeenCalledWith('/stats/games/game-1/replay', { params: { variant: 'card-link' } });
     fireEvent.click(within(dialog).getByRole('button', { name: '关闭回放' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });

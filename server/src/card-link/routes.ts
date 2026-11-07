@@ -1,8 +1,6 @@
 import { reviewPreview } from "./reviewPreview";
 import { cardDirectory } from './directory';
-import { cardStats, cardReplays, statsQuery, replaysQuery } from './stats';
 import { dailyLeaderboard } from "./leaderboard";
-import { decodeReplay } from "./replay";
 import { config } from "../config";
 import { identityKeys, matchOwner } from "./claims";
 import { queueBuild } from "./buildJobs";
@@ -198,70 +196,6 @@ router.delete(
 );
 router.post('/queue/heartbeat', validateBody(z.object({ ticket: requestId }).strict()),
   asyncHandler(async (req, res) => res.json(await heartbeatQueue(ownerOf(req), req.body.ticket))));
-router.get(
-  "/history",
-  validateQuery(pageQuery),
-  asyncHandler(async (req, res) => {
-    const page = Number(req.query.page);
-    res.json(
-      await db("card_participants as p")
-        .join("card_results as r", "r.match_id", "p.match_id")
-        .whereIn("p.identity_key", await identityKeys(ownerOf(req)))
-        .orderBy("r.created_at", "desc")
-        .limit(30)
-        .offset(page * 30)
-        .select(
-          "p.match_id",
-          "p.variant",
-          "p.scene",
-          "p.solved",
-          "p.hops",
-          "p.elapsed",
-          "r.created_at",
-        ),
-    );
-  }),
-);
-router.get('/stats', validateQuery(statsQuery), asyncHandler(async (req, res) => {
-  const { variant } = statsQuery.parse(req.query);
-  res.json(await cardStats(ownerOf(req), variant));
-}));
-router.get('/replays', validateQuery(replaysQuery), asyncHandler(async (req, res) => {
-  res.json(await cardReplays(ownerOf(req), replaysQuery.parse(req.query)));
-}));
-router.get(
-  "/history/:id",
-  asyncHandler(async (req, res) => {
-    if (
-      !(await db("card_participants")
-        .where({ match_id: req.params.id })
-        .whereIn("identity_key", await identityKeys(ownerOf(req)))
-        .first())
-    )
-      throw new HttpError(404, "CARD_MATCH_NOT_FOUND");
-    const r = await db("card_results")
-      .where({ match_id: req.params.id })
-      .first();
-    const result = decodeReplay(r.payload);
-    const g = await loadGraph(result.match.graphVersion);
-    res.json({
-      ...result,
-      playersDirectory: await cardDirectory(g.data.players, result.match.variant),
-      evidence: g.data.edges.filter((e) =>
-        result.players.some((p: { results: ({ path: number[] } | null)[] }) =>
-          p.results.some((r) =>
-            r?.path.some(
-              (id, i) =>
-                i > 0 &&
-                ((id === e.a && r.path[i - 1] === e.b) ||
-                  (id === e.b && r.path[i - 1] === e.a)),
-            ),
-          ),
-        ),
-      ),
-    });
-  }),
-);
 router.get(
   "/leaderboard",
   validateQuery(leaderboardQuery),

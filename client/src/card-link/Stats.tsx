@@ -26,14 +26,14 @@ export default function CardStats() {
   useEffect(() => {
     let alive = true;
     setSummary(null); setError('');
-    void api.get<SummaryResponse>('/card-link/stats', { params: { variant } })
+    void api.get<SummaryResponse>('/stats/me', { params: { variant: 'card-link', hand: variant } })
       .then(({ data }) => { if (alive) setSummary(data); }).catch(error => { if (alive) setError(errMsg(error)); });
     return () => { alive = false; };
   }, [variant, retry]);
   useEffect(() => {
     let alive = true;
     detailRequest.current++; setReplay(null); setOpening(''); setItems([]); setLoading(true); setHasNext(false);
-    void api.get<{ items: Item[]; hasNext: boolean }>('/card-link/replays', { params: { variant, scene, page } })
+    void api.get<{ items: Item[]; hasNext: boolean }>('/stats/replays', { params: { variant: 'card-link', hand: variant, scene, page } })
       .then(({ data }) => { if (alive) { setItems(data.items); setHasNext(data.hasNext); } })
       .catch(error => { if (alive) setError(errMsg(error)); }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; detailRequest.current++; };
@@ -41,7 +41,7 @@ export default function CardStats() {
   const open = async (item: Item) => {
     const request = ++detailRequest.current;
     setOpening(item.id);
-    try { const { data } = await api.get<CardReplay>(`/card-link/history/${item.id}`); if (request === detailRequest.current) setReplay(data); }
+    try { const { data } = await api.get<CardReplay>(`/stats/games/${item.id}/replay`, { params: { variant: 'card-link' } }); if (request === detailRequest.current) setReplay(data); }
     catch (error) { if (request === detailRequest.current) setError(errMsg(error)); }
     finally { if (request === detailRequest.current) setOpening(''); }
   };

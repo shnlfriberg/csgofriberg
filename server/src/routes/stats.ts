@@ -1,6 +1,6 @@
 import { soupReplay } from '../services/turtleSoup';
 import { singleGameVariantSchema, type SingleGameVariant } from '../services/gameModes';
-import { Router } from 'express';
+import { Router, type NextFunction, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { db } from '../db/knex';
 import { guestNameFromKey, optionalAuth, userNameFromUsername } from '../middleware/auth';
@@ -13,6 +13,11 @@ import { GuessFeedback, Player } from '../types';
 import { rateLimit, requestIdentity } from '../middleware/rateLimit';
 import { globalStatsCacheKey, personalStatsCacheKey } from '../services/statsCache';
 import { DIFFICULTY_LEVELS } from '../difficulties';
+import { locationReplays, locationReplaysQuery, locationStatistics, locationStatsQuery } from '../location/statistics';
+import { replay as locationReplay } from '../location/games';
+import { requestOwner } from '../location/identity';
+import { cardReplayDetail, cardReplays, cardStats } from '../card-link/stats';
+import { variantSchema as cardHandSchema } from '../card-link/validation';
 
 const router = Router();
 router.use(optionalAuth);
@@ -214,6 +219,70 @@ function replayGuesses(target: Player, ids: number[]): GuessFeedback[] {
     return guess ? [compareGuess(guess, target)] : [];
   });
 }
+
+/**
+ * 图寻 and 卡牌连接 statistics on the same paths as classic and 海龟汤, chosen
+ * by `variant` (卡牌's hand mode is `hand`, as in /api/game). Response bodies
+ * are each game's own summary and replay shapes. Other variants continue to the
+ * classic handlers below.
+ */
+const entertainmentVariant = (req: Request, _res: Response, next: NextFunction) =>
+  req.query.variant === 'location' || req.query.variant === 'card-link' ? next() : next('route');
+const locationSummaryQuery = locationStatsQuery.extend({ variant: z.literal('location') }).strict();
+const locationReplayListQuery = locationReplaysQuery.extend({ variant: z.literal('location') }).strict();
+const cardSummaryQuery = z.object({ variant: z.literal('card-link'), hand: cardHandSchema.default('unlimited') }).strict();
+const cardReplayListQuery = cardSummaryQuery.extend({
+  scene: z.enum(['all', 'practice', 'daily', 'friend', 'ranked']).default('all'),
+  page: z.coerce.number().int().min(1).max(100000).default(1),
+}).strict();
+const entertainmentReplayParams = z.object({ id: z.string().regex(/^[\w-]{1,128}$/) });
+function parseQuery<T>(schema: z.ZodType<T>, value: unknown): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new HttpError(400, 'VALIDATION_FAILED');
+  return parsed.data;
+}
+
+router.get(
+  '/me',
+  entertainmentVariant,
+  rateLimit({ name: 'stats-entertainment', limit: 30, windowSeconds: 60, key: requestIdentity, failClosed: true }),
+  asyncHandler(async (req, res) => {
+    const owner = requestOwner(req);
+    if (req.query.variant === 'location') {
+      res.json(await locationStatistics(owner.key, parseQuery(locationSummaryQuery, req.query).difficulties));
+      return;
+    }
+    res.json(await cardStats(owner, parseQuery(cardSummaryQuery, req.query).hand));
+  })
+);
+
+router.get(
+  '/replays',
+  entertainmentVariant,
+  rateLimit({ name: 'stats-entertainment-replays', limit: 60, windowSeconds: 60, key: requestIdentity, failClosed: true }),
+  asyncHandler(async (req, res) => {
+    const owner = requestOwner(req);
+    if (req.query.variant === 'location') {
+      res.json(await locationReplays(owner.key, parseQuery(locationReplayListQuery, req.query)));
+      return;
+    }
+    const { hand, scene, page } = parseQuery(cardReplayListQuery, req.query);
+    res.json(await cardReplays(owner, { variant: hand, scene, page }));
+  })
+);
+
+router.get(
+  '/games/:id/replay',
+  entertainmentVariant,
+  rateLimit({ name: 'stats-entertainment-replay', limit: 60, windowSeconds: 60, key: requestIdentity, failClosed: true }),
+  validateParams(entertainmentReplayParams),
+  asyncHandler(async (req, res) => {
+    const owner = requestOwner(req);
+    res.json(req.query.variant === 'location'
+      ? await locationReplay(req.params.id, owner)
+      : await cardReplayDetail(req.params.id, owner));
+  })
+);
 
 /** 统计:当前身份的个人数据和全站聚合。回放列表独立分页查询。 */
 router.get(

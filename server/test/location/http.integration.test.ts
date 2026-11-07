@@ -16,6 +16,7 @@ import { MIX } from '../../src/location/rules';
 import type { Difficulty, Identity } from '../../src/location/types';
 import { seedLocationFixtures } from './database';
 import gameRoutes from '../../src/routes/game';
+import statsRoutes from '../../src/routes/stats';
 
 describe('location HTTP lifecycle', () => {
   let server: http.Server; let base = ''; let clean: () => Promise<void>;
@@ -27,7 +28,7 @@ describe('location HTTP lifecycle', () => {
   }
   beforeAll(async () => {
     await initDb(); await initRedis(); clean = await seedLocationFixtures();
-    const app = express(); app.use(express.json()); app.use('/api/location', locationRoutes); app.use('/api/game', gameRoutes); app.use(errorHandler);
+    const app = express(); app.use(express.json()); app.use('/api/location', locationRoutes); app.use('/api/game', gameRoutes); app.use('/api/stats', statsRoutes); app.use(errorHandler);
     server = app.listen(0); await new Promise<void>(resolve => server.once('listening', resolve)); base = `http://127.0.0.1:${(server.address() as any).port}`;
   });
   afterAll(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await clean(); });
@@ -70,7 +71,7 @@ describe('location HTTP lifecycle', () => {
       const answer = await req(`/games/${game.id}/answers`, { mapId: q.mapId, floorId: q.floorId, u: q.u, v: q.v, round, version: round - 1, requestId: randomUUID() });
       expect(answer.status).toBe(200); game = answer.data; expect(game.results).toEqual([]); expect(game.totalScore).toBeNull(); expect(game).not.toHaveProperty('questions');
       expect((await req(`/games/${game.id}`)).data.results).toEqual([]);
-      expect((await req(`/games/${game.id}/replay`)).status).toBe(404);
+      expect((await req(`/games/${game.id}/replay?variant=location`, undefined, false, '/api/stats')).status).toBe(404);
     }
     expect(game.status).toBe('ready');
     const submissions = await Promise.all([req(`/games/${game.id}/submit`, {}), req(`/games/${game.id}/submit`, {})]);
@@ -79,7 +80,7 @@ describe('location HTTP lifecycle', () => {
     expect(Number((await db('location_results').where({ identity_key: identity.key, game_id: game.id }).count('* as count').first())!.count)).toBe(1);
     expect((await req('/games', { mode: 'daily', difficulty: 'normal' })).data.status).toBe('finished');
     expect((await req(`/games/${game.id}/abandon`, {})).status).toBe(409);
-    expect((await req(`/games/${game.id}/replay`)).data.totalScore).toBe(25000);
+    expect((await req(`/games/${game.id}/replay?variant=location`, undefined, false, '/api/stats')).data.totalScore).toBe(25000);
   });
   it('expires unfinished games and keeps scores independent of catalog edits', async () => {
     const created = await req('/games', { mode: 'daily', difficulty: 'easy' }); const game = (await loadGame(created.data.id, identity))!;

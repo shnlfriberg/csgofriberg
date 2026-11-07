@@ -1,6 +1,9 @@
 import { compareResults, type Variant } from '@friberg/card-link-core';
 import { z } from 'zod';
 import { db } from '../db/knex';
+import { HttpError } from '../middleware/common';
+import { cardDirectory } from './directory';
+import { loadGraph } from './graphs';
 import { cached } from '../services/queryCache';
 import { identityKeys } from './claims';
 import { decodeReplay } from './replay';
@@ -59,3 +62,29 @@ export async function cardReplays(owner: Owner, options: z.infer<typeof replaysQ
       rank: ['friend', 'ranked'].includes(row.scene) ? rank : null };
   }) };
 }
+
+/** One settled match of this identity (or its claimed guest keys) with the evidence of every saved path. */
+export async function cardReplayDetail(id: string, owner: Owner) {
+  if (!(await db('card_participants').where({ match_id: id }).whereIn('identity_key', await identityKeys(owner)).first()))
+    throw new HttpError(404, 'CARD_MATCH_NOT_FOUND');
+  const row = await db('card_results').where({ match_id: id }).first();
+  const result = decodeReplay(row.payload);
+  const g = await loadGraph(result.match.graphVersion);
+  return {
+    ...result,
+    playersDirectory: await cardDirectory(g.data.players, result.match.variant),
+    evidence: g.data.edges.filter((e) =>
+      result.players.some((p: { results: ({ path: number[] } | null)[] }) =>
+        p.results.some((r) =>
+          r?.path.some(
+            (pid, i) =>
+              i > 0 &&
+              ((pid === e.a && r.path[i - 1] === e.b) ||
+                (pid === e.b && r.path[i - 1] === e.a)),
+          ),
+        ),
+      ),
+    ),
+  };
+}
+

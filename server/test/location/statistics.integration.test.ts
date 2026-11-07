@@ -7,7 +7,7 @@ import { db } from '../../src/db/knex';
 import { initDb } from '../../src/db/init';
 import { initRedis } from '../../src/redis';
 import { errorHandler } from '../../src/middleware/common';
-import locationRoutes from '../../src/location/routes';
+import statsRoutes from '../../src/routes/stats';
 import { testMap } from './fixtures';
 import type { Difficulty, Mode, RoundResult } from '../../src/location/types';
 
@@ -48,48 +48,48 @@ describe('location statistics and personal replays', () => {
         }),
       });
     }
-    const app = express(); app.use('/location', locationRoutes); app.use(errorHandler);
+    const app = express(); app.use('/api/stats', statsRoutes); app.use(errorHandler);
     server = app.listen(0); await new Promise<void>((resolve) => server.once('listening', resolve));
-    base = `http://127.0.0.1:${(server.address() as { port: number }).port}/location`;
+    base = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/stats`;
   });
   afterAll(async () => {
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await db('location_results').whereIn('identity_key', [owner, other]).delete();
   });
   it('merges selected difficulties, counts multiplayer games once globally and excludes retired winners', async () => {
-    const all = await req('/stats');
+    const all = await req('/me?variant=location');
     expect(all.status).toBe(200);
     expect(all.data.personal).toEqual({ acceptedSubmissions: 0, singleGames: 3, randomGames: 2, dailyGames: 1, averageScore: 15000,
       bestScore: 20000, multiGames: 2, multiEntries: 2, multiWins: 1, multiAverageScore: 12000 });
     expect(all.data.global.multiGames).toBe(2);
     expect(all.data.global.multiEntries).toBe(3);
     expect(all.data.global.multiAverageScore).toBe(12000);
-    const easy = await req('/stats?difficulties=easy');
+    const easy = await req('/me?variant=location&difficulties=easy');
     expect(easy.data.personal).toMatchObject({ singleGames: 1, averageScore: 10000, bestScore: 10000, multiGames: 0 });
-    const isolated = await req('/stats?difficulties=easy', other);
+    const isolated = await req('/me?variant=location&difficulties=easy', other);
     expect(isolated.data.personal.singleGames).toBe(0);
     expect(isolated.data.personal.averageScore).toBeNull();
-    expect((await req('/stats?difficulties=invalid')).status).toBe(400);
+    expect((await req('/me?variant=location&difficulties=invalid')).status).toBe(400);
   });
   it('filters and paginates only the current identity’s single and multiplayer results', async () => {
-    const first = await req('/replays?pageSize=2');
+    const first = await req('/replays?variant=location&pageSize=2');
     expect(first.data).toMatchObject({ page: 1, pageSize: 2, hasNext: true });
     expect(first.data.items.map((item: { mode: string }) => item.mode)).toEqual(['daily', 'random']);
-    const second = await req('/replays?pageSize=2&page=2');
+    const second = await req('/replays?variant=location&pageSize=2&page=2');
     expect(second.data.hasNext).toBe(false); expect(second.data.items).toHaveLength(1);
-    const daily = await req('/replays?mode=daily');
+    const daily = await req('/replays?variant=location&mode=daily');
     expect(daily.data.items).toHaveLength(1); expect(daily.data.items[0].mode).toBe('daily');
-    const multi = await req('/replays?type=multi&difficulties=normal');
+    const multi = await req('/replays?variant=location&type=multi&difficulties=normal');
     expect(multi.data.items).toHaveLength(1); expect(multi.data.items[0]).toMatchObject({ rank: 1, retired: false });
-    expect((await req('/replays?type=single', other)).data.items).toEqual([]);
-    expect((await req('/replays?page=-1')).status).toBe(400);
+    expect((await req('/replays?variant=location&type=single', other)).data.items).toEqual([]);
+    expect((await req('/replays?variant=location&page=-1')).status).toBe(400);
   });
   it('returns original screenshot and map snapshots in a replay and blocks other identities', async () => {
     const id = `${tag}-random-easy`;
-    const own = await req(`/games/${id}/replay`);
+    const own = await req(`/games/${id}/replay?variant=location`);
     expect(own.data.results[0]).toEqual(round);
-    expect((await req(`/games/${id}/replay`, other)).status).toBe(404);
-    const multi = await req(`/games/${tag}-multiplayer/replay`);
+    expect((await req(`/games/${id}/replay?variant=location`, other)).status).toBe(404);
+    const multi = await req(`/games/${tag}-multiplayer/replay?variant=location`);
     expect(multi.data.roomResults).toHaveLength(2);
     expect(multi.data.results[0].imageUrl).toBe(round.imageUrl);
   });

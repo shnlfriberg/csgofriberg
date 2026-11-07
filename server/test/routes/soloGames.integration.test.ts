@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken';
 import type { AddressInfo } from 'net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import gameRoutes from '../../src/routes/game';
+import statsRoutes from '../../src/routes/stats';
 import { errorHandler } from '../../src/middleware/common';
 import { config } from '../../src/config';
 import { initDb } from '../../src/db/init';
@@ -48,6 +49,7 @@ describe('single-player API for entertainment variants', () => {
     const app = express();
     app.use(express.json());
     app.use('/api/game', gameRoutes);
+    app.use('/api/stats', statsRoutes);
     app.use(errorHandler);
     server = app.listen(0);
     await new Promise<void>((resolve) => server.once('listening', resolve));
@@ -105,6 +107,17 @@ describe('single-player API for entertainment variants', () => {
     expect(finished.data.results).toHaveLength(5);
     expect(finished.data.maps).toBeUndefined();
 
+    // Statistics and replays use the generic stats paths.
+    const summary = await request(cookie, '/stats/me?variant=location&difficulties=hard');
+    expect(summary.data.personal).toMatchObject({ singleGames: 1, randomGames: 1, bestScore: 25000 });
+    const list = await request(cookie, '/stats/replays?variant=location&difficulties=hard');
+    expect(list.data.items).toEqual([expect.objectContaining({ gameId, mode: 'random', totalScore: 25000 })]);
+    const replay = await request(cookie, `/stats/games/${gameId}/replay?variant=location`);
+    expect(replay.data).toMatchObject({ gameId, totalScore: 25000 });
+    expect(replay.data.results).toHaveLength(5);
+    expect((await request(guest().cookie, `/stats/games/${gameId}/replay?variant=location`)).status).toBe(404);
+    expect((await request(cookie, '/stats/me?variant=location&difficulties=beginner')).status).toBe(400);
+
     // A finished game is not resumed; exit abandons the next one.
     const next = await request(cookie, '/game/start', { variant: 'location', mode: 'hard' });
     expect(next.data.gameId).not.toBe(gameId);
@@ -147,4 +160,14 @@ describe('single-player API for entertainment variants', () => {
     await request(cookie, `/game/${game.gameId}/exit`, {});
   });
 
+  it('serves 卡牌连接 statistics on the generic stats paths', async () => {
+    const { cookie } = guest();
+    const summary = await request(cookie, '/stats/me?variant=card-link&hand=limited');
+    expect(summary.status).toBe(200);
+    expect(summary.data).toMatchObject({ personal: expect.objectContaining({ games: 0 }), rating: null });
+    expect((await request(cookie, '/stats/replays?variant=card-link&scene=practice')).data).toEqual({ items: [], hasNext: false });
+    expect((await request(cookie, '/stats/me?variant=card-link&hand=unknown')).status).toBe(400);
+    expect((await request(cookie, '/stats/replays?variant=card-link&page=1.5')).status).toBe(400);
+    expect((await request(cookie, `/stats/games/${randomUUID()}/replay?variant=card-link`)).data.code).toBe('CARD_MATCH_NOT_FOUND');
+  });
 });
