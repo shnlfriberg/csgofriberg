@@ -18,7 +18,7 @@ describe('card scheduler index and fault isolation', () => {
     vi.mocked(advanceById).mockResolvedValue({} as any);
     const notify = vi.fn(async (_id: string) => {});
     await advanceDueMatches(notify);
-    expect(advanceById).toHaveBeenCalledWith(id);
+    expect(advanceById).toHaveBeenCalledWith(id, undefined, { presence: true });
     expect(notify).toHaveBeenCalledWith(id);
     await db('card_matches').where({ id }).delete();
     ids.pop();
@@ -41,7 +41,7 @@ describe('card scheduler index and fault isolation', () => {
     const notify = vi.fn(async (_id: string) => {});
     try {
       await advanceDueMatches(notify);
-      expect(advanceById).toHaveBeenCalledWith(ids[1]);
+      expect(advanceById).toHaveBeenCalledWith(ids[1], undefined, { presence: true });
       expect(notify).toHaveBeenCalledWith(ids[1]);
       expect(notify).not.toHaveBeenCalledWith(ids[0]);
     } finally { warning.mockRestore(); }

@@ -3,13 +3,15 @@ import type { Server } from 'socket.io';
 import { setupCardSocket } from '../../src/card-link/socket';
 import { seatId } from '../../src/card-link/views';
 const mocks = vi.hoisted(() => ({ read: vi.fn() }));
-vi.mock('../../src/card-link/matches', () => ({ readView: mocks.read, readSnapshot: async () => ({ m: { questions: [{ graphVersion: 'test' }] }, rows: [] }), advanceById: vi.fn() }));
+vi.mock('../../src/card-link/matches', () => ({ readView: mocks.read,
+  readSnapshot: async () => ({ m: { questions: [{ graphVersion: 'test' }], scene: 'friend', status: 'waiting' }, rows: [{ identity_key: 'u:1', payload: '{}' }] }),
+  advanceById: vi.fn(), needsAdvance: () => false, scheduledAt: () => null }));
 vi.mock('../../src/card-link/graphs', () => ({ loadGraph: async () => ({}) }));
 vi.mock('../../src/card-link/claims', () => ({ matchOwner: async (_id: string, owner: unknown) => owner }));
 vi.mock('../../src/middleware/auth', () => ({ authenticateCookie: async () => ({ id: 1 }), getGuestFromCookie: vi.fn() }));
 vi.mock('../../src/socket/connection', () => ({ socketAllowedWithIp: async () => true }));
 vi.mock('../../src/services/pow', () => ({ getRequestPow: () => ({ difficulty: 100 }) }));
-vi.mock('../../src/card-link/scheduler', () => ({ advanceDueMatches: async () => {} }));
+vi.mock('../../src/card-link/scheduler', () => ({ advanceDueMatches: async () => {}, activeMatchStatuses: ['waiting', 'preparing', 'playing', 'roundOver'] }));
 vi.mock('../../src/card-link/settlement', () => ({ flushSettlements: async () => {} }));
 vi.mock('../../src/card-link/buildJobs', () => ({ processBuilds: async () => {} }));
 

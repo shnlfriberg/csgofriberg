@@ -5,13 +5,42 @@ import { createHash } from "crypto";
 import { measured, observe } from './metrics';
 export const fingerprint = (value: unknown) =>
   createHash("sha256").update(JSON.stringify(value)).digest("hex");
+const commitHooks = new WeakMap<Knex.Transaction, Array<() => unknown>>();
+
+/**
+ * Run `hook` only after the surrounding transaction commits (room-kernel
+ * occupancy release, deadline scheduling, settlement wake-ups). A retried or
+ * rolled-back attempt discards its hooks.
+ */
+export function onCommit(trx: Knex.Transaction, hook: () => unknown): void {
+  const hooks = commitHooks.get(trx);
+  if (hooks) hooks.push(hook);
+  else void (trx as unknown as { executionPromise?: Promise<unknown> }).executionPromise
+    ?.then(hook).catch((error) => console.error('[card-link:commit-hook]', error));
+}
+
+/** Run `hook` when this transaction attempt rolls back (undo external claims). */
+export function onRollback(trx: Knex.Transaction, hook: () => unknown): void {
+  void (trx as unknown as { executionPromise?: Promise<unknown> }).executionPromise
+    ?.catch(() => Promise.resolve().then(hook).catch((error) => console.error('[card-link:rollback-hook]', error)));
+}
+
 // SQLite upgrades deferred transactions conservatively; retries rerun deterministic commands.
 export async function transaction<T>(
   fn: (trx: Knex.Transaction) => Promise<T>,
 ): Promise<T> {
   for (let attempt = 0; ; attempt++)
     try {
-      return await measured('transaction_ms', () => db.transaction(fn));
+      let hooks: Array<() => unknown> = [];
+      const result = await measured('transaction_ms', () => db.transaction((trx) => {
+        hooks = [];
+        commitHooks.set(trx, hooks);
+        return fn(trx);
+      }));
+      for (const hook of hooks) {
+        try { await hook(); } catch (error) { console.error('[card-link:commit-hook]', error); }
+      }
+      return result;
     } catch (e) {
       const code = String((e as { code?: string }).code ?? "");
       // Node's SQLite shim exposes numeric extended result codes (e.g. 517

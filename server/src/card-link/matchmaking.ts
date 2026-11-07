@@ -10,7 +10,21 @@ import type { Owner } from "./types";
 import { activeReservation, clearEndedReservations, pendingRanked } from './reservations';
 import { requireScene, sceneFlags } from './operations';
 import { randomUUID } from 'crypto';
-export const QUEUE_LEASE_MS = 10_000;
+import { foreignOccupancy } from '../rooms/kernel/occupancy';
+import { identityChannel } from '../rooms/kernel/broadcast';
+import { getKernelIo } from '../rooms/kernel/registry';
+import { onCommit } from './transaction';
+
+/** Seated in a classic or 图寻 room: ranked queueing would break the one-seat rule. */
+async function assertFreeSeat(owner: Owner) {
+  const occupied = await foreignOccupancy(owner.key, 'card-link');
+  if (occupied) {
+    await db('card_queue').where({ identity_key: owner.key }).delete();
+    throw new HttpError(409, 'CARD_ALREADY_PLAYING', { occupied });
+  }
+}
+// Clients heartbeat every 5 s; the pairing itself is pushed (room-kernel:found).
+export const QUEUE_LEASE_MS = 15_000;
 type QueuedOwner = Owner & { heartbeatAt?: number; ticket?: string };
 export async function requireRanked(
   owner: Owner,
@@ -31,6 +45,7 @@ export async function queueMatch(owner: Owner, variant: Variant) {
     await db("card_queue").where({ identity_key: owner.key }).delete();
     throw e;
   }
+  await assertFreeSeat(owner);
   let g = await activeGraph();
   return transaction(async (trx) => {
     const catalog = await lockRow(trx, "card_catalog", { id: 1 });
@@ -61,7 +76,9 @@ export async function queueMatch(owner: Owner, variant: Variant) {
         user.banned_at ||
         user.matchmaking_restricted ||
         (await activeReservation(trx, await identityKeys(other, trx))) ||
-        (await pendingRanked(trx, await identityKeys(other, trx), variant))
+        (await pendingRanked(trx, await identityKeys(other, trx), variant)) ||
+        // Redis-only check (classic/图寻 seats): safe inside this transaction.
+        (await foreignOccupancy(other.key, 'card-link'))
       ) {
         await trx("card_queue").where({ identity_key: other.key }).delete();
         continue;
@@ -78,6 +95,10 @@ export async function queueMatch(owner: Owner, variant: Variant) {
       await trx("card_queue")
         .whereIn("identity_key", [owner.key, other.key])
         .delete();
+      // Push the pairing to the waiting player instead of relying on heartbeat polling.
+      onCommit(trx, () => {
+        getKernelIo()?.to(identityChannel(other.key)).emit('room-kernel:found', { game: 'card-link', roomId: m.id });
+      });
       return { id: m.id };
     }
     const old = await trx("card_queue")
@@ -100,8 +121,9 @@ export async function queueMatch(owner: Owner, variant: Variant) {
 }
 export async function heartbeatQueue(owner: Owner, ticket: string) {
   await requireRanked(owner);
+  // Heartbeats only touch the caller's own queue row: no global catalog lock.
   return transaction(async trx => {
-    const catalog = await lockRow(trx, 'card_catalog', { id: 1 });
+    const catalog = await trx('card_catalog').where({ id: 1 }).first();
     const keys = await identityKeys(owner, trx);
     const playing = await activeReservation(trx, keys);
     if (playing) return { id: String(playing.match_id), queued: false };
@@ -117,14 +139,17 @@ export async function heartbeatQueue(owner: Owner, ticket: string) {
       await trx('card_queue').where({ identity_key: owner.key }).delete();
       return { queued: false };
     }
-    await trx('card_queue').where({ identity_key: owner.key })
+    const updated = await trx('card_queue').where({ identity_key: owner.key, payload: row.payload })
       .update({ payload: JSON.stringify({ ...queued, heartbeatAt: Date.now() }) });
+    if (!updated) {
+      const current = await activeReservation(trx, keys);
+      return current ? { id: String(current.match_id), queued: false } : { queued: false };
+    }
     return { queued: true, ticket };
   });
 }
 export async function cancelQueue(owner: Owner, ticket?: string) {
   return transaction(async (trx) => {
-    await lockRow(trx, "card_catalog", { id: 1 });
     const row = await trx('card_queue').where({ identity_key: owner.key }).first();
     if (!ticket || (row && JSON.parse(row.payload).ticket === ticket))
       await trx("card_queue").where({ identity_key: owner.key }).delete();

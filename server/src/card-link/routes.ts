@@ -4,7 +4,7 @@ import { cardStats, cardReplays, statsQuery, replaysQuery } from './stats';
 import { dailyLeaderboard } from "./leaderboard";
 import { decodeReplay } from "./replay";
 import { config } from "../config";
-import { identityKeys } from "./claims";
+import { identityKeys, matchOwner } from "./claims";
 import { queueBuild } from "./buildJobs";
 import { Router, type Request } from "express";
 import { z } from "zod";
@@ -75,6 +75,8 @@ router.use(
 router.get(
   "/config",
   asyncHandler(async (_req, res) => {
+    // Short private cache: scene switches still reach pages within 30 s.
+    res.set("Cache-Control", "private, max-age=30");
     const c = await db("card_catalog").where({ id: 1 }).first();
     res.json({ enabled: Boolean(c?.enabled && c.graph_version), scenes: sceneFlags(c ?? {}), rules: RULES });
   }),
@@ -122,13 +124,27 @@ router.get(
     res.json(await readView(req.params.id, ownerOf(req))),
   ),
 );
+const directoryCache = new Map<string, { body: string; expiresAt: number }>();
 router.get(
   "/matches/:id/directory",
   asyncHandler(async (req, res) => {
-    await readView(req.params.id, ownerOf(req));
-    const m = await getMatch(req.params.id),
-      g = await loadGraph(m.questions[0].graphVersion);
-    res.json({ version: g.data.version, players: await cardDirectory(g.data.players, m.variant) });
+    // Membership only (indexed seat lookup); the directory itself is the same
+    // for every member of a graph version and variant, so it is cached.
+    const owner = await matchOwner(req.params.id, ownerOf(req));
+    const seat = await db("card_seats").where({ match_id: req.params.id, identity_key: owner.key }).first("identity_key");
+    if (!seat) throw new HttpError(403, "FORBIDDEN");
+    const m = await getMatch(req.params.id);
+    const cacheKey = `${m.questions[0].graphVersion}:${m.variant}`;
+    let cached = directoryCache.get(cacheKey);
+    if (!cached || cached.expiresAt <= Date.now()) {
+      const g = await loadGraph(m.questions[0].graphVersion);
+      cached = { body: JSON.stringify({ version: g.data.version, players: await cardDirectory(g.data.players, m.variant) }), expiresAt: Date.now() + 60_000 };
+      directoryCache.set(cacheKey, cached);
+      if (directoryCache.size > 32) directoryCache.delete(directoryCache.keys().next().value!);
+    }
+    // Revalidated with Express's ETag (304 without a body when unchanged).
+    res.set("Cache-Control", "private, max-age=300");
+    res.type("application/json").send(cached.body);
   }),
 );
 router.post(

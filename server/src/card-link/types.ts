@@ -37,6 +37,8 @@ export interface Match {
   dailyPractice?: boolean;
   createdAt: number;
   rulesVersion: 1;
+  /** Earliest disconnect-grace deadline of a seat (multiplayer; scheduling only). */
+  graceAt?: number | null;
 }
 export interface Seat {
   owner: Owner;

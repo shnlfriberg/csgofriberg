@@ -17,7 +17,8 @@ export async function advanceDueMatches(notify: (id: string) => Promise<void>) {
     .whereNull('due_at').limit(100).select('id');
   for (const row of [...due, ...legacy]) {
     try {
-      await advanceById(row.id);
+      // Sweeps are the safety net for missed kernel wake-ups: re-read presence too.
+      await advanceById(row.id, undefined, { presence: true });
       await notify(row.id);
     } catch (error) {
       // One unavailable old graph must not block other rooms or settlement.

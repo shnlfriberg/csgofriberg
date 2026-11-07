@@ -1,79 +1,235 @@
 import { matchOwner } from "./claims";
 import { processBuilds } from "./buildJobs";
-import { advanceDueMatches } from './scheduler';
 import type { Server } from "socket.io";
 import { authenticateCookie, getGuestFromCookie } from "../middleware/auth";
 import { isGuestBanned } from "../services/guestAccounts";
 import { socketAllowedWithIp } from "../socket/connection";
 import { HttpError } from "../middleware/common";
-import {
-  readView,
-  readSnapshot,
-  advanceById,
-} from "./matches";
+import { readView, readSnapshot, advanceById, needsAdvance, scheduledAt } from "./matches";
 import { db } from '../db/knex';
+import { redis, redisKey } from '../redis';
 import { cardChannel, setCardPresenceReader } from './presence';
-import { flushSettlements } from "./settlement";
+import { flushSettlements, settle } from "./settlement";
 import { loadGraph } from "./graphs";
-import { matchView } from "./views";
+import { publicMatchView, seatMatchView } from "./views";
 import type { Owner } from "./types";
 import { emitted } from './metrics';
+import { activeMatchStatuses, advanceDueMatches } from './scheduler';
+import { activateRoomAdapter } from '../rooms/kernel';
+import { startLeasedWorker } from '../rooms/kernel/lease';
+import { countKernel } from '../rooms/kernel/metrics';
+import { claimOccupancy } from '../rooms/kernel/occupancy';
+import { attachPresence, detachPresence, onlineIdentities, watchScope } from '../rooms/kernel/presence';
+import { dispatchPresenceInBackground } from '../rooms/kernel';
+import type { GameRoomAdapter } from '../rooms/kernel/registry';
+import { registerScheduleConsumer } from '../rooms/kernel/scheduler';
+import { parseScheduleItem } from '../rooms/kernel/schedules';
+import { cardSchedules, scheduleTick, setCardKernelHandlers } from './kernel';
+import { logTransientWarning } from '../services/transientLog';
+
 let io: Server | null = null;
-const recent = new Map<
-  string,
-  { phase: number; seats: string; revisions: Map<string, number> }
->();
 const channel = cardChannel;
+const NOTIFIED_TTL_SECONDS = 86_400;
+type Notified = { phase: number; seats: string; revisions: Record<string, number> };
+/** Single-instance fallback for the shared notification baseline. */
+const localNotified = new Map<string, Notified>();
+
+async function readNotified(id: string): Promise<Notified | null> {
+  const client = redis();
+  if (!client) return localNotified.get(id) ?? null;
+  const raw = await client.get(redisKey(`card-link:notified:${id}`));
+  return raw ? JSON.parse(raw) as Notified : null;
+}
+
+async function writeNotified(id: string, value: Notified): Promise<void> {
+  const client = redis();
+  if (!client) {
+    localNotified.delete(id);
+    localNotified.set(id, value);
+    if (localNotified.size > 1000) localNotified.delete(localNotified.keys().next().value!);
+    return;
+  }
+  await client.set(redisKey(`card-link:notified:${id}`), JSON.stringify(value), { EX: NOTIFIED_TTL_SECONDS });
+}
+
+/**
+ * Push the committed state to every seat. The last delivered revisions are
+ * shared through Redis, so a patch prepared on any instance carries the base
+ * the client actually holds (the old per-instance cache produced stale bases
+ * and forced HTTP reloads). Shared view parts are computed once.
+ */
 export async function notifyMatch(id: string) {
   if (!io) return;
   const { m, rows } = await readSnapshot(id),
     g = await loadGraph(m.questions[0].graphVersion);
-  const views = rows.map((r) => ({
-    row: r,
-    view: matchView(m, rows, r.identity_key, g),
-  }));
-  if (!views.length) return;
-  const summary = JSON.stringify(views[0].view.players),
-    old = recent.get(id),
+  if (!rows.length) return;
+  const shared = publicMatchView(m, rows, g);
+  const summary = JSON.stringify(shared.players),
+    old = await readNotified(id),
     phaseChanged = !old || old.phase !== m.revision;
-  for (const { row, view } of views) {
-    const privateChanged =
-      !old || old.revisions.get(row.identity_key) !== Number(row.revision);
+  for (const row of rows) {
+    const key = String(row.identity_key);
+    const revision = Number(row.revision);
+    const privateChanged = !old || old.revisions[key] !== revision;
+    if (!phaseChanged && !privateChanged && old!.seats === summary) continue;
+    const view = seatMatchView(m, rows, key, g, shared);
     if (phaseChanged) {
       emitted(id, view);
-      io.to(channel(id, row.identity_key)).emit("card-link:state", view);
-    } else if (privateChanged || old.seats !== summary) {
+      io.to(channel(id, key)).emit("card-link:state", view);
+    } else {
       const patch = {
         id,
         phaseRevision: m.revision,
         publicRevision: view.publicRevision,
-        baseRevision: old.revisions.get(row.identity_key) ?? null,
-        revision: Number(row.revision),
+        baseRevision: old!.revisions[key] ?? null,
+        revision,
         dueAt: view.dueAt,
         expiresAt: view.expiresAt,
         players: view.players,
         ...(privateChanged ? { current: view.current, connections: view.connections } : {}),
       };
       emitted(id, patch);
-      io.to(channel(id, row.identity_key)).emit("card-link:patch", patch);
+      io.to(channel(id, key)).emit("card-link:patch", patch);
     }
   }
-  recent.delete(id);
-  recent.set(id, {
+  await writeNotified(id, {
     phase: m.revision,
     seats: summary,
-    revisions: new Map(rows.map((r) => [r.identity_key, Number(r.revision)])),
+    revisions: Object.fromEntries(rows.map((r) => [String(r.identity_key), Number(r.revision)])),
   });
-  if (recent.size > 1000) recent.delete(recent.keys().next().value!);
 }
+
+async function advanceAndNotify(id: string, presence = false): Promise<void> {
+  await advanceById(id, undefined, { presence });
+  await notifyMatch(id);
+}
+
+/** 卡牌连接 seats are online while any socket watches the match (kernel registry). */
+const cardAdapter: GameRoomAdapter = {
+  game: 'card-link',
+  presence: 'watch',
+  async isActiveMember(roomId, identityKey) {
+    const row = await db('card_reservations as r')
+      .join('card_matches as m', 'm.id', 'r.match_id')
+      .where({ 'r.match_id': roomId, 'r.identity_key': identityKey })
+      .whereIn('m.status', activeMatchStatuses)
+      .first('r.match_id');
+    return row ? 'player' : false;
+  },
+  async describe(roomId) {
+    const row = await db('card_matches').where({ id: roomId }).first('status', 'code', 'payload');
+    if (!row) return null;
+    const round = (JSON.parse(row.payload) as { round?: number }).round;
+    return { status: String(row.status), round: typeof round === 'number' ? round + 1 : undefined, code: row.code ?? undefined };
+  },
+  async onPresence(change) {
+    countKernel(`card-link.presence.${change.online ? 'online' : 'offline'}`);
+    await advanceAndNotify(change.roomId, true);
+  },
+  async cancelQueue(identityKey) {
+    await db('card_queue').where({ identity_key: identityKey }).delete();
+  },
+  async adopt() {
+    // Matches created before the kernel: claim seats and schedule exact deadlines.
+    const rows = await db('card_reservations as r')
+      .join('card_matches as m', 'm.id', 'r.match_id')
+      .whereIn('m.status', activeMatchStatuses)
+      .select('r.identity_key', 'r.match_id', 'm.due_at');
+    const scheduled = new Set<string>();
+    for (const row of rows) {
+      const result = await claimOccupancy({ game: 'card-link', roomId: String(row.match_id) }, [String(row.identity_key)], { staleSameGame: true });
+      if (!result.ok) countKernel('occupancy.adoptConflicts');
+      if (scheduled.has(String(row.match_id))) continue;
+      scheduled.add(String(row.match_id));
+      // Spread the first presence inspection instead of a startup thundering herd.
+      await cardSchedules.add(`tick|${row.match_id}|0`, Date.now() + 1_000 + Math.floor(Math.random() * 5_000));
+    }
+  },
+};
+
+/** Safety net for deadlines that were not processed on time (and solo games). */
+async function sweepDueMatches(): Promise<void> {
+  await advanceDueMatches(async (id) => {
+    countKernel('card-link.swept');
+    await notifyMatch(id);
+  });
+}
+
+/** Repair presence missed during a deploy or crash (one SQL read, no RPC). */
+async function reconcilePresence(): Promise<void> {
+  const matches = await db('card_matches').whereIn('scene', ['friend', 'ranked'])
+    .whereIn('status', activeMatchStatuses).select('id');
+  if (!matches.length) return;
+  const ids = matches.map((row) => String(row.id));
+  const seats = await db('card_seats').whereIn('match_id', ids).select('match_id', 'identity_key', 'payload');
+  const live = await onlineIdentities(ids.map((id) => watchScope('card-link', id)));
+  const online = new Map(ids.map((id, index) => [id, live[index]]));
+  const stale = new Set<string>();
+  for (const seat of seats) {
+    const payload = JSON.parse(seat.payload) as { retired?: boolean; connected?: boolean };
+    if (payload.retired) continue;
+    const isOnline = online.get(String(seat.match_id))?.has(String(seat.identity_key)) ?? false;
+    if (isOnline !== (payload.connected !== false)) stale.add(String(seat.match_id));
+  }
+  for (const id of stale) {
+    countKernel('card-link.reconciled');
+    await advanceAndNotify(id, true).catch((error) => logTransientWarning('[card-link:reconcile]', error instanceof Error ? error.message : 'FAILED'));
+  }
+}
+
+/** Builds are rare: check without the catalog lock before taking it. */
+async function maybeProcessBuilds(): Promise<void> {
+  const pending = await db('card_build_jobs').whereIn('status', ['pending', 'running'])
+    .where('due_at', '<=', Date.now()).first('id');
+  if (pending) await processBuilds();
+}
+
 export function setupCardSocket(server: Server) {
   io = server;
-  setCardPresenceReader(async (match, rows) => {
-    const channels = rows.map(row => channel(match.id, row.identity_key));
-    const sockets = await server.in(channels).fetchSockets();
-    return new Set(rows.filter((row, index) => sockets.some(socket => socket.rooms.has(channels[index])))
-      .map(row => row.identity_key));
+  // Online seats come from the kernel watch registry: one Redis script, no
+  // cluster-wide fetchSockets and never inside a SQL transaction.
+  setCardPresenceReader(async (match) => (await onlineIdentities([watchScope('card-link', match.id)]))[0]);
+  setCardKernelHandlers({
+    tick: async (id) => {
+      const after = await advanceById(id, undefined, { presence: true });
+      await notifyMatch(id);
+      await scheduleTick(id, ['finished', 'cancelled'].includes(after.status) ? null : scheduledAt(after));
+    },
+    settle: async (id) => { await settle(id).catch(() => undefined); await cardSchedules.remove(`settle|${id}|0`); },
   });
+  const unregisterAdapter = activateRoomAdapter(cardAdapter);
+  const unregisterSchedules = registerScheduleConsumer({
+    name: 'card-link',
+    source: cardSchedules,
+    batch: 40,
+    concurrency: 8,
+    groupKey: (item) => parseScheduleItem(item).roomId,
+    handleGroup: async (items) => {
+      for (const item of items) {
+        const { kind, roomId } = parseScheduleItem(item);
+        try {
+          if (kind === 'tick') {
+            const after = await advanceById(roomId, undefined, { presence: true });
+            await notifyMatch(roomId);
+            // Re-arm the exact deadline (a tick that changed nothing still holds its lease).
+            await scheduleTick(roomId, ['finished', 'cancelled'].includes(after.status) ? null : scheduledAt(after));
+          } else if (kind === 'settle') {
+            await settle(roomId).catch(() => undefined);
+            await cardSchedules.remove(item);
+          } else await cardSchedules.remove(item);
+        } catch (error) {
+          if (error instanceof HttpError && error.code === 'CARD_MATCH_NOT_FOUND') await cardSchedules.remove(item);
+          else logTransientWarning('[card-link:schedule]', `${roomId}: ${error instanceof Error ? error.message : 'FAILED'}`);
+        }
+      }
+    },
+  });
+  const stops = [
+    startLeasedWorker('card-link-sweep', 10_000, sweepDueMatches),
+    startLeasedWorker('card-link-reconcile', 30_000, reconcilePresence),
+    startLeasedWorker('card-link-settle', 30_000, flushSettlements),
+    startLeasedWorker('card-link-builds', 5_000, maybeProcessBuilds),
+  ];
   let stopping = false;
   const pending = new Set<Promise<unknown>>();
   const track = (p: Promise<unknown>) => {
@@ -86,12 +242,18 @@ export function setupCardSocket(server: Server) {
   };
   server.on("connection", (socket) => {
     let watchRevision = 0;
-    const resync = async (id: string | undefined) => {
-      if (!id || stopping) return;
-      await advanceById(id);
-      await notifyMatch(id);
+    /** Leave the watched match: presence detaches; the kernel reports offline transitions. */
+    const unwatch = async () => {
+      const previousId = socket.data.cardMatchId as string | undefined;
+      const previousChannel = socket.data.cardChannel as string | undefined;
+      socket.data.cardChannel = null;
+      socket.data.cardMatchId = null;
+      if (previousChannel) await socket.leave(previousChannel);
+      if (previousId) {
+        const transition = await detachPresence(socket.id, watchScope('card-link', previousId));
+        if (transition && !stopping) dispatchPresenceInBackground([transition], 'unwatch');
+      }
     };
-    socket.on('disconnect', () => { watchRevision++; track(resync(socket.data.cardMatchId)); });
     socket.on("card-link:watch", (raw, ack) => {
       const revision = ++watchRevision;
       const current = () => revision === watchRevision && socket.connected;
@@ -129,13 +291,14 @@ export function setupCardSocket(server: Server) {
           throw new HttpError(403, "USER_BANNED");
         if (typeof raw?.id !== "string" || raw.id.length !== 36)
           throw new HttpError(400, "VALIDATION_FAILED");
-        await readView(raw.id, me);
-        const nextChannel = channel(raw.id, (await matchOwner(raw.id, me)).key);
+        const seatKey = (await matchOwner(raw.id, me)).key;
+        // Membership check without advancing (cheap, read-only).
+        const snapshot = await readSnapshot(raw.id);
+        if (!snapshot.rows.some((r) => r.identity_key === seatKey)) throw new HttpError(403, 'FORBIDDEN');
         if (!current()) return;
-        if (socket.data.cardChannel)
-          await socket.leave(socket.data.cardChannel);
-        const previousId = socket.data.cardMatchId;
+        if (socket.data.cardMatchId && socket.data.cardMatchId !== raw.id) await unwatch();
         if (!current()) return;
+        const nextChannel = channel(raw.id, seatKey);
         socket.data.cardChannel = nextChannel;
         socket.data.cardMatchId = raw.id;
         await socket.join(nextChannel);
@@ -143,13 +306,14 @@ export function setupCardSocket(server: Server) {
           if (socket.data.cardChannel !== nextChannel) await socket.leave(nextChannel);
           return;
         }
-        // Read again after subscribing so a concurrent command cannot be missed.
+        // Attach only a still-current watch; superseded watches never leave presence behind.
+        const cameOnline = await attachPresence(socket.id, seatKey, watchScope('card-link', raw.id));
+        // Subscribed before reading, so a concurrent command cannot be missed.
+        const disconnected = snapshot.rows.some((r) => r.identity_key === seatKey &&
+          (JSON.parse(r.payload) as { connected?: boolean }).connected === false);
+        if (cameOnline && (disconnected || needsAdvance(snapshot.m, snapshot.rows))) await advanceAndNotify(raw.id, true);
         const view = await readView(raw.id, me);
         if (current()) respond({ ok: true, data: view });
-        if (current()) {
-          track(notifyMatch(raw.id));
-          if (previousId && previousId !== raw.id) track(resync(previousId));
-        }
       })().catch((e) => {
         if (current())
           respond({
@@ -165,45 +329,19 @@ export function setupCardSocket(server: Server) {
     });
     socket.on("card-link:unwatch", () => {
       watchRevision++;
-      if (socket.data.cardChannel) {
-        const previousId = socket.data.cardMatchId;
-        const leaving = socket.leave(socket.data.cardChannel);
-        socket.data.cardChannel = null;
-        socket.data.cardMatchId = null;
-        track(Promise.resolve(leaving).then(() => resync(previousId)));
-      }
+      track(unwatch());
     });
+    socket.on('disconnect', () => { watchRevision++; });
   });
-  let running = false;
-  let adopted = false;
-  const tick = async () => {
-    if (running || stopping) return;
-    running = true;
-    try {
-      if (!adopted) {
-        // Old active multiplayer payloads remain intact; schedule a first
-        // presence check without waiting for their original round deadline.
-        await db('card_matches').whereIn('scene', ['friend', 'ranked'])
-          .whereIn('status', ['waiting', 'preparing', 'playing', 'roundOver'])
-          .where(q => q.where('due_at', '>', Date.now()).orWhereNull('due_at'))
-          .update({ due_at: Date.now() });
-        adopted = true;
-      }
-      await advanceDueMatches(notifyMatch);
-      await flushSettlements();
-      track(processBuilds());
-    } finally {
-      running = false;
-    }
-  };
-  const timer = setInterval(() => track(tick()), 1000);
-  timer.unref();
   return async () => {
     stopping = true;
-    clearInterval(timer);
+    unregisterSchedules();
+    unregisterAdapter();
+    await Promise.all(stops.map((stop) => stop()));
     await Promise.allSettled([...pending]);
     io = null;
     setCardPresenceReader(null);
-    recent.clear();
+    setCardKernelHandlers({ tick: null, settle: null });
+    localNotified.clear();
   };
 }

@@ -23,11 +23,28 @@ import { activeReservation, clearEndedReservations } from './reservations';
 import { requireScene } from './operations';
 import { measured, observe } from './metrics';
 import { performance } from 'node:perf_hooks';
-import { onlineCardPlayers, CARD_DISCONNECT_MS, CARD_PRESENCE_INTERVAL_MS } from './presence';
+import { onlineCardPlayers, CARD_DISCONNECT_MS } from './presence';
+import { claimCardSeats, isMultiplayer, releaseCardSeatsAfterCommit, scheduleAfterCommit, wakeSettlement } from './kernel';
+import { onCommit } from './transaction';
 export type GraphLoaded = Awaited<ReturnType<typeof loadGraph>>;
-function scheduledAt(m: Match) {
+/**
+ * Exact next deadline: the phase deadline and, for multiplayer rooms, the
+ * earliest disconnect grace. Presence changes arrive as kernel events, so rooms
+ * are no longer re-inspected every two seconds.
+ */
+export function scheduledAt(m: Match) {
   if (singleScene(m) || ['finished', 'cancelled'].includes(m.status)) return m.dueAt;
-  return Math.min(m.dueAt ?? Infinity, Date.now() + CARD_PRESENCE_INTERVAL_MS);
+  const at = Math.min(m.dueAt ?? Infinity, m.graceAt ?? Infinity);
+  return Number.isFinite(at) ? at : null;
+}
+/** Seats parsed once per row payload (rows are rewritten through saveSeat). */
+const parsedSeats = new WeakMap<SeatRow, { raw: string; seat: Seat }>();
+export function seatOf(row: SeatRow): Seat {
+  const cached = parsedSeats.get(row);
+  if (cached && cached.raw === row.payload) return cached.seat;
+  const seat = JSON.parse(row.payload) as Seat;
+  parsedSeats.set(row, { raw: row.payload, seat });
+  return seat;
 }
 export const today = (now = Date.now()) =>
   new Intl.DateTimeFormat("en-CA", {
@@ -50,6 +67,7 @@ export async function saveMatch(trx: Knex.Transaction, m: Match) {
       due_at: scheduledAt(m),
       payload: JSON.stringify(m),
     });
+  scheduleAfterCommit(trx, m.id, () => scheduledAt(m));
 }
 export async function saveSeat(trx: Knex.Transaction, row: SeatRow, s: Seat) {
   const changed = await trx("card_seats")
@@ -86,6 +104,7 @@ export async function insertSeat(
   o: Owner,
   g: GraphLoaded,
 ) {
+  if (isMultiplayer(m)) await claimCardSeats(trx, m.id, [o.key]);
   const s: Seat = {
     owner: o,
     ready: false,
@@ -184,6 +203,7 @@ export async function createMatchIn(
     due_at: scheduledAt(m),
     payload: JSON.stringify(m),
   });
+  scheduleAfterCommit(trx, m.id, () => scheduledAt(m));
   if (day && !m.dailyPractice)
     await trx("card_daily_attempts").insert({
       day,
@@ -272,14 +292,27 @@ export async function createMatch(
     );
   });
 }
+/** Consistent read-only snapshot (no row lock: reads never block commands). */
 export async function readSnapshot(id: string) {
-  return transaction(async (trx) => {
-    const row = await lockRow(trx, "card_matches", { id });
+  const read = async (trx: Knex.Transaction) => {
+    const row = await trx("card_matches").where({ id }).first();
     if (!row) throw new HttpError(404, "CARD_MATCH_NOT_FOUND");
     return {
       m: JSON.parse(row.payload) as Match,
       rows: await rowsFor(trx, id),
     };
+  };
+  return db.client.config.client === 'pg'
+    ? db.transaction(read, { isolationLevel: 'repeatable read' })
+    : db.transaction(read);
+}
+/** Whether a read must first apply a passed deadline (pure; no presence RPC). */
+export function needsAdvance(m: Match, rows: SeatRow[], now = Date.now()): boolean {
+  if (singleScene(m) || ['finished', 'cancelled'].includes(m.status)) return false;
+  if (m.dueAt !== null && now >= m.dueAt) return true;
+  return rows.some((row) => {
+    const seat = seatOf(row);
+    return !seat.retired && seat.disconnectAt != null && seat.disconnectAt <= now;
   });
 }
 export async function readView(id: string, owner: Owner) {
@@ -287,7 +320,7 @@ export async function readView(id: string, owner: Owner) {
   let { m, rows } = await readSnapshot(id);
   if (!rows.some((r) => r.identity_key === owner.key))
     throw new HttpError(403, "FORBIDDEN");
-  if (!singleScene(m) && !['finished', 'cancelled'].includes(m.status)) {
+  if (needsAdvance(m, rows)) {
     await advanceById(id);
     ({ m, rows } = await readSnapshot(id));
     if (!rows.some(r => r.identity_key === owner.key)) throw new HttpError(403, 'CARD_ROOM_UNAVAILABLE');
@@ -303,12 +336,18 @@ export async function readView(id: string, owner: Owner) {
   }
   return matchView(m, rows, owner.key, g);
 }
+async function seatKeys(trx: Knex.Transaction, id: string): Promise<string[]> {
+  return (await trx('card_seats').where({ match_id: id }).select('identity_key')).map((row) => String(row.identity_key));
+}
 async function finish(trx: Knex.Transaction, m: Match, now: number) {
   m.status = "finished";
   m.dueAt = null;
+  m.graceAt = null;
   m.revision++;
   await saveMatch(trx, m);
   await trx('card_reservations').where({ match_id: m.id }).delete();
+  if (isMultiplayer(m)) releaseCardSeatsAfterCommit(trx, m.id, await seatKeys(trx, m.id));
+  onCommit(trx, () => wakeSettlement(m.id));
   await trx("card_outbox")
     .insert({ match_id: m.id, attempts: 0, due_at: now })
     .onConflict("match_id")
@@ -317,14 +356,19 @@ async function finish(trx: Knex.Transaction, m: Match, now: number) {
 async function cancelMatch(trx: Knex.Transaction, m: Match) {
   m.status = 'cancelled';
   m.dueAt = null;
+  m.graceAt = null;
   m.revision++;
   await saveMatch(trx, m);
   await trx('card_reservations').where({ match_id: m.id }).delete();
+  if (isMultiplayer(m)) releaseCardSeatsAfterCommit(trx, m.id, await seatKeys(trx, m.id));
 }
 
-async function syncConnections(trx: Knex.Transaction, m: Match, rows: SeatRow[], now: number) {
-  const online = await onlineCardPlayers(m, rows);
-  if (online === null) return;
+/**
+ * Apply presence to seats. `online` is read from the kernel presence registry
+ * *before* the transaction (never an RPC under the row lock); without it only
+ * graces that already passed are applied, using the persisted flags.
+ */
+async function syncConnections(trx: Knex.Transaction, m: Match, rows: SeatRow[], now: number, online?: Set<string> | null) {
   const expired: SeatRow[] = [];
   for (const row of rows) {
     const s: Seat = JSON.parse(row.payload);
@@ -338,8 +382,11 @@ async function syncConnections(trx: Knex.Transaction, m: Match, rows: SeatRow[],
       s.disconnectAt = null;
       expired.push(row);
       await saveSeat(trx, row, s);
+    } else if (!online) {
+      continue;
     } else if (online.has(row.identity_key)) {
-      if (s.connected !== true || s.disconnectAt != null) {
+      // An unset flag already reads as online; only real changes bump the seat revision.
+      if (s.connected === false || s.disconnectAt != null) {
         s.connected = true;
         s.disconnectAt = null;
         await saveSeat(trx, row, s);
@@ -350,12 +397,22 @@ async function syncConnections(trx: Knex.Transaction, m: Match, rows: SeatRow[],
       await saveSeat(trx, row, s);
     }
   }
+  const grace = rows.reduce<number | null>((earliest, row) => {
+    const seat = seatOf(row);
+    if (seat.retired || seat.disconnectAt == null) return earliest;
+    return earliest === null ? seat.disconnectAt : Math.min(earliest, seat.disconnectAt);
+  }, null);
+  if ((m.graceAt ?? null) !== grace) {
+    m.graceAt = grace;
+    await saveMatch(trx, m);
+  }
   if (!expired.length) return;
   if (m.status === 'waiting') {
     if (m.scene === 'ranked') { await cancelMatch(trx, m); return; }
     for (const row of expired) {
       await trx('card_seats').where({ match_id: m.id, identity_key: row.identity_key }).delete();
       await trx('card_reservations').where({ match_id: m.id, identity_key: row.identity_key }).delete();
+      releaseCardSeatsAfterCommit(trx, m.id, [String(row.identity_key)]);
       rows.splice(rows.indexOf(row), 1);
     }
     if (!rows.length) { await cancelMatch(trx, m); return; }
@@ -380,10 +437,11 @@ export async function advance(
   rows: SeatRow[],
   g: GraphLoaded,
   now: number,
+  online?: Set<string> | null,
 ) {
   if (["finished", "cancelled"].includes(m.status)) return;
   if (!singleScene(m)) {
-    await syncConnections(trx, m, rows, now);
+    await syncConnections(trx, m, rows, now, online);
     if (['finished', 'cancelled'].includes(m.status)) return;
   }
   if (needsExpiryPolicy(m)) {
@@ -584,7 +642,6 @@ export async function joinMatch(code: string, owner: Owner) {
   owner = await matchOwner(old.id, owner);
   const g = await loadGraph(old.questions[0].graphVersion);
   return transaction(async (trx) => {
-    await lockRow(trx, "card_catalog", { id: 1 });
     const row = await lockRow(trx, "card_matches", { id: old.id });
     const m: Match = JSON.parse(row.payload);
     const rows = await rowsFor(trx, m.id);
@@ -659,10 +716,12 @@ export async function controlMatch(
             await trx("card_reservations")
               .where({ identity_key: owner.key, match_id: id })
               .delete();
+            releaseCardSeatsAfterCommit(trx, id, [owner.key]);
             const rest = rows.filter((r) => r !== row);
             if (!rest.length) {
               m.status = "cancelled";
               m.dueAt = null;
+              m.graceAt = null;
             } else if (m.host === owner.key) m.host = rest[0].identity_key;
             m.revision++;
             await saveMatch(trx, m);
@@ -683,9 +742,13 @@ export async function controlMatch(
     );
   });
 }
-export async function advanceById(id: string, repairKey?: string) {
+export async function advanceById(id: string, repairKey?: string, options: { presence?: boolean } = {}) {
   const before = await getMatch(id),
     g = await loadGraph(before.questions[0].graphVersion);
+  // Presence is read from the kernel registry before taking the row lock.
+  const online = options.presence && !singleScene(before) && !['finished', 'cancelled'].includes(before.status)
+    ? await onlineCardPlayers(before, await rowsFor(db, id))
+    : undefined;
   return transaction(async (trx) => {
     const row = await lockRow(trx, "card_matches", { id });
     const m: Match = JSON.parse(row.payload);
@@ -702,12 +765,13 @@ export async function advanceById(id: string, repairKey?: string) {
         }
       }
     }
-    await advance(trx, m, rows, g, now);
-    // Only a due inspection needs rescheduling. An ordinary read must not
-    // rewrite the full match or keep pushing its presence inspection forward.
-    if (!singleScene(m) && !['finished', 'cancelled'].includes(m.status) &&
-        m.revision === Number(row.revision) && (row.due_at == null || Number(row.due_at) <= now))
-      await trx('card_matches').where({ id }).update({ due_at: scheduledAt(m) });
+    await advance(trx, m, rows, g, now, online);
+    // A due inspection that changed nothing still needs its next deadline.
+    if (!['finished', 'cancelled'].includes(m.status) && (row.due_at == null || Number(row.due_at) <= now)) {
+      const next = scheduledAt(m);
+      if (next !== (row.due_at == null ? null : Number(row.due_at))) await trx('card_matches').where({ id }).update({ due_at: next });
+      scheduleAfterCommit(trx, id, () => next);
+    }
     return m;
   });
 }

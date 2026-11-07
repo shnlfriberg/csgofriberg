@@ -33,6 +33,7 @@ import {
 import { settle } from "../../src/card-link/settlement";
 import { queueMatch, heartbeatQueue, cancelQueue, QUEUE_LEASE_MS } from "../../src/card-link/matchmaking";
 import { setCardPresenceReader, CARD_DISCONNECT_MS } from '../../src/card-link/presence';
+import { claimOccupancy, lookupOccupancy, releaseOccupancy } from '../../src/rooms/kernel/occupancy';
 import type { Owner } from '../../src/card-link/types';
 import { shortestPath } from "@friberg/card-link-core";
 import { randomUUID } from "crypto";
@@ -261,6 +262,32 @@ describe("card link durable application", () => {
     expect(await db('card_rating_ledger').where({ match_id: id })).toHaveLength(0);
     clock.mockRestore();
   });
+  it('reads views without presence lookups and holds one site-wide seat per identity', async () => {
+    const reader = vi.fn(async () => new Set<string>());
+    setCardPresenceReader(reader);
+    const owner = { key: `g:seat-${randomUUID()}`, userId: null, name: 'Seat' };
+    const { id } = await createMatch(owner, 'friend', 'unlimited', 'easy', 120, randomUUID());
+    await readView(id, owner);
+    await readView(id, owner);
+    // Presence comes from kernel events; plain reads never query it (no RPC, no row lock).
+    expect(reader).not.toHaveBeenCalled();
+    expect(await lookupOccupancy(owner.key)).toEqual({ game: 'card-link', roomId: id });
+    // A seat held in a 图寻 room blocks creating or joining a 卡牌连接 room.
+    const other = { key: `g:busy-${randomUUID()}`, userId: null, name: 'Busy' };
+    await claimOccupancy({ game: 'location', roomId: 'LOCKD' }, [other.key]);
+    try {
+      await expect(createMatch(other, 'friend', 'unlimited', 'easy', 120, randomUUID()))
+        .rejects.toMatchObject({ code: 'CARD_ALREADY_PLAYING', details: { occupied: { game: 'location', roomId: 'LOCKD' } } });
+      await expect(joinMatch((await readView(id, owner)).code!, other))
+        .rejects.toMatchObject({ code: 'CARD_ALREADY_PLAYING' });
+      expect(await db('card_seats').where({ match_id: id, identity_key: other.key })).toHaveLength(0);
+    } finally {
+      await releaseOccupancy({ game: 'location', roomId: 'LOCKD' }, [other.key]);
+    }
+    // Leaving the waiting room releases the seat after commit.
+    await controlMatch(id, owner, 'leave', randomUUID());
+    await vi.waitFor(async () => expect(await lookupOccupancy(owner.key)).toBeNull());
+  });
   it('restores a friend within 30 seconds, rejects a late return, and keeps other players in the game', async () => {
     const owners = [0, 1, 2].map(i => ({ key: `g:grace-${randomUUID()}`, userId: null, name: `G${i}` }));
     let online = new Set(owners.map(o => o.key));
@@ -272,18 +299,20 @@ describe("card link durable application", () => {
     await controlMatch(id, owners[0], 'start', randomUUID());
     let now = Date.now() + 3001;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
-    await advanceById(id);
+    await advanceById(id, undefined, { presence: true });
     const original = await readView(id, owners[0]);
     online.delete(owners[0].key);
-    await advanceById(id);
+    await advanceById(id, undefined, { presence: true });
     expect((await readView(id, owners[1])).players.find(p => p.id === original.me)).toMatchObject({ connected: false, retired: false, disconnectAt: now + CARD_DISCONNECT_MS });
     now += CARD_DISCONNECT_MS - 1;
     online.add(owners[0].key);
+    await advanceById(id, undefined, { presence: true });
     expect((await readView(id, owners[0])).players.find(p => p.id === original.me)).toMatchObject({ connected: true, disconnectAt: null, retired: false });
     online.delete(owners[0].key);
-    await advanceById(id);
+    await advanceById(id, undefined, { presence: true });
     now += CARD_DISCONNECT_MS;
     online.add(owners[0].key);
+    await advanceById(id, undefined, { presence: true });
     const late = await readView(id, owners[0]);
     expect(late.status).toBe('playing');
     expect(late.dueAt).toBe(original.dueAt);
@@ -298,9 +327,9 @@ describe("card link durable application", () => {
     const { id } = await createMatch(owners[0], 'friend', 'limited', 'easy', 120, randomUUID());
     await joinMatch((await readView(id, owners[0])).code!, owners[1]);
     online.delete(owners[0].key);
-    await advanceById(id);
+    await advanceById(id, undefined, { presence: true });
     vi.spyOn(Date, 'now').mockReturnValue(Date.now() + CARD_DISCONNECT_MS + 1);
-    await advanceById(id);
+    await advanceById(id, undefined, { presence: true });
     const view = await readView(id, owners[1]);
     expect(view.host).toBe(true);
     expect(view.players).toHaveLength(1);
@@ -316,11 +345,11 @@ describe("card link durable application", () => {
     for (const owner of [a, b]) await controlMatch(id!, owner, 'ready', randomUUID());
     let now = Date.now() + 3001;
     vi.spyOn(Date, 'now').mockImplementation(() => now);
-    await advanceById(id!);
+    await advanceById(id!, undefined, { presence: true });
     online.delete(a.key);
-    await advanceById(id!);
+    await advanceById(id!, undefined, { presence: true });
     now += CARD_DISCONNECT_MS;
-    await advanceById(id!);
+    await advanceById(id!, undefined, { presence: true });
     expect((await readView(id!, b)).status).toBe('finished');
     expect(await db('card_reservations').where({ match_id: id })).toHaveLength(0);
     // Also recover old-version reservations stranded by a failed outbox.

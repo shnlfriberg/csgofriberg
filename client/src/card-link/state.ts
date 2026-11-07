@@ -33,6 +33,21 @@ export function acceptPatch(
         (patch.publicRevision ?? 0) < (old.publicRevision ?? 0)))
   )
     return { view: old, reload: false };
+  // The HTTP command response already advanced this seat: the matching push is
+  // a duplicate. Keep only newer public data instead of reloading the match.
+  if (old.phaseRevision === patch.phaseRevision && old.revision === patch.revision) {
+    if ((patch.publicRevision ?? 0) <= (old.publicRevision ?? 0)) return { view: old, reload: false };
+    return {
+      view: {
+        ...old,
+        publicRevision: patch.publicRevision ?? old.publicRevision,
+        players: patch.players,
+        ...(patch.dueAt !== undefined ? { dueAt: patch.dueAt } : {}),
+        ...(patch.expiresAt !== undefined ? { expiresAt: patch.expiresAt } : {}),
+      },
+      reload: false,
+    };
+  }
   if (
     old.phaseRevision !== patch.phaseRevision ||
     old.revision !== patch.baseRevision
