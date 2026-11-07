@@ -19,6 +19,10 @@
   --correct: #38bd78;
   --close: #d59632;
   --wrong: #675563;
+  /* Readable strong accent and small shadow for dark surfaces (the light-theme
+     olive value used to leak into this theme). */
+  --primary-strong: #e6ff86;
+  --shadow-sm: 0 3px 10px rgba(0, 0, 0, 0.32);
   --shadow: 0 18px 42px rgba(0, 0, 0, 0.28);
   --shadow-lg: 0 28px 80px rgba(0, 0, 0, 0.48);
   --radius: 4px;

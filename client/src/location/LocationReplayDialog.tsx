@@ -41,7 +41,7 @@ export default function LocationReplayDialog({ replay, item, onClose }: {
     <header className="replay-heading">
       <div>
         <h2 id={titleId}>{t('location.replayTitle')}</h2>
-        <p>{t(`location.${item.mode}`)} · {t(`location.${item.difficulty}`)} · {total.toLocaleString()} / 25,000</p>
+        <p>{t(`location.${item.mode}`)} · {t(`location.${item.difficulty}`)} · {total.toLocaleString()} / {(25000).toLocaleString()}</p>
         <p>{new Date(item.finishedAt).toLocaleString(currentLocale())}</p>
       </div>
       <button type="button" className="confirm-close" aria-label={t('replay.close')} onClick={onClose}><X size={18} /></button>

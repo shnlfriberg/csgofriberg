@@ -1,8 +1,9 @@
 import { lazy, Suspense } from 'react';
 const CardLink = lazy(() => import('./pages/CardLink'));
 const TurtleSoupLobby = lazy(() => import('./pages/TurtleSoupLobby'));
-import Entertainment from './pages/Entertainment';
-import LocationMenu from './pages/LocationMenu';
+// Entertainment pages load on demand, so the 图寻 styles stay out of the main bundle.
+const Entertainment = lazy(() => import('./pages/Entertainment'));
+const LocationMenu = lazy(() => import('./pages/LocationMenu'));
 const LocationGame = lazy(() => import('./pages/LocationGame'));
 const LocationMulti = lazy(() => import('./pages/LocationMulti'));
 const LocationHistory = lazy(() => import('./pages/LocationHistory'));

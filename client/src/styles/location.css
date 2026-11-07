@@ -1,6 +1,3 @@
-.location-page {
-  --location-accent: #ffad5a;
-}
 .location-history-filter,
 .location-replay-player {
   display: flex;
@@ -89,18 +86,14 @@
   box-shadow: 0 0 7px #7de7ff99, 0 0 0 1px #15191d;
 }
 /* ===== 娱乐模式骨架：紧凑间距，由 .page-scroll 的 gap 统一控制区块间距 ===== */
+/* One content width for every entertainment page (hub, 图寻, 海龟汤, 卡牌连接): the
+   header spans the window and content is centred by the shell's --content-max. */
 /* Accent follows the main theme: lime fills, plus a readable strong tone for text on light surfaces. */
 .location-page {
   --location-accent: var(--primary);
   --location-accent-text: var(--primary-strong);
 }
-html[data-theme='blast'] .location-page { --location-accent-text: var(--primary); }
 .location-page .page-scroll {
-  max-width: 1320px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 18px 24px 28px;
-  box-sizing: border-box;
   gap: 14px;
 }
 /* 对局页：题图与雷达共用一个由视口高度推出的正方形尺寸，桌面端一屏内完成一轮。 */
@@ -109,7 +102,6 @@ html[data-theme='blast'] .location-page { --location-accent-text: var(--primary)
   /* Lobby, status and panels line up with the three-column round layout. */
   --content-max: min(1632px, calc(var(--loc-stage) * 2 + 240px));
   --loc-review: max(280px, calc(var(--visual-viewport-height, 100dvh) - 300px));
-  max-width: 1680px;
   padding-block: 14px 24px;
   gap: 12px;
 }
@@ -123,19 +115,7 @@ html[data-theme='blast'] .location-page { --location-accent-text: var(--primary)
 
 /* ===== 入口与大厅：沿用主模式组件（首页入口卡、单人难度卡、多人房间卡、标准按钮） ===== */
 /* 入口卡用 flex 换行而非固定列数，任意数量的卡片每一行都居中。 */
-.menu-grid.ent-menu-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 14px;
-  max-width: none;
-  padding-block: 10px 6px;
-}
-.ent-menu-grid > .menu-card {
-  flex: 0 1 250px;
-  min-width: 200px;
-  box-sizing: border-box;
-}
+/* Shared entry-card row and content width: styles/entertainment.css. */
 .location-rules-entry {
   display: flex;
   justify-content: center;
@@ -926,62 +906,6 @@ html[data-theme='blast'] .location-page { --location-accent-text: var(--primary)
   color: var(--location-accent-text);
 }
 
-/* ===== 统计页沿用的图寻卡片 ===== */
-.location-stat-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-.location-stat-grid > div {
-  padding: 16px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-.location-stat-grid span {
-  color: var(--text-light);
-  font-size: 12px;
-}
-.location-stat-grid strong {
-  display: block;
-  margin-top: 8px;
-  font-size: 26px;
-}
-.location-history-list {
-  margin-top: 16px;
-}
-.location-history-row {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin: 8px 0;
-  padding: 12px 16px;
-  color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  cursor: pointer;
-  text-align: left;
-}
-.location-history-row small {
-  display: block;
-  color: var(--text-light);
-  margin-top: 4px;
-}
-.location-history-row strong {
-  color: var(--location-accent-text);
-  font-size: 20px;
-}
-.location-pagination {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 16px;
-  margin-top: 16px;
-}
-
 @media (min-width: 1100px) {
   .location-daily-finished-layout {
     grid-template-columns: minmax(0, 7fr) minmax(280px, 3fr);
@@ -1130,7 +1054,7 @@ html[data-theme='blast'] .location-page { --location-accent-text: var(--primary)
 .submission-image-detail h3 { margin: 0; overflow-wrap: anywhere; }
 .submission-image-detail label { display: grid; gap: 8px; min-width: 0; }
 @media (min-width: 1200px) {
-  .location-submission-page .page-scroll { max-width: 1680px; }
+  .location-submission-page { --content-max: 105rem; }
   .location-submission-page .submission-layout { grid-template-columns: minmax(0, 1fr) 280px; }
   .location-submission-page .submission-fields { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
   .location-submission-page .submission-fields > * { grid-column: 1 / -1; }

@@ -74,7 +74,7 @@ export default function LocationStats() {
   const columns: Column<LocationReplayItem>[] = [
     { key: 'mode', title: t('stats.mode'), render: (item) => `${t(`location.${item.mode}`)} · ${t(`location.${item.difficulty}`)}` },
     { key: 'result', title: t('stats.result'), render: resultBadge },
-    { key: 'score', title: t('location.totalScore'), render: (item) => `${item.totalScore.toLocaleString()} / 25,000` },
+    { key: 'score', title: t('location.totalScore'), render: (item) => `${item.totalScore.toLocaleString()} / ${(25000).toLocaleString()}` },
     { key: 'time', title: t('stats.time'), render: (item) => new Date(item.finishedAt).toLocaleString(currentLocale()) },
     { key: 'replay', title: t('stats.replay'), render: replayButton },
   ];
@@ -145,7 +145,7 @@ export default function LocationStats() {
         <div className="stats-replay-mobile-list" aria-busy={loading}>
           {items.map((item) => <article className="stats-replay-mobile-item" key={item.gameId}>
             <div className="stats-replay-mobile-heading"><strong>{t(`location.${item.mode}`)} · {t(`location.${item.difficulty}`)}</strong>{resultBadge(item)}</div>
-            <div className="stats-replay-mobile-details"><span>{t('location.totalScore')} <strong>{item.totalScore.toLocaleString()} / 25,000</strong></span></div>
+            <div className="stats-replay-mobile-details"><span>{t('location.totalScore')} <strong>{item.totalScore.toLocaleString()} / {(25000).toLocaleString()}</strong></span></div>
             <div className="stats-replay-mobile-footer"><time>{new Date(item.finishedAt).toLocaleString(currentLocale())}</time>{replayButton(item)}</div>
           </article>)}
           {!items.length && <p className="muted">{t(loading ? 'common.loading' : 'location.noHistory')}</p>}

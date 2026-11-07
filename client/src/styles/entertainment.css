@@ -1,0 +1,40 @@
+/* ===== 娱乐模式公共骨架（图寻、海龟汤、卡牌连接共用）=====
+   Loaded globally so every entertainment page shares one layout, regardless of
+   which mode's lazy chunk is loaded first. */
+
+/* One content width; the header spans the window and content is centred. */
+.ent-page,
+.location-page { --content-max: 80rem; }
+
+/* Intro lines, notices and footnotes are centred above the centred cards. */
+.ent-page .single-lobby-subtitle,
+.location-page .single-lobby-subtitle,
+.ent-notice {
+  text-align: center;
+}
+.ent-notice { margin: 0 0 8px; }
+.ent-notice .btn { margin-inline: 4px; }
+
+/* Mode entry cards: a centred, wrapping row with the same card size everywhere. */
+.menu-grid.ent-menu-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  max-width: none;
+  margin-inline: auto;
+  padding-block: 10px 6px;
+}
+.ent-menu-grid > .menu-card {
+  flex: 0 1 250px;
+  min-width: 200px;
+  box-sizing: border-box;
+}
+
+/* Start-button row under the difficulty cards: as wide as the card row, not the page. */
+.ent-page .single-lobby-action,
+.location-page .single-lobby-action {
+  width: min(1104px, 100%);
+  margin-inline: auto;
+  box-sizing: border-box;
+}

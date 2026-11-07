@@ -1,7 +1,7 @@
 import GameRules from '../components/GameRules';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Soup, Play, Check } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Soup, Play, Check, ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Page from '../components/Page';
 import { AVAILABLE_DIFFICULTIES } from '../config/difficulties';
@@ -15,7 +15,9 @@ export default function TurtleSoupLobby() {
     try { return AVAILABLE_DIFFICULTIES.find((d) => d.key === localStorage.getItem(KEY))?.key ?? 'beginner'; }
     catch { return 'beginner'; }
   });
-  return <Page title={t('soup.title')} icon={<Soup size={18} />} className="soup-lobby">
+  return <Page title={t('soup.title')} icon={<Soup size={18} />} className="soup-lobby ent-page" actions={
+    <Link className="btn btn-ghost btn-sm" to="/entertainment"><ArrowLeft size={16} aria-hidden="true" /><span className="btn-text">{t('location.entertainment')}</span></Link>
+  }>
     <p className="muted single-lobby-subtitle">{t('soup.description')}</p>
     <div className="single-difficulty-grid">{AVAILABLE_DIFFICULTIES.map((difficulty) => {
       const Icon = difficultyIcon(difficulty.key);

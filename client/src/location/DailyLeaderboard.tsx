@@ -23,14 +23,14 @@ export default function DailyLeaderboard({
     >
       <div className="location-board-heading">
         <div>
-          <span className="location-eyebrow">TOP 100</span>
+          <span className="location-eyebrow">{t('location.topN', { count: 100 })}</span>
           <h2 id="location-daily-leaderboard-heading">
             {t('location.leaderboard')}
           </h2>
           <p className="muted">{t(`location.${difficulty}`)}</p>
         </div>
         <span className="location-board-date">
-          {t('location.officialGuest')}
+          {t('location.leaderboardHint')}
         </span>
       </div>
       {board.map((entry) => (
@@ -45,7 +45,7 @@ export default function DailyLeaderboard({
       ))}
       {!board.length && (
         <p className="muted location-board-empty">
-          {t('location.officialGuest')}
+          {t('location.leaderboardEmpty')}
         </p>
       )}
     </section>

@@ -1,7 +1,7 @@
 import GameRules from '../components/GameRules';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
-import { Soup, RotateCcw, Home, Flag } from 'lucide-react';
+import { Soup, RotateCcw, ArrowLeft, Flag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import Page from '../components/Page';
 import GuessInputBar from '../components/GuessInputBar';
@@ -33,6 +33,8 @@ function SoupGamePage({ mode }: { mode: string }) {
   const confirm = useConfirm();
   const { game, options, busy, error, expired, pending, load, submit, exit } = useTurtleSoup(mode);
   const [values, setValues] = useState<Partial<Record<SoupField, string>>>({});
+  // Mobile: while the guess input has focus, collapse chrome above the keyboard (as in the classic game).
+  const [inputFocused, setInputFocused] = useState(false);
   const historyRef = useRef<HTMLDivElement>(null);
   useEffect(() => { setValues({}); }, [game?.gameId]);
   useEffect(() => {
@@ -47,7 +49,8 @@ function SoupGamePage({ mode }: { mode: string }) {
       confirmLabel: t(restart ? 'game.restart' : 'game.leaveConfirm'), tone: 'danger',
     })) return;
     if (await exit()) {
-      if (restart) await load(); else navigate('/');
+      // Leaving returns to the 海龟汤 lobby (the mode's own menu), not the site home.
+      if (restart) await load(); else navigate('/turtle-soup');
     }
   };
 
@@ -74,14 +77,14 @@ function SoupGamePage({ mode }: { mode: string }) {
     void submit('question', { field, value });
   };
 
-  return <Page title={`${t('soup.title')} · ${difficultyLabel(t, mode)}`} icon={<Soup size={18} />} className="soup-page" showHome={false}
+  return <Page title={`${t('soup.title')} · ${difficultyLabel(t, mode)}`} icon={<Soup size={18} />} className={`soup-page ent-page game-page${inputFocused ? ' keyboard-active' : ''}`} showHome={false}
     actions={<>
       <button className="btn btn-ghost btn-sm" disabled={busy || Boolean(pending)} onClick={() => void leaveOrRestart(true)} aria-label={t('game.restart')}><RotateCcw size={15} /><span className="btn-text">{t('game.restart')}</span></button>
-      <button className="btn btn-ghost btn-sm" disabled={busy || Boolean(pending)} onClick={() => void leaveOrRestart(false)} aria-label={t('common.home')}><Home size={15} /><span className="btn-text">{t('common.home')}</span></button>
+      <button className="btn btn-ghost btn-sm" disabled={busy || Boolean(pending)} onClick={() => void leaveOrRestart(false)} aria-label={t('soup.title')}><ArrowLeft size={15} aria-hidden="true" /><span className="btn-text">{t('soup.title')}</span></button>
     </>}
-    statusBar={<><span>{t('soup.remaining')}</span><strong className="soup-counter" aria-live="polite">{game?.remainingQuestions ?? SOUP_MAX_ATTEMPTS}<small> / {game?.maxQuestions ?? SOUP_MAX_ATTEMPTS}</small></strong><span className="muted">{t('soup.description')}</span></>}
+    statusBar={<><span>{t('soup.remaining')}</span><strong className="soup-counter" aria-live="polite">{game?.remainingQuestions ?? SOUP_MAX_ATTEMPTS}<small> / {game?.maxQuestions ?? SOUP_MAX_ATTEMPTS}</small></strong></>}
     dock={game?.status === 'playing' && <GuessInputBar key={game.gameId} disabled={disabled || game.remainingQuestions <= 0}
-      onPick={(player) => submit('guess', { playerId: player.id })} buttonText={t('soup.guess')} />}>
+      onPick={(player) => submit('guess', { playerId: player.id })} buttonText={t('soup.guess')} onFocusChange={setInputFocused} />}>
     {error && !pending && <div className="card" role="alert"><p>{expired ? t('soup.expired') : error}</p><button className="btn" onClick={() => void load()} disabled={busy}>{t(expired ? 'game.restart' : 'common.retry')}</button></div>}
     {pending && !busy && <div className="card soup-pending" role="alert"><p>{t('soup.pending')}</p><button className="btn" disabled={busy} onClick={() => void load()}>{t('soup.retry')}</button></div>}
     {!game && busy && <p role="status">{t('common.loading')}</p>}
