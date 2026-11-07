@@ -7,6 +7,7 @@ const { pollState } = require('./production-poll.cjs');
 const requireServer = createRequire('/app/server/dist/index.js');
 const { db } = requireServer('./db/knex.js');
 const { config } = requireServer('./config.js');
+const { initRedis, closeRedis } = requireServer('./redis.js');
 const { browserFingerprint } = requireServer('./services/pow.js');
 const jwt = requireServer('jsonwebtoken');
 const WebSocket = createRequire(createRequire(requireServer.resolve('socket.io')).resolve('engine.io'))('ws');
@@ -227,7 +228,11 @@ async function verifyLaunchFixes(originalVersion) {
   const {transaction,lockRow}=requireServer('./card-link/transaction.js');
   const {settle}=requireServer('./card-link/settlement.js');
   const {cancelQueue}=requireServer('./card-link/matchmaking.js');
+  const {releaseCardSeatsAfterCommit}=requireServer('./card-link/kernel.js');
   const {updatePlayer}=requireServer('./services/playerMutations.js');
+  // In-process fixtures below create and settle multiplayer seats, which claim and
+  // release site-wide occupancy in the shared Redis (room kernel) like the apps do.
+  await initRedis();
   const users=[];
   for(let i=0;i<2;i++) {
     const [u]=await db('users').insert({username:`release-${randomUUID().slice(0,20)}`,password_hash:'fixture-only',role:i===0?'admin':'user',email:`${randomUUID()}@example.invalid`,email_verified_at:db.fn.now()}).returning('*');
@@ -271,6 +276,8 @@ async function verifyLaunchFixes(originalVersion) {
     m.status='finished';m.dueAt=null;m.revision++;
     await trx('card_matches').where({id:m.id}).update({status:m.status,due_at:null,revision:m.revision,payload:JSON.stringify(m)});
     await trx('card_reservations').where({match_id:m.id}).delete();
+    // Finishing frees both site-wide seats after commit, as finish() does.
+    releaseCardSeatsAfterCommit(trx,m.id,users.map(({key})=>key));
     await trx('card_outbox').insert({match_id:m.id,attempts:10,due_at:Date.now()+600000,error:'fixture failure'});return m;
   });
   for(const host of ['app','app2']) assert.equal((await call(host,users[0],'/card-link/queue',{variant:'limited'},409)).code,'CARD_SETTLEMENT_PENDING');
@@ -299,5 +306,6 @@ async function verifyLaunchFixes(originalVersion) {
 }
 main().catch(e=>{console.error(e);process.exitCode=1;}).finally(async () => {
   sockets.forEach(socket => socket.close());
+  await closeRedis();
   await db.destroy();
 });
