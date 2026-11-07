@@ -97,6 +97,16 @@ describe('DailyChallenge', () => {
     expect(countdown).not.toHaveTextContent('00:00:00 后刷新');
   });
 
+  it('never shows an extra second from floating-point clock anchors', async () => {
+    // (anchor + 60000) - anchor is not exactly 60000 for many fractional anchors.
+    const anchor = 84825.19426180921;
+    expect((anchor + 60_000) - anchor).not.toBe(60_000);
+    vi.spyOn(performance, 'now').mockReturnValue(anchor);
+    get.mockResolvedValue(detail() as never);
+    renderAtRoute(<DailyChallenge />, { route: '/daily/beginner', path: '/daily/:mode' });
+    expect(await screen.findByText(/后刷新/)).toHaveTextContent('00:01:00 后刷新');
+  });
+
   it('renders the embedded top-ten result and current-player marker', async () => {
     get.mockImplementation(async (path) => {
       if (path === '/daily-challenge/beginner/leaderboard') return leaderboard() as never;

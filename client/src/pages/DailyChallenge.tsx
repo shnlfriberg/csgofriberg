@@ -76,7 +76,9 @@ function localDeadline(timestamp: unknown, anchor: ServerClockAnchor | null): nu
 }
 
 function remainingTime(target: number, now: number): string {
-  const totalSeconds = Math.max(0, Math.ceil((target - now) / 1000));
+  // Both values come from fractional performance.now() anchors: round to whole
+  // milliseconds first, or float error (60000.000000000007 ms) shows one extra second.
+  const totalSeconds = Math.max(0, Math.ceil(Math.round(target - now) / 1000));
   const hours = Math.floor(totalSeconds / 3600);
   const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = totalSeconds % 60;
