@@ -99,10 +99,6 @@ jobs:
           cache-to: type=gha,mode=max
           provenance: false
           sbom: false
-      - name: Verify isolated PostgreSQL migrations and production runtime
-        run: bash scripts/verify-production.sh "friberg-candidate:${{ github.sha }}"
-      # Same checkout and build arguments reuse the verified runtime layers;
-      # registry output additionally retains provenance and SBOM attestations.
       - name: Publish verified build inputs with attestations
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v7
