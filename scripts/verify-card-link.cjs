@@ -17,8 +17,9 @@ const { shortestPath } = requireServer('@friberg/card-link-core');
 assert.equal(new URL(process.env.DB_URL).pathname, '/soup_release_qa');
 const agent = 'card-link-container-qa', ip = '192.0.2.199';
 const cookie = index => `csgofriberg_guest=${jwt.sign({key:`card-container-${index}`,typ:'guest'},config.jwtSecret,{expiresIn:'1h'})}; csgofriberg_pow=${jwt.sign({typ:'pow',fp:browserFingerprint(agent,ip),jti:randomUUID(),difficulty:config.powDifficulty},config.jwtSecret,{expiresIn:'1h'})}`;
-async function request(host,index,path,body) {
-  const response=await fetch(`http://${host}:3000/api/card-link${path}`,{
+async function request(host,index,path,body) { return api(host,index,`/card-link${path}`,body); }
+async function api(host,index,path,body) {
+  const response=await fetch(`http://${host}:3000/api${path}`,{
     method:body===undefined?'GET':'POST',headers:{Cookie:cookie(index),'User-Agent':agent,'X-Forwarded-For':ip,'X-Forwarded-Proto':'https',Origin:'https://soup-release-qa.invalid','Content-Type':'application/json'},
     body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000),
   });
@@ -91,41 +92,48 @@ async function main() {
   await verifyLaunchFixes(built.version);
   const {settle: settleSolo}=requireServer('./card-link/settlement.js');
   for (const variant of ['limited','unlimited']) for (const duration of [0,120]) {
-    const solo=await request('app',2,'/matches',{scene:'practice',variant,difficulty:'easy',duration,requestId:randomUUID()});
-    const state=await request('app2',2,`/matches/${solo.id}`);
+    // 单人 starts like classic games on /api/game; the previous one was exited, so this creates a new match.
+    const solo=await api('app',2,'/game/start',{variant:'card-link',mode:'easy',hand:variant,duration});
+    const state=await api('app2',2,`/game/${solo.gameId}/state`);
+    assert.equal(state.gameId,solo.gameId);assert.equal(state.hand,variant);assert.equal(state.mode,'easy');
     assert.equal(state.duration,duration);
     assert.equal(state.current.deadline,duration===0?null:state.current.startedAt+duration*1000);
     assert.equal(state.expiresAt,state.current.startedAt+1800000);
     assert.equal(state.dueAt,state.current.deadline??state.expiresAt);
-    await request('app2',2,`/matches/${solo.id}/control`,{action:'leave',requestId:randomUUID()});
-    await settleSolo(solo.id);
+    await api('app2',2,`/game/${solo.gameId}/exit`,{});
+    await settleSolo(solo.gameId);
   }
-  const careerStats=await request('app',2,'/stats?variant=limited');
+  const careerStats=await api('app',2,'/stats/me?variant=card-link&hand=limited');
   assert.equal(careerStats.personal.games,2);assert.equal(careerStats.personal.solved,0);
-  const careerList=await request('app2',2,'/replays?variant=limited&scene=practice&page=1');
+  const careerList=await api('app2',2,'/stats/replays?variant=card-link&hand=limited&scene=practice&page=1');
   assert.equal(careerList.items.length,2);assert.equal(careerList.hasNext,false);
   assert(!JSON.stringify(careerList).includes('g:card-container'));
-  assert.equal((await request('app2',3,'/replays?variant=limited')).items.length,0);
+  assert.equal((await api('app2',3,'/stats/replays?variant=card-link&hand=limited')).items.length,0);
   console.log('PASS PostgreSQL timed/untimed solo settings and private career statistics/replays');
   // Room expiry is persisted and enforced across the two production processes.
   for (const scene of ['practice','daily']) {
-    const solo=await request('app',4,'/matches',{scene,variant:'unlimited',difficulty:'normal',duration:0,requestId:randomUUID()});
-    let state=await request('app2',4,`/matches/${solo.id}`);
+    const solo=scene==='practice'
+      ? {id:(await api('app',4,'/game/start',{variant:'card-link',mode:'normal',hand:'unlimited',duration:0})).gameId}
+      : await request('app',4,'/matches',{scene,variant:'unlimited',difficulty:'normal',duration:0,requestId:randomUUID()});
+    // 单人 is read and played through /api/game (a move answers with the seat patch); daily keeps its endpoints.
+    const read=host=>scene==='practice'?api(host,4,`/game/${solo.id}/state`):request(host,4,`/matches/${solo.id}`);
+    const command=(host,input)=>scene==='practice'?api(host,4,`/game/${solo.id}/command`,input):request(host,4,`/matches/${solo.id}/commands`,input);
+    let state=await read('app2');
     assert.equal(state.current.deadline,null);assert.equal(state.duration,0);
     const cutoff=state.expiresAt;
     if(scene==='daily') assert.equal(cutoff,Date.parse(`${state.day}T00:00:00+08:00`)+86400000);
     const graph=await loadGraph(state.graphVersion), path=shortestPath(graph.index,state.question.start,state.question.end);
     const input={requestId:randomUUID(),revision:state.revision,phaseRevision:state.phaseRevision,command:{type:'play',playerId:path[1],index:0}};
-    state=await request('app',4,`/matches/${solo.id}/commands`,input);
+    state=await command('app',input);
     if(scene==='daily') assert.equal(state.expiresAt,cutoff);
-    else assert(state.expiresAt>cutoff);
-    assert.equal((await request('app2',4,`/matches/${solo.id}`)).expiresAt,state.expiresAt);
+    else { assert(state.expiresAt>cutoff); assert.equal(state.baseRevision,input.revision); }
+    assert.equal((await read('app2')).expiresAt,state.expiresAt);
     const raw=await db('card_matches').where({id:solo.id}).first(), m=JSON.parse(raw.payload);
     m.expiresAt=Date.now()-1;m.dueAt=m.expiresAt;
     await db('card_matches').where({id:solo.id}).update({due_at:m.dueAt,payload:JSON.stringify(m)});
-    const expired = await request('app2',4,`/matches/${solo.id}`);
+    const expired = await read('app2');
     assert.equal(expired.status,'finished');assert.equal(expired.current.stoppedAt,m.expiresAt);
-    assert.equal((await request('app',4,`/matches/${solo.id}`)).current.stoppedAt,expired.current.stoppedAt);
+    assert.equal((await read('app')).current.stoppedAt,expired.current.stoppedAt);
     await Promise.all([settleSolo(solo.id),settleSolo(solo.id)]);
     assert.equal(Number((await db('card_results').where({match_id:solo.id}).count('* as n').first()).n),1);
   }
@@ -231,7 +239,7 @@ async function verifyLaunchFixes(originalVersion) {
       body:body===undefined?undefined:JSON.stringify(body),signal:AbortSignal.timeout(15000)});
     const data=await response.json();assert.equal(response.status,expected,JSON.stringify(data));return data;
   }
-  for(const path of ['/card-link/stats?variant=bad','/card-link/replays?page=1.5','/card-link/history?page=Infinity','/card-link/leaderboard?variant=bad','/card-link/daily-leaderboard?day=bad','/admin/card-link/reviews?page=-1'])
+  for(const path of ['/stats/me?variant=card-link&hand=bad','/stats/replays?variant=card-link&page=1.5','/card-link/leaderboard?variant=bad','/card-link/daily-leaderboard?day=bad','/admin/card-link/reviews?page=-1'])
     assert.equal((await call('app',users[0],path,undefined,400)).code,'VALIDATION_FAILED');
   const {exportPlayers}=requireServer('./services/playerExport.js');
   const sample=(await exportPlayers()).find(p=>p.career && p.difficulties.length);

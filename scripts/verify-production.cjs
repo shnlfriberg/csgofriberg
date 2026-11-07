@@ -219,17 +219,20 @@ async function main() {
     const saved=JSON.parse(await redis.get(`${process.env.REDIS_PREFIX}single:game:${id}`));
     assert.equal(saved.id,id); assert.equal(saved.userId,null);
     const question={requestId:randomUUID(),version:0,field:'age',value:25};
-    for(let i=0;i<2;i++) { const r=await request(`/api/game/${id}/question`,question);assert.equal(r.status,200);view=await r.json();assert.equal(view.questionCount,1); }
+    // A new write answers with a delta on its version; the replayed request with the full view.
+    for(let i=0;i<2;i++) { const r=await request(`/api/game/${id}/question`,question);assert.equal(r.status,200);view=await r.json();assert.equal(view.questionCount,1);assert.equal(view.base,i?undefined:0); }
     assert.equal((await request(`/api/game/${id}/question`,{...question,requestId:randomUUID()})).status,409);
     const second=await request(`/api/game/${id}/question`,{requestId:randomUUID(),version:1,field:'isActive',value:true});
     assert.equal(second.status,200); assert.equal((await second.json()).questionCount,2);
     const guess=await request(`/api/game/${id}/guess`,{requestId:randomUUID(),version:2,playerId:saved.targetPlayerId});
     assert.equal(guess.status,200); const won=await guess.json(); assert.equal(won.status,'won');
-    assert.equal(won.remainingQuestions,21); assert.equal(won.guessCount,1);
+    assert.equal(won.remainingQuestions,21); assert.equal(won.guessCount,1); assert.equal(won.base,2); assert.equal(won.event.type,'guess');
+    const final=await (await request(`/api/game/${id}/state`)).json();
+    assert.equal(final.events.length,3); assert.deepEqual(final.events.at(-1),won.event); assert.deepEqual(final.answer,won.answer);
     const record=await db('games').where({session_id:id}).first();
     await db('players').where({id:saved.targetPlayerId}).update({nickname:`qa-renamed-${saved.targetPlayerId}`,age:99});
     const replay=await request(`/api/stats/games/${record.id}/replay`); assert.equal(replay.status,200);
-    const replayData=await replay.json(); assert.deepEqual(replayData.answer,won.answer); assert.deepEqual(replayData.events,won.events);
+    const replayData=await replay.json(); assert.deepEqual(replayData.answer,won.answer); assert.deepEqual(replayData.events,final.events);
     const summary=await request('/api/stats/me?variant=turtle-soup'); const stats=await summary.json();
     assert.equal(summary.status,200); assert.equal(stats.personal.totalGames,1); assert.equal(stats.personal.avgGuesses,3);
     console.log('PASS PostgreSQL soup settlement, request deduplication, 409 and immutable snapshot replay');
