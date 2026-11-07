@@ -3,6 +3,8 @@ import { evalStateScript, redisKey, redisState } from '../redis';
 import { GuessFeedback } from '../types';
 import { config } from '../config';
 import { logTransientError } from './transientLog';
+import { isForeignOccupancyValue, localOccupancy } from '../rooms/kernel/occupancy';
+import { ScheduleSource } from '../rooms/kernel/schedules';
 import { DIFFICULTY_LEVELS } from '../difficulties';
 import {
   getRoomGameModeDefinition,
@@ -182,7 +184,8 @@ const FINISHED_ROOM_TTL_MS = 5 * 60_000;
 const MAX_GLOBAL_ROOMS = 10_000;
 const MAX_ROOMS_PER_IP = 50;
 const localRooms = new Map<string, StoredRoom>();
-const localIdentityRooms = new Map<string, string>();
+// Shared with the room kernel so the single-instance fallback sees every game's seat.
+const localIdentityRooms = localOccupancy;
 const localLocks = new Map<string, Promise<void>>();
 interface RoomGuessTarget {
   round: number;
@@ -195,6 +198,22 @@ interface RoomGuessTarget {
 }
 
 const roomTargetCache = new Map<string, RoomGuessTarget>();
+const ROOM_TARGET_CACHE_LIMIT = 10_000;
+const classicSchedules = new ScheduleSource('classic', 'room:schedules');
+
+function cacheRoomTarget(roomId: string, target: RoomGuessTarget): void {
+  roomTargetCache.delete(roomId);
+  roomTargetCache.set(roomId, target);
+  if (roomTargetCache.size > ROOM_TARGET_CACHE_LIMIT) {
+    const oldest = roomTargetCache.keys().next().value;
+    if (oldest !== undefined) roomTargetCache.delete(oldest);
+  }
+}
+
+/** Drop a cached target, e.g. after another instance started a rematch round. */
+export function forgetRoomGuessTarget(roomId: string): void {
+  roomTargetCache.delete(roomId);
+}
 
 function roomKey(id: string) {
   return redisKey(`room:${id}`);
@@ -502,9 +521,11 @@ export async function getRoomForIdentity(
 
 export async function getRoomIdForIdentity(identity: string): Promise<string | null> {
   const client = stateRedis();
-  return client
+  const value = client
     ? await client.get(identityKey(identity))
     : localIdentityRooms.get(identity) ?? null;
+  // Seats in other room games (图寻, 卡牌连接) share this key but are not classic rooms.
+  return isForeignOccupancyValue(value) ? null : value;
 }
 
 export async function getRoomStateProbeForIdentity(
@@ -524,13 +545,14 @@ export async function getRoomStateProbeForIdentity(
   };
   const client = stateRedis();
   if (!client) {
-    const roomId = localIdentityRooms.get(identity);
+    const mapped = localIdentityRooms.get(identity);
+    const roomId = isForeignOccupancyValue(mapped) ? undefined : mapped;
     const room = roomId ? localRooms.get(roomId) : undefined;
     return probeFromRoom(room ? normalizeRoom(structuredClone(room)) : null, roomId ?? '');
   }
 
   const roomId = await client.get(identityKey(identity));
-  if (!roomId) return null;
+  if (!roomId || isForeignOccupancyValue(roomId)) return null;
   const result = await client.multi()
     .get(identityKey(identity))
     .hmGet(roomMetaKey(roomId), [
@@ -948,7 +970,7 @@ export async function getRoomGuessTarget(
       gameMode: gameModeRaw === 'relay2v2' ? 'relay2v2' as const : gameModeRaw === 'relay' ? 'relay' as const : 'classic' as const,
       currentTurnKey: currentTurnKeyRaw || null,
     };
-    roomTargetCache.set(roomId, target);
+    cacheRoomTarget(roomId, target);
     return target;
   }
 
@@ -975,7 +997,7 @@ export async function getRoomGuessTarget(
     gameMode: room.gameMode,
     currentTurnKey: room.currentTurnKey,
   };
-  roomTargetCache.set(roomId, target);
+  cacheRoomTarget(roomId, target);
   return target;
 }
 
@@ -1159,6 +1181,8 @@ export async function applyRoomGuess(input: ApplyRoomGuessInput): Promise<ApplyR
   let result = await evalStateScript(scriptName, script, keys, args);
   if (typeof result !== 'string') throw new Error('INVALID_GUESS_RESULT');
   let parsed = JSON.parse(result) as ApplyRoomGuessResult;
+  // A cached target can be stale when another instance saved the round (e.g. a rematch).
+  if (parsed.kind === 'error' && parsed.reason === 'target_changed') forgetRoomGuessTarget(input.roomId);
   if (parsed.kind === 'error' && parsed.code === 'HOT_STATE_MISSING') {
     const room = await getRoom(input.roomId);
     if (!room) return { kind: 'error', code: 'NO_ACTIVE_ROUND', reason: 'room_missing' };
@@ -1193,8 +1217,17 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
       ...room.players.filter((player) => !player.eliminated),
       ...room.spectators,
     ];
+    const reactivating = current?.status === 'finished' && room.status !== 'finished';
     for (const member of members) {
       const mappedRoomId = localIdentityRooms.get(member.key);
+      if (isForeignOccupancyValue(mappedRoomId)) {
+        // Seated in another room game: block new active members and rematches.
+        if (room.status !== 'finished' && (!currentMembers.has(member.key) || reactivating)) {
+          room.revision = previousRevision;
+          throw new Error('ROOM_IDENTITY_CONFLICT');
+        }
+        continue;
+      }
       const mappedRoom = mappedRoomId ? localRooms.get(mappedRoomId) : null;
       if (
         mappedRoomId &&
@@ -1209,7 +1242,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
     localRooms.set(room.id, structuredClone(room));
     if (room.targetPlayerId) {
-      roomTargetCache.set(room.id, {
+      cacheRoomTarget(room.id, {
         round: room.round,
         targetPlayerId: room.targetPlayerId,
         maxGuesses: room.maxGuesses,
@@ -1223,6 +1256,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
     for (const member of members) {
       const mappedRoomId = localIdentityRooms.get(member.key);
+      if (isForeignOccupancyValue(mappedRoomId)) continue;
       const mappedRoom = mappedRoomId ? localRooms.get(mappedRoomId) : null;
       if (
         !mappedRoomId ||
@@ -1283,7 +1317,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     }
   }
   const result = await evalCachedStateScript(
-    'room-save-v7',
+    'room-save-v8',
     `local incoming = cjson.decode(ARGV[1])
      local identityCount = tonumber(ARGV[6])
      local metaKey = KEYS[4 + identityCount]
@@ -1312,9 +1346,13 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
        if member.eliminated ~= true then table.insert(incomingMembers, member) end
      end
      for _, member in ipairs(incoming.spectators or {}) do table.insert(incomingMembers, member) end
+     local reactivating = currentOk and current.status == 'finished' and incoming.status ~= 'finished'
      for index, member in ipairs(incomingMembers) do
        local mappedRoomId = redis.call('GET', KEYS[3 + index])
-       if mappedRoomId and mappedRoomId ~= ARGV[2] then
+       if mappedRoomId and string.find(mappedRoomId, '|', 1, true) then
+         -- Seat held by another room game (图寻/卡牌连接): never overwritten here.
+         if incoming.status ~= 'finished' and (not currentMembers[member.key] or reactivating) then return -1 end
+       elseif mappedRoomId and mappedRoomId ~= ARGV[2] then
          local mappedRoomRaw = redis.call('GET', ARGV[8] .. mappedRoomId)
          local mappedStatus = redis.call('HGET', ARGV[8] .. mappedRoomId .. ':meta', 'status')
          if mappedStatus then
@@ -1400,7 +1438,9 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
        local identityKey = KEYS[3 + index]
        local mappedRoomId = redis.call('GET', identityKey)
        local canClaim = not mappedRoomId or mappedRoomId == ARGV[2]
-       if not canClaim then
+       if mappedRoomId and string.find(mappedRoomId, '|', 1, true) then
+         canClaim = false
+       elseif not canClaim then
          local mappedRoomRaw = redis.call('GET', ARGV[8] .. mappedRoomId)
          local mappedStatus = redis.call('HGET', ARGV[8] .. mappedRoomId .. ':meta', 'status')
          if mappedStatus then
@@ -1455,7 +1495,7 @@ export async function saveRoom(room: StoredRoom): Promise<void> {
     throw new Error('STALE_ROOM_WRITE');
   }
   if (room.targetPlayerId) {
-    roomTargetCache.set(room.id, {
+    cacheRoomTarget(room.id, {
       round: room.round,
       targetPlayerId: room.targetPlayerId,
       maxGuesses: room.maxGuesses,
@@ -1548,13 +1588,20 @@ export async function releaseRoomCapacity(ip: string, roomId: string): Promise<v
 }
 
 export async function clearIdentityRoom(identity: string, expectedRoomId?: string): Promise<void> {
-  if (!expectedRoomId || localIdentityRooms.get(identity) === expectedRoomId) {
+  const localValue = localIdentityRooms.get(identity);
+  if ((!expectedRoomId && !isForeignOccupancyValue(localValue)) || localValue === expectedRoomId) {
     localIdentityRooms.delete(identity);
   }
   const client = stateRedis();
   if (!client) return;
   if (!expectedRoomId) {
-    await client.del(identityKey(identity));
+    await evalCachedStateScript(
+      'room-identity-clear-classic-v1',
+      `local value = redis.call('GET', KEYS[1])
+       if value and not string.find(value, '|', 1, true) then return redis.call('DEL', KEYS[1]) end
+       return 0`,
+      { keys: [identityKey(identity)], arguments: [] }
+    );
     return;
   }
   await evalCachedStateScript(
@@ -1965,33 +2012,23 @@ export async function schedule(
 ): Promise<boolean> {
   const client = stateRedis();
   if (!client) return false;
-  await client.zAdd(redisKey('room:schedules'), {
-    score: at,
-    value: `${kind}|${roomId}|${discriminator}`,
-  });
-  return true;
+  return classicSchedules.add(`${kind}|${roomId}|${discriminator}`, at);
 }
 
 export async function claimDueSchedules(limit = 100): Promise<string[]> {
   const client = stateRedis();
   if (!client) return [];
-  const now = Date.now();
-  return evalCachedStateScript(
-    'room-schedule-claim-v1',
-    `local items = redis.call('ZRANGEBYSCORE', KEYS[1], '-inf', ARGV[1], 'LIMIT', 0, ARGV[2])
-     for _, item in ipairs(items) do
-       redis.call('ZADD', KEYS[1], 'XX', ARGV[3], item)
-     end
-     return items`,
-    {
-      keys: [redisKey('room:schedules')],
-      arguments: [String(now), String(limit), String(now + 15_000)],
-    }
-  ) as Promise<string[]>;
+  return classicSchedules.claimDue(limit);
 }
 
 export async function acknowledgeSchedule(item: string): Promise<void> {
-  await stateRedis()?.zRem(redisKey('room:schedules'), item);
+  if (!stateRedis()) return;
+  await classicSchedules.remove(item);
+}
+
+/** The classic `room:schedules` deadline source, driven by the shared kernel scheduler. */
+export function classicScheduleSource(): ScheduleSource {
+  return classicSchedules;
 }
 
 export async function beginMaintenanceWindow(durationMs = 90_000): Promise<number> {

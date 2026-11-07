@@ -6,7 +6,8 @@ import { ZodSchema } from 'zod';
  * 具体文案由前端翻译。
  */
 export class HttpError extends Error {
-  constructor(public status: number, public code: string) {
+  /** Optional extra response fields (for example the room that blocks a join). */
+  constructor(public status: number, public code: string, public details?: Record<string, unknown>) {
     super(code);
   }
 }
@@ -48,7 +49,7 @@ export function errorHandler(
     return res.status(400).json({ code: 'INVALID_REQUEST_BODY' });
   }
   if (err instanceof HttpError) {
-    return res.status(err.status).json({ code: err.code });
+    return res.status(err.status).json(err.details ? { ...err.details, code: err.code } : { code: err.code });
   }
   if (err instanceof Error && err.message === 'REDIS_UNAVAILABLE') {
     return res.status(503).json({ code: 'REDIS_UNAVAILABLE' });

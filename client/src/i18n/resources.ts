@@ -3,6 +3,7 @@ import { cardTranslations } from '../card-link/messages';
 import { turtleSoupTranslations, turtleSoupErrors } from './turtleSoup';
 import { locationTranslations } from './location';
 import { presenceTranslations } from './presence';
+import { roomKernelTranslations } from './roomKernel';
 import { recoveryTranslations } from './recovery';
 import { adminUiTranslations } from './adminUi';
 export const resources = {
@@ -12,6 +13,7 @@ export const resources = {
       adminUi: adminUiTranslations.zh,
       soup: turtleSoupTranslations.zh,
       presence: presenceTranslations.zh,
+      roomKernel: roomKernelTranslations.zh,
       location: locationTranslations.zh,
       card: cardTranslations.zh,
       common: {
@@ -303,6 +305,7 @@ export const resources = {
       adminUi: adminUiTranslations.en,
       soup: turtleSoupTranslations.en,
       presence: presenceTranslations.en,
+      roomKernel: roomKernelTranslations.en,
       location: locationTranslations.en,
       card: cardTranslations.en,
       difficulty: {
@@ -517,6 +520,7 @@ export const resources = {
       adminUi: adminUiTranslations.ja,
       soup: turtleSoupTranslations.ja,
       presence: presenceTranslations.ja,
+      roomKernel: roomKernelTranslations.ja,
       location: locationTranslations.ja,
       card: cardTranslations.ja,
       difficulty: {

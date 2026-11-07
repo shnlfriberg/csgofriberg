@@ -3,35 +3,40 @@ import { z } from 'zod';
 import { isRedisTimeoutError } from '../redis';
 import { StoredIdentity, getRoomForIdentity } from '../services/roomStore';
 import { logTransientWarning } from '../services/transientLog';
+import { registerKernelEvent, type SocketAck } from '../rooms/kernel/events';
+import { isOccupiedError, lookupOccupancy } from '../rooms/kernel/occupancy';
 import { publicRoom } from './roomView';
 
-export type SocketAck = (value: any) => void;
+export type { SocketAck } from '../rooms/kernel/events';
 
+/** Classic room events: raw acknowledgements, validated before the pending cap. */
 export function registerSocketEvent<T = any>(
   socket: Socket,
   event: string,
   handler: (payload: T, ack?: SocketAck) => Promise<void>,
   schema?: z.ZodTypeAny
 ): void {
-  socket.on(event, (payload: any, ack?: SocketAck) => {
-    const parsed = schema?.safeParse(payload);
-    if (parsed && !parsed.success) return ack?.({ code: 'VALIDATION_FAILED' });
-    const validatedPayload = (parsed ? parsed.data : payload) as T;
-    const pendingEvents = Number(socket.data.pendingEvents ?? 0);
-    if (pendingEvents >= 8) return ack?.({ code: 'RATE_LIMITED' });
-    socket.data.pendingEvents = pendingEvents + 1;
-    void handler(validatedPayload, ack).catch(async (err) => {
+  registerKernelEvent<T>(socket, {
+    event,
+    schema,
+    ack: 'classic',
+    order: 'validate-then-pending',
+    pendingField: 'pendingEvents',
+    handler: (payload, ack) => handler(payload, ack),
+    mapError: async (err) => {
+      if (isOccupiedError(err)) return { code: 'ALREADY_IN_ROOM', occupied: err.occupied };
       if (err instanceof Error && err.message === 'ROOM_IDENTITY_CONFLICT') {
         const identity = socket.data.identity as StoredIdentity | undefined;
         const room = identity ? await getRoomForIdentity(identity.key).catch(() => null) : null;
-        ack?.({
+        const foreign = !room && identity ? await lookupOccupancy(identity.key).catch(() => null) : null;
+        return {
           code: 'ALREADY_IN_ROOM',
           room: room && identity ? publicRoom(room, identity.key) : undefined,
           role: room && identity
             ? room.players.some((player) => player.key === identity.key) ? 'player' : 'spectator'
             : undefined,
-        });
-        return;
+          ...(foreign && foreign.game !== 'classic' ? { occupied: foreign } : {}),
+        };
       }
       const code = isRedisTimeoutError(err)
         ? 'REDIS_UNAVAILABLE'
@@ -47,9 +52,7 @@ export function registerSocketEvent<T = any>(
       } else {
         console.error(`[socket:${event}]`, err);
       }
-      ack?.({ code });
-    }).finally(() => {
-      socket.data.pendingEvents = Math.max(0, Number(socket.data.pendingEvents ?? 1) - 1);
-    });
+      return { code };
+    },
   });
 }

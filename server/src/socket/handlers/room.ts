@@ -1,3 +1,4 @@
+import { foreignOccupancy } from '../../rooms/kernel/occupancy';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { isDifficultyAvailable } from '../../services/playerCache';
@@ -156,6 +157,11 @@ export async function handleRoomCreate(
     });
     return;
   }
+  const occupied = await foreignOccupancy(me.key, 'classic');
+  if (occupied) {
+    ack?.({ code: 'ALREADY_IN_ROOM', occupied });
+    return;
+  }
   const boType = payload.boType;
   const gameMode = payload.gameMode;
   const modeDefinition = getRoomGameModeDefinition(gameMode);
@@ -262,6 +268,13 @@ export async function handleRoomJoin(
       role: current.players.some((player) => player.key === me.key) ? 'player' : 'spectator',
     });
     return;
+  }
+  if (!current) {
+    const occupied = await foreignOccupancy(me.key, 'classic');
+    if (occupied) {
+      ack?.({ code: 'ALREADY_IN_ROOM', occupied });
+      return;
+    }
   }
   const role = await withRoomLock(roomId, (room) => {
     if (room.status === 'finished') return { code: 'ROOM_NOT_FOUND' };

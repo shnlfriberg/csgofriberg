@@ -42,6 +42,8 @@ import {
 } from '../store/multiLobbyPreferences';
 import { useAuth } from '../store/auth';
 import ModalPortal from '../components/ModalPortal';
+import { useOccupiedRoomPrompt } from '../components/OccupiedRoomDialog';
+import { occupiedOf } from '../api/roomKernel';
 
 type DbType = string;
 const BO_OPTIONS = [1, 3, 5, 7];
@@ -140,6 +142,8 @@ export default function MultiLobby() {
   const location = useLocation();
   const navigate = useNavigate();
   const confirm = useConfirm();
+  // Seats in 图寻 rooms or 卡牌连接 matches also count: one multiplayer seat site-wide.
+  const [occupiedDialog, promptOccupied] = useOccupiedRoomPrompt();
   const searchingRef = useRef(false);
   const replacingRoomRef = useRef(false);
   const matchOptionsRef = useRef({ dbType: mmDbType, anonymous: mmAnonymous });
@@ -446,6 +450,14 @@ export default function MultiLobby() {
       guessIntervalMs: Math.round(guessIntervalSeconds * 1000),
       roundDurationMs: roundDurationSeconds * 1000,
     }, (res: any) => {
+      const occupied = res?.code === 'ALREADY_IN_ROOM' && !res.room ? occupiedOf(res) : null;
+      if (occupied) {
+        setCreating(false);
+        void promptOccupied(occupied).then((choice) => {
+          if (choice === 'left') void create(true);
+        });
+        return;
+      }
       if (res?.code === 'ALREADY_IN_ROOM' && res.room) {
         setCreating(false);
         setCurrentRoom(res.room);
@@ -475,6 +487,13 @@ export default function MultiLobby() {
       if (!await leaveCurrentFor(currentRoom, currentRole, action)) return;
     }
     getSocket().emit('room:join', { roomId: code.trim(), spectate }, (res: any) => {
+      const occupied = res?.code === 'ALREADY_IN_ROOM' && !res.room ? occupiedOf(res) : null;
+      if (occupied) {
+        void promptOccupied(occupied).then((choice) => {
+          if (choice === 'left') void join(code, spectate, true);
+        });
+        return;
+      }
       if (res?.code === 'ALREADY_IN_ROOM' && res.room) {
         setCurrentRoom(res.room);
         setCurrentRole(res.role ?? 'player');
@@ -505,6 +524,13 @@ export default function MultiLobby() {
       if (res?.code) {
         setSearching(false);
         searchingRef.current = false;
+        const occupied = res.code === 'ALREADY_IN_ROOM' ? occupiedOf(res) : null;
+        if (occupied) {
+          void promptOccupied(occupied).then((choice) => {
+            if (choice === 'left') startMatch();
+          });
+          return;
+        }
         if (!applyMatchCooldown(res)) toast.error(translate(res.code));
         return;
       }
@@ -537,6 +563,7 @@ export default function MultiLobby() {
 
   return (
     <Page title={t('multi.title')} icon={<Globe size={17} />}>
+      {occupiedDialog}
       {currentRoom && (
         <div className="card multi-lobby-message-card" style={{ borderColor: 'var(--warning)' }}>
           <h3>

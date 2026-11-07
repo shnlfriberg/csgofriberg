@@ -5,10 +5,10 @@ import { getPlayer } from '../services/playerCache';
 import { StoredIdentity, StoredRoom } from '../services/roomStore';
 import { GuessFeedback, Player } from '../types';
 import { winsNeeded } from './roomRules';
+import { identityChannel } from '../rooms/kernel/broadcast';
 
-export function identityChannel(key: string): string {
-  return `identity:${key}`;
-}
+// Identity channels are shared by every room game through the room kernel.
+export { identityChannel };
 
 export function spectatorChannel(roomId: string): string {
   return `room:${roomId}:spectators`;

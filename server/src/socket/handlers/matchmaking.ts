@@ -1,3 +1,4 @@
+import { foreignOccupancy } from '../../rooms/kernel/occupancy';
 import { randomUUID } from 'crypto';
 import { z } from 'zod';
 import { config } from '../../config';
@@ -56,6 +57,12 @@ export async function handleMatchStart(
       room: publicRoom(currentRoom, me.key),
       serverNow: Date.now(),
     });
+    return;
+  }
+  const occupied = await foreignOccupancy(me.key, 'classic');
+  if (occupied) {
+    await cancelQueue(me.key);
+    ack?.({ code: 'ALREADY_IN_ROOM', occupied });
     return;
   }
   if (!me.userId || !me.emailVerified) {
@@ -167,13 +174,16 @@ export async function handleMatchStart(
   } catch (err) {
     await releaseRoomCapacity(room.ownerIp, room.id);
     if (err instanceof Error && err.message === 'ROOM_IDENTITY_CONFLICT') {
-      const [myRoom, opponentRoom] = await Promise.all([
+      const [myRoom, opponentRoom, myForeign, opponentForeign] = await Promise.all([
         getRoomForIdentity(me.key),
         getRoomForIdentity(opponent.key),
+        foreignOccupancy(me.key, 'classic'),
+        foreignOccupancy(opponent.key, 'classic'),
       ]);
+      // Identities seated in another room game are not re-queued.
       await Promise.allSettled([
-        myRoom ? Promise.resolve() : requeueCandidate(dbType, queuedMe),
-        opponentRoom ? Promise.resolve() : requeueCandidate(dbType, opponent),
+        myRoom || myForeign ? Promise.resolve() : requeueCandidate(dbType, queuedMe),
+        opponentRoom || opponentForeign ? Promise.resolve() : requeueCandidate(dbType, opponent),
       ]);
       if (myRoom) {
         ack?.({
@@ -181,6 +191,10 @@ export async function handleMatchStart(
           room: publicRoom(myRoom, me.key),
           serverNow: Date.now(),
         });
+        return;
+      }
+      if (myForeign) {
+        ack?.({ code: 'ALREADY_IN_ROOM', occupied: myForeign });
         return;
       }
       ack?.({ queued: true });

@@ -105,36 +105,44 @@ export async function handleGameGuess(
     return;
   }
   const { roundId, eventId } = payload;
-  const targetState = await getRoomGuessTarget(roomId, roundId);
-  if (!targetState) {
-    ack?.({ code: 'NO_ACTIVE_ROUND', reason: 'target_missing' });
-    return;
+  let targetState: Awaited<ReturnType<typeof getRoomGuessTarget>> = null;
+  let result: Awaited<ReturnType<typeof applyRoomGuess>> | null = null;
+  // A target cached by this instance can be stale after a rematch saved elsewhere;
+  // the store drops it on `target_changed`, so one fresh attempt is enough.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    targetState = await getRoomGuessTarget(roomId, roundId);
+    if (!targetState) {
+      ack?.({ code: 'NO_ACTIVE_ROUND', reason: 'target_missing' });
+      return;
+    }
+    if (targetState.round !== roundId) {
+      ack?.({ code: 'STALE_ROUND', reason: 'round_id_mismatch' });
+      return;
+    }
+    const target = getPlayer(targetState.targetPlayerId);
+    if (!target) {
+      ack?.({ code: 'INTERNAL_ERROR' });
+      return;
+    }
+    result = await applyRoomGuess({
+      roomId,
+      identity: me.key,
+      socketId: socket.id,
+      expectedRound: roundId,
+      eventId,
+      targetPlayerId: targetState.targetPlayerId,
+      feedback: compareGuess(guess, target),
+      maxGuesses: targetState.maxGuesses,
+      roundDurationMs: targetState.roundDurationMs,
+      nextRoundDelayMs: NEXT_ROUND_DELAY_MS,
+      minGuessIntervalMs: targetState.guessIntervalMs,
+      rateLimit: 12,
+      rateWindowSeconds: 10,
+      gameMode: targetState.gameMode,
+    });
+    if (!(result.kind === 'error' && result.reason === 'target_changed')) break;
   }
-  if (targetState.round !== roundId) {
-    ack?.({ code: 'STALE_ROUND', reason: 'round_id_mismatch' });
-    return;
-  }
-  const target = getPlayer(targetState.targetPlayerId);
-  if (!target) {
-    ack?.({ code: 'INTERNAL_ERROR' });
-    return;
-  }
-  const result = await applyRoomGuess({
-    roomId,
-    identity: me.key,
-    socketId: socket.id,
-    expectedRound: roundId,
-    eventId,
-    targetPlayerId: targetState.targetPlayerId,
-    feedback: compareGuess(guess, target),
-    maxGuesses: targetState.maxGuesses,
-    roundDurationMs: targetState.roundDurationMs,
-    nextRoundDelayMs: NEXT_ROUND_DELAY_MS,
-    minGuessIntervalMs: targetState.guessIntervalMs,
-    rateLimit: 12,
-    rateWindowSeconds: 10,
-    gameMode: targetState.gameMode,
-  });
+  if (!result || !targetState) return;
   if (result.kind === 'error') {
     if (result.code === 'GUESS_COOLDOWN') {
       ack?.({ code: result.code, retryAfterMs: result.retryAfterMs });

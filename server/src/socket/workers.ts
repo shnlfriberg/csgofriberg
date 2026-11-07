@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import { cleanupPresence, getPresenceStats, PresenceStats } from '../services/presence';
-import { claimDueSchedules } from '../services/roomStore';
+import { classicScheduleSource } from '../services/roomStore';
+import { registerScheduleConsumer } from '../rooms/kernel/scheduler';
 import { logTransientError } from '../services/transientLog';
 import { refreshConnectionSlots } from './connection';
 import { handleScheduledGroup } from './scheduleProcessor';
@@ -20,21 +21,6 @@ export type SocketWorkers = {
 
 function yieldEventLoop(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
-}
-
-async function processGroupsWithLimit(
-  groups: string[][],
-  limit: number,
-  handler: (group: string[]) => Promise<void>
-): Promise<void> {
-  let cursor = 0;
-  await Promise.all(Array.from({ length: Math.min(limit, groups.length) }, async () => {
-    while (cursor < groups.length) {
-      const group = groups[cursor++];
-      await handler(group);
-      await yieldEventLoop();
-    }
-  }));
 }
 
 export function createSocketWorkers(io: Server): SocketWorkers {
@@ -70,29 +56,16 @@ export function createSocketWorkers(io: Server): SocketWorkers {
     void cleanupPresence().catch((err) => logTransientError('[presence:cleanup]', err));
   }, 60_000);
   presenceCleanupWorker.unref?.();
-  let scheduleRequest: Promise<void> | null = null;
-  const scheduleWorker = setInterval(() => {
-    if (scheduleRequest) return;
-    scheduleRequest = claimDueSchedules(40)
-      .then(async (items) => {
-        const byRoom = new Map<string, string[]>();
-        for (const item of items) {
-          const roomId = item.split('|')[1] ?? '';
-          const group = byRoom.get(roomId) ?? [];
-          group.push(item);
-          byRoom.set(roomId, group);
-        }
-        await processGroupsWithLimit([...byRoom.values()], 8, async (group) => {
-          await handleScheduledGroup(io, group);
-        });
-      })
-      .then(() => undefined)
-      .catch((err) => logTransientError('[schedule]', err))
-      .finally(() => {
-        scheduleRequest = null;
-      });
-  }, 1000);
-  scheduleWorker.unref?.();
+  // Classic deadlines run on the shared room kernel scheduler (same claim
+  // script, batch size and per-room concurrency as before).
+  const unregisterSchedules = registerScheduleConsumer({
+    name: 'classic',
+    source: classicScheduleSource(),
+    batch: 40,
+    concurrency: 8,
+    groupKey: (item) => item.split('|')[1] ?? '',
+    handleGroup: (group) => handleScheduledGroup(io, group),
+  });
   const heartbeatWorker = setInterval(() => {
     if (heartbeatRequest) return;
     const entries = [...heartbeatEntries.values()];
@@ -112,7 +85,7 @@ export function createSocketWorkers(io: Server): SocketWorkers {
     heartbeatEntries,
     trackBackground,
     stop: async () => {
-      clearInterval(scheduleWorker);
+      unregisterSchedules();
       clearInterval(heartbeatWorker);
       clearInterval(presenceWorker);
       clearInterval(presenceCleanupWorker);
