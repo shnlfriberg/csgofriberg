@@ -8,6 +8,7 @@ import { db } from "../../src/db/knex";
 import { ensureSchema } from "../../src/db/schema";
 import { config } from "../../src/config";
 import { browserFingerprint } from "../../src/services/pow";
+import { advanceById } from '../../src/card-link/matches';
 import {
   graphIndex,
   shortestPath,
@@ -20,12 +21,13 @@ describe("card private synchronization across real processes", () => {
     ports: number[] = [];
   const agent = "card-socket-drill",
     ip = "192.0.2.222";
-  const keys = [`card-socket-${randomUUID()}`, `card-socket-${randomUUID()}`];
+  const keys = Array.from({ length: 3 }, () => `card-socket-${randomUUID()}`);
   const cookies = keys.map(
     (key) =>
       `csgofriberg_guest=${jwt.sign({ key, typ: "guest" }, config.jwtSecret, { expiresIn: "1h" })}; csgofriberg_pow=${jwt.sign({ typ: "pow", fp: browserFingerprint(agent, ip), jti: randomUUID(), difficulty: config.powDifficulty }, config.jwtSecret, { expiresIn: "1h" })}`,
   );
   let id: string;
+  const extraMatches: string[] = [];
   const version = "c".repeat(64);
   const data: GraphData = {
     version,
@@ -169,7 +171,8 @@ describe("card private synchronization across real processes", () => {
           });
         });
       }
-    if (id) {
+    const cleanupIds = new Set([...extraMatches, ...(id ? [id] : [])]);
+    for (const id of cleanupIds) {
       for (const table of [
         "card_participants",
         "card_results",
@@ -196,6 +199,72 @@ describe("card private synchronization across real processes", () => {
       expect(await response.json()).toEqual({ code: 'VALIDATION_FAILED' });
     }
   });
+  it('creates, joins, restores, commands and rematches using only WS across two processes', async () => {
+    const connectLobby = async (processIndex: number, seat: number) => {
+      const socket = connectSocket(`http://127.0.0.1:${ports[processIndex]}`, { transports: ['websocket'], reconnection: false,
+        extraHeaders: { Cookie: cookies[seat], 'User-Agent': agent, 'X-Forwarded-For': ip } });
+      sockets.push(socket);
+      await new Promise<void>((resolve, reject) => { socket.once('connect', resolve); socket.once('connect_error', reject); });
+      return socket;
+    };
+    const send = async (socket: Socket, event: string, data: unknown): Promise<any> => {
+      const result = await new Promise<any>((resolve, reject) => socket.timeout(10000).emit(event, data,
+        (error: unknown, result: unknown) => error ? reject(error) : resolve(result)));
+      expect(result, `${event}: ${JSON.stringify(result)}`).toMatchObject({ ok: true });
+      return result.data;
+    };
+    const a = await connectLobby(0, 0), b = await connectLobby(1, 1), c = await connectLobby(1, 2);
+    const created = await send(a, 'card-link:create', { scene: 'friend', variant: 'limited', difficulty: 'normal', duration: 120, requestId: randomUUID() });
+    const currentId = created.id; extraMatches.push(currentId);
+    const original = await send(a, 'card-link:watch', { id: currentId });
+    await send(b, 'card-link:join', { code: original.code });
+    await send(b, 'card-link:watch', { id: currentId });
+    await send(c, 'card-link:join', { code: original.code });
+    await send(c, 'card-link:watch', { id: currentId });
+    expect(await send(b, 'card-link:active', {})).toMatchObject({ id: currentId });
+    expect((await send(a, 'card-link:directory', { id: currentId })).players).toHaveLength(15);
+    for (const socket of [a, b, c]) await send(socket, 'card-link:control', { id: currentId, action: 'ready', requestId: randomUUID() });
+    await send(a, 'card-link:control', { id: currentId, action: 'start', requestId: randomUUID() });
+    let state: any;
+    const until = Date.now() + 10000;
+    do { state = await send(a, 'card-link:state', { id: currentId }); if (state.status === 'playing') break;
+      await new Promise(resolve => setTimeout(resolve, 100)); } while (Date.now() < until);
+    expect(state.status).toBe('playing');
+    const input = { id: currentId, requestId: randomUUID(), revision: state.revision, phaseRevision: state.phaseRevision, command: { type: 'reorder', board: [] } };
+    const result = await send(a, 'card-link:command', input);
+    const anotherTab = await connectLobby(1, 0);
+    await send(anotherTab, 'card-link:watch', { id: currentId });
+    expect(await send(anotherTab, 'card-link:command', input)).toEqual(result);
+    anotherTab.disconnect();
+    // Advance a terminal test fixture through the real finish/settlement path.
+    const raw = await db('card_matches').where({ id: currentId }).first();
+    const m = JSON.parse(raw.payload); m.status = 'playing'; m.round = 2; m.dueAt = Date.now() - 1;
+    await db('card_matches').where({ id: currentId }).update({ status: m.status, due_at: m.dueAt, payload: JSON.stringify(m) });
+    await advanceById(currentId);
+    expect((await send(a, 'card-link:state', { id: currentId })).status).toBe('finished');
+    const oldSeats = await db('card_seats').where({ match_id: currentId }).orderBy('identity_key');
+    await send(a, 'card-link:rematch', { id: currentId, wanted: true, requestId: randomUUID() });
+    expect((await send(b, 'card-link:state', { id: currentId })).rematch).toMatchObject({ acceptedKeys: [state.me], requiredKeys: expect.any(Array) });
+    await send(a, 'card-link:rematch', { id: currentId, wanted: false, requestId: randomUUID() });
+    expect((await send(b, 'card-link:state', { id: currentId })).rematch.acceptedKeys).toEqual([]);
+    await send(a, 'card-link:rematch', { id: currentId, wanted: true, requestId: randomUUID() });
+    await send(b, 'card-link:rematch', { id: currentId, wanted: true, requestId: randomUUID() });
+    expect((await send(a, 'card-link:state', { id: currentId })).rematch.nextId).toBeUndefined();
+    const requestId = randomUUID();
+    const next = await send(c, 'card-link:rematch', { id: currentId, wanted: true, requestId });
+    extraMatches.push(next.nextId);
+    expect(next.nextId).toBeTypeOf('string'); expect(next.nextId).not.toBe(currentId);
+    expect(await send(c, 'card-link:rematch', { id: currentId, wanted: true, requestId })).toEqual(next);
+    expect((await send(a, 'card-link:state', { id: currentId })).rematch.nextId).toBe(next.nextId);
+    expect(await db('card_seats').where({ match_id: currentId }).orderBy('identity_key')).toEqual(oldSeats);
+    const nextView = await send(a, 'card-link:watch', { id: next.nextId });
+    await send(b, 'card-link:watch', { id: next.nextId });
+    await send(c, 'card-link:watch', { id: next.nextId });
+    expect(nextView).toMatchObject({ scene: 'friend', variant: 'limited', difficulty: 'normal', duration: 120, round: 0, status: 'preparing' });
+    expect(nextView.players.every((p: any) => p.ready && p.results.length === 0 && !p.retired)).toBe(true);
+    for (const socket of [a, b, c]) await send(socket, 'card-link:control', { id: next.nextId, action: 'leave', requestId: randomUUID() });
+    a.disconnect(); b.disconnect(); c.disconnect();
+  }, 30000);
   it("keeps opponent cards private, retries across instances, and resumes after process death", async () => {
     id = (
       await request(0, 0, "/matches", {

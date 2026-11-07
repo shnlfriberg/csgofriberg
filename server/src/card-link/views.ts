@@ -99,6 +99,11 @@ export function seatMatchView(
   }
   return {
     id: m.id,
+    ...(m.rematch ? { rematch: {
+      acceptedKeys: m.rematch.acceptedKeys.map(seatId),
+      requiredKeys: m.rematch.requiredKeys.map(seatId),
+      ...(m.rematch.nextId && m.rematch.acceptedKeys.includes(key) ? { nextId: m.rematch.nextId } : {}),
+    } } : {}),
     code: m.code,
     scene: m.scene,
     variant: m.variant,

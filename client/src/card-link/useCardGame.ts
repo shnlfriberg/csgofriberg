@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Command } from "@friberg/card-link-core";
 import { api, errMsg } from "../api/client";
 import { getSocket } from "../api/socket";
+import { roomAction } from '../api/roomKernel';
 import { refreshAuthenticatedSession } from '../api/authSession';
 import type { Directory, View } from "./types";
 import { fromSoloPatch, fromSoloView, isSoloPatch, type SoloCardPatch, type SoloCardView } from './solo';
@@ -15,9 +16,10 @@ type Pending = {
 };
 /**
  * `solo` marks a 单人 (practice) match, played through the shared single-player
- * API (`/api/game/:id/state|command`); other scenes use the card endpoints.
+ * API; daily uses HTTP and multiplayer uses the shared Socket connection.
  */
-export function useCardGame(id: string | null, solo = false) {
+export function useCardGame(id: string | null, solo = false, daily = false) {
+  const multiplayer = !solo && !daily;
   const [view, setView] = useState<View | null>(null),
     [directory, setDirectory] = useState<Directory>([]),
     [error, setError] = useState(""),
@@ -25,6 +27,7 @@ export function useCardGame(id: string | null, solo = false) {
     [pending, setPending] = useState<Pending | null>(null);
   const [connectionError, setConnectionError] = useState('');
   const [realtimeReady, setRealtimeReady] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
   const retrySubscription = useRef<() => void>(() => {});
   const identity = useAuth((s) => s.user?.id ?? null);
   const context = `${identity}:${id}`,
@@ -49,8 +52,9 @@ export function useCardGame(id: string | null, solo = false) {
   const reload = useCallback(async () => {
     if (!id) return;
     if (solo) apply(fromSoloView((await api.get<SoloCardView>(`/game/${id}/state`)).data));
+    else if (multiplayer) apply(await roomAction<View>('card-link:state', { id }));
     else apply((await api.get<View>(`/card-link/matches/${id}`)).data);
-  }, [id, solo, apply]);
+  }, [id, solo, multiplayer, apply]);
   /** Merge a seat patch (Socket push or v2 command response); false if a reload is needed. */
   const merge = useCallback(
     (p: Patch): boolean => {
@@ -71,6 +75,7 @@ export function useCardGame(id: string | null, solo = false) {
     setBusy(false);
     setConnectionError('');
     setRealtimeReady(false);
+    setUnavailable(false);
     if (!id) return;
     let alive = true;
     try {
@@ -79,18 +84,18 @@ export function useCardGame(id: string | null, solo = false) {
     } catch {
       /* Memory fallback. */
     }
-    void reload().catch((e) => {
+    if (!multiplayer) void reload().catch((e) => {
       if (alive) setError(errMsg(e));
     });
-    void api
-      .get(`/card-link/matches/${id}/directory`)
-      .then((r) => {
-        if (alive) setDirectory(r.data.players);
+    if (!multiplayer) void api.get(`/card-link/matches/${id}/directory`).then(r => r.data)
+      .then((data) => {
+        if (alive) setDirectory(data.players);
       })
       .catch((e) => {
         if (alive) setError(errMsg(e));
       });
     const socket = getSocket();
+    let directoryLoaded = false;
     let sequence = 0, attempts = 0;
     let retryTimer: ReturnType<typeof setTimeout> | undefined;
     const current = () => alive && activeContext.current === contextToken;
@@ -106,6 +111,13 @@ export function useCardGame(id: string | null, solo = false) {
         if (!current() || request !== sequence) return;
         if (response?.ok && response.data) {
           apply(response.data);
+          if (multiplayer && !directoryLoaded) {
+            void roomAction<{ players: Directory }>('card-link:directory', { id }).then(data => {
+              if (!current()) return;
+              directoryLoaded = true;
+              setDirectory(data.players);
+            }).catch(error => { if (current()) setError(errMsg(error)); });
+          }
           attempts = 0;
           setConnectionError('');
           setRealtimeReady(true);
@@ -118,6 +130,10 @@ export function useCardGame(id: string | null, solo = false) {
         attempts++;
         if (attempts > 3) return;
         const code = error?.response?.data?.code;
+        if (['CARD_MATCH_NOT_FOUND', 'CARD_ROOM_UNAVAILABLE', 'FORBIDDEN'].includes(code)) {
+          setUnavailable(true);
+          return;
+        }
         try {
           if (code === 'AUTH_EXPIRED') await refreshAuthenticatedSession();
           if (!current() || request !== sequence) return;
@@ -158,7 +174,7 @@ export function useCardGame(id: string | null, solo = false) {
       socket.off("card-link:state", state);
       socket.off("card-link:patch", patch);
     };
-  }, [id, identity, storageKey, reload, apply, merge]);
+  }, [id, identity, storageKey, reload, apply, merge, multiplayer]);
   const send = async (command?: Command) => {
     if (!id || !view || inFlight.current === contextToken) return;
     const input =
@@ -194,6 +210,11 @@ export function useCardGame(id: string | null, solo = false) {
         if (isSoloPatch(r.data)) {
           if (!merge(fromSoloPatch(r.data))) await reload().catch(() => undefined);
         } else apply(fromSoloView(r.data));
+      } else if (multiplayer) {
+        const data = await roomAction<View | Patch>('card-link:command', { id, ...input });
+        if ('baseRevision' in data) {
+          if (!merge(data)) await reload().catch(() => undefined);
+        } else apply(data);
       } else {
         const r = await api.post<View>(`/card-link/matches/${id}/commands`, input);
         apply(r.data);
@@ -203,7 +224,8 @@ export function useCardGame(id: string | null, solo = false) {
       if (activeContext.current !== contextToken) return;
       setError(errMsg(e));
       const status = (e as { response?: { status: number } }).response?.status;
-      if (status && status < 500) {
+      const code = (e as { code?: string }).code;
+      if ((status && status < 500) || (code && !['INTERNAL_ERROR', 'REDIS_UNAVAILABLE'].includes(code))) {
         clear();
         await reload().catch(() => undefined);
         if (activeContext.current === contextToken &&
@@ -215,6 +237,6 @@ export function useCardGame(id: string | null, solo = false) {
       if (activeContext.current === contextToken) setBusy(false);
     }
   };
-  return { view, directory, error, connectionError, realtimeReady,
+  return { view, directory, error, connectionError, realtimeReady, unavailable,
     retryConnection: () => retrySubscription.current(), busy, pending, send, reload, setError };
 }

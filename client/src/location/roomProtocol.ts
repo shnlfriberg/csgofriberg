@@ -21,6 +21,7 @@ export interface RoomViewV2 extends Omit<RoomView, 'maps' | 'results'> {
 }
 
 export interface RoomPatchSectionsV2 {
+  rematch?: RoomView['rematch'];
   status?: RoomView['status'];
   round?: number;
   startsAt?: number | null;
@@ -80,6 +81,7 @@ export function applyRoomPatchV2(view: RoomView, patch: RoomPatchV2, maps: reado
   // question and radar components do not re-render for every patch.
   const next: RoomView = { ...view, revision: patch.rev, serverNow: patch.serverNow, maps: sections.maps ?? view.maps };
   if (sections.status !== undefined) next.status = sections.status;
+  if (sections.rematch !== undefined) next.rematch = sections.rematch;
   if (sections.round !== undefined) next.round = sections.round;
   if (sections.startsAt !== undefined) next.startsAt = sections.startsAt;
   if (sections.endsAt !== undefined) next.endsAt = sections.endsAt;

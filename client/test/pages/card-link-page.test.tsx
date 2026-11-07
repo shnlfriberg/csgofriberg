@@ -2,11 +2,12 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import CardLink from '../../src/pages/CardLink';
 import { renderAtRoute, renderWithProviders } from '../render';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { View } from '../../src/card-link/types';
 
-const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn(), reload: vi.fn(), game: vi.fn(), setError: vi.fn() }));
+const mocks = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), delete: vi.fn(), reload: vi.fn(), game: vi.fn(), room: vi.fn(), setError: vi.fn() }));
 vi.mock('../../src/api/client', () => ({ api: mocks, errMsg: () => 'Failed' }));
+vi.mock('../../src/api/roomKernel', async importOriginal => ({ ...await importOriginal<typeof import('../../src/api/roomKernel')>(), roomAction: mocks.room }));
 vi.mock('../../src/card-link/useCardGame', () => ({ useCardGame: mocks.game }));
 const socketMock = vi.hoisted(() => ({ handlers: new Map<string, (...args: any[]) => void>() }));
 vi.mock('../../src/api/socket', () => ({ getSocket: () => ({
@@ -14,10 +15,15 @@ vi.mock('../../src/api/socket', () => ({ getSocket: () => ({
   off: (event: string) => socketMock.handlers.delete(event),
 }) }));
 vi.mock('../../src/card-link/useCardMotion', () => ({ useCardMotion: () => ({ current: null }) }));
-const route = (suffix = '') => renderAtRoute(<CardLink />, { route: `/entertainment/card-link${suffix}`, path: '/entertainment/card-link' });
+const Address = () => <output data-testid="address">{useLocation().search}</output>;
+const route = (suffix = '') => renderAtRoute(<><CardLink /><Address /></>, { route: `/entertainment/card-link${suffix}`, path: '/entertainment/card-link' });
 let game: View;
 beforeEach(() => {
   vi.clearAllMocks();
+  sessionStorage.clear();
+  socketMock.handlers.clear();
+  mocks.room.mockReset().mockImplementation(async event => event === 'card-link:config' ? { enabled: true }
+    : ['card-link:create', 'card-link:join'].includes(event) ? { id: game.id } : { id: null, queued: false });
   game = { id: 'new-room', scene: 'friend', variant: 'unlimited', status: 'waiting', round: 0, rounds: 3, dueAt: null, players: [], current: null, evidence: [] } as unknown as View;
   mocks.game.mockImplementation((id: string | null) => ({ view: id ? game : null, directory: [], error: '', busy: false, pending: null, send: vi.fn(), reload: mocks.reload, setError: mocks.setError }));
   mocks.get.mockImplementation(async path => ({ data: path.endsWith('/config') ? { enabled: true } : path.endsWith('/daily-leaderboard') ? [] : { id: null, queued: false } }));
@@ -27,8 +33,44 @@ beforeEach(() => {
 });
 afterEach(() => vi.useRealTimers());
 describe('card page resume and clock isolation', () => {
+  it('votes and withdraws from multiplayer settlement through WS', async () => {
+    HTMLDialogElement.prototype.showModal = vi.fn(function (this: HTMLDialogElement) { this.setAttribute('open', ''); });
+    HTMLDialogElement.prototype.close = vi.fn(function (this: HTMLDialogElement) { this.removeAttribute('open'); });
+    game = { ...game, me: 'a', status: 'finished', question: { start: 1, end: 2 },
+      players: ['a', 'b'].map(id => ({ id, name: id, ready: true, retired: false, connected: true, solved: false, locked: true, results: [null] })),
+      current: { board: [], hand: [], discarded: [], links: [false], locked: true, startedAt: 0, stoppedAt: 1000, deadline: null,
+        refreshes: 0, best: null, remaining: 0, token: 0, exhausted: false } } as View;
+    sessionStorage.setItem('card-room:guest', game.id);
+    mocks.room.mockImplementation(async (event, payload) => {
+      if (event === 'card-link:config') return { enabled: true };
+      if (event === 'card-link:rematch') game = { ...game, rematch: { acceptedKeys: payload.wanted ? ['a'] : [], requiredKeys: ['a', 'b'] } };
+      return {};
+    });
+    route('?menu=friend');
+    fireEvent.click(screen.getByRole('button', { name: '再来一局' }));
+    await waitFor(() => expect(screen.getByText('1 / 2 人想要再来一局')).toBeInTheDocument());
+    expect(mocks.room).toHaveBeenCalledWith('card-link:rematch', expect.objectContaining({ id: game.id, wanted: true }));
+    fireEvent.click(screen.getByRole('button', { name: '取消再来一局' }));
+    await waitFor(() => expect(screen.getByText('0 / 2 人想要再来一局')).toBeInTheDocument());
+    expect(mocks.post).not.toHaveBeenCalled();
+  });
+  it('creates and restores a multiplayer room without putting its ID in the URL or calling HTTP', async () => {
+    const page = route('?menu=friend');
+    const create = screen.getByRole('button', { name: '创建好友房' });
+    await waitFor(() => expect(create).toBeEnabled());
+    fireEvent.click(create);
+    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('new-room', false, false));
+    expect(screen.getByTestId('address')).toHaveTextContent('?menu=friend');
+    expect(screen.getByTestId('address')).not.toHaveTextContent('new-room');
+    expect(sessionStorage.getItem('card-room:guest')).toBe('new-room');
+    expect(mocks.get).not.toHaveBeenCalled(); expect(mocks.post).not.toHaveBeenCalled();
+    page.unmount();
+    route('?menu=friend');
+    expect(mocks.game).toHaveBeenLastCalledWith('new-room', false, false);
+    expect(screen.getByTestId('address')).not.toHaveTextContent('new-room');
+  });
   it('respects per-scene new-game controls while retaining existing-room join', async () => {
-    mocks.get.mockImplementation(async path => ({ data: path.endsWith('/config') ? { enabled: true, scenes: { friend: false } } : { id: null, queued: false } }));
+    mocks.room.mockImplementation(async event => event === 'card-link:config' ? { enabled: true, scenes: { friend: false } } : { id: null, queued: false });
     route('?menu=friend');
     expect(await screen.findByText('此场景暂时停止新开局，已有对局仍可继续。')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: '创建好友房' })).toBeDisabled();
@@ -37,7 +79,7 @@ describe('card page resume and clock isolation', () => {
   });
   it('renews a queue ticket without overlapping requests and cancels only that ticket on unmount', async () => {
     vi.useFakeTimers();
-    mocks.get.mockImplementation(async path => ({ data: path.endsWith('/config') ? { enabled: true } : { queued: true, ticket: 'queue-ticket-1', id: null } }));
+    mocks.room.mockImplementation(async event => event === 'card-link:config' ? { enabled: true } : event === 'card-link:active' ? { queued: true, ticket: 'queue-ticket-1', id: null } : new Promise(resolve => { release = resolve; }));
     let release!: (response: unknown) => void;
     mocks.post.mockImplementation(() => new Promise(resolve => { release = resolve; }));
     const page = route('?menu=ranked');
@@ -46,20 +88,20 @@ describe('card page resume and clock isolation', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
     expect(mocks.post).not.toHaveBeenCalled();
     await act(async () => { await vi.advanceTimersByTimeAsync(3000); });
-    expect(mocks.post).toHaveBeenCalledWith('/card-link/queue/heartbeat', { ticket: 'queue-ticket-1' });
+    expect(mocks.room).toHaveBeenCalledWith('card-link:queue:heartbeat', { ticket: 'queue-ticket-1' });
     await act(async () => { await vi.advanceTimersByTimeAsync(12000); });
-    expect(mocks.post).toHaveBeenCalledTimes(1);
+    expect(mocks.room.mock.calls.filter(([event]) => event === 'card-link:queue:heartbeat')).toHaveLength(1);
     page.unmount();
-    expect(mocks.delete).toHaveBeenCalledWith('/card-link/queue', { data: { ticket: 'queue-ticket-1' } });
-    await act(async () => { release({ data: { queued: true } }); await vi.advanceTimersByTimeAsync(10000); });
-    expect(mocks.post).toHaveBeenCalledTimes(1);
+    expect(mocks.room).toHaveBeenCalledWith('card-link:queue:cancel', { ticket: 'queue-ticket-1' });
+    await act(async () => { release({ queued: true }); await vi.advanceTimersByTimeAsync(10000); });
+    expect(mocks.room.mock.calls.filter(([event]) => event === 'card-link:queue:heartbeat')).toHaveLength(1);
   });
   it('enters a ranked match pushed by the server without polling for it', async () => {
-    mocks.get.mockImplementation(async path => ({ data: path.endsWith('/config') ? { enabled: true } : { queued: true, ticket: 'queue-ticket-2', id: null } }));
+    mocks.room.mockImplementation(async event => event === 'card-link:config' ? { enabled: true } : { queued: true, ticket: 'queue-ticket-2', id: null });
     route('?menu=ranked');
     await waitFor(() => expect(socketMock.handlers.has('room-kernel:found')).toBe(true));
     act(() => socketMock.handlers.get('room-kernel:found')!({ game: 'card-link', roomId: 'pushed-room' }));
-    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('pushed-room', false));
+    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('pushed-room', false, false));
   });
   it('shows ranked ready confirmation without a host start button and displays the offline grace countdown', async () => {
     vi.useFakeTimers();
@@ -102,7 +144,7 @@ describe('card page resume and clock isolation', () => {
     expect(button).toBeDisabled();
     game = { ...game, id: 'next-room', status: 'playing', current: { ...game.current!, locked: false, hand: [3], stoppedAt: undefined } };
     await act(async () => { finish({ data: scene === 'practice' ? { gameId: 'next-room' } : { id: 'next-room' } }); });
-    expect(mocks.game).toHaveBeenLastCalledWith('next-room', scene === 'practice');
+    expect(mocks.game).toHaveBeenLastCalledWith('next-room', scene === 'practice', scene === 'daily');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.querySelector('[data-cl-card="3"]')).toHaveAttribute('data-cl-draggable');
   });
@@ -171,7 +213,8 @@ describe('card page resume and clock isolation', () => {
     fireEvent.click(screen.getByRole('button', { name: '返回大厅' }));
     fireEvent.click(await screen.findByRole('button', { name: '恢复本局' }));
     expect(screen.getByRole('button', { name: '准备 / 取消准备' })).toBeInTheDocument();
-    expect(mocks.post).toHaveBeenCalledTimes(1);
+    expect(mocks.room).toHaveBeenCalledWith('card-link:create', expect.objectContaining({ scene: 'friend' }));
+    expect(mocks.post).not.toHaveBeenCalled();
   });
   it('starts 单人 through the shared game API and resumes it from the lobby', async () => {
     game = { ...game, id: 'solo-room', scene: 'practice', status: 'playing', variant: 'unlimited', difficulty: 'normal', duration: 0,
@@ -182,11 +225,11 @@ describe('card page resume and clock isolation', () => {
     const start = await screen.findByRole('button', { name: '开始' });
     await waitFor(() => expect(start).toBeEnabled());
     fireEvent.click(start);
-    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('solo-room', true));
+    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('solo-room', true, false));
     expect(mocks.post).toHaveBeenCalledWith('/game/start', { variant: 'card-link', mode: 'normal', hand: 'unlimited', duration: 0 });
     fireEvent.click(screen.getByRole('button', { name: '返回大厅' }));
     fireEvent.click(await screen.findByRole('button', { name: '恢复本局' }));
-    expect(mocks.game).toHaveBeenLastCalledWith('solo-room', true);
+    expect(mocks.game).toHaveBeenLastCalledWith('solo-room', true, false);
     expect(mocks.post).toHaveBeenCalledTimes(1);
   });
   it('ticks the clock without rendering the whole page or polling the server', async () => {

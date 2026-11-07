@@ -25,6 +25,10 @@ export function roomView(
   return {
     id: room.id,
     gameId: room.gameId,
+    ...(room.rematch ? { rematch: {
+      acceptedKeys: room.rematch.acceptedKeys.map(key),
+      requiredKeys: room.rematch.requiredKeys.map(key),
+    } } : {}),
     me: key(identity),
     viewerUserId: me.identity.userId,
     host: key(room.host),

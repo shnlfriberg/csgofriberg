@@ -16,6 +16,7 @@ import { seedLocationFixtures } from './database';
 
 describe('location multiplayer across two actual server processes', () => {
   const children: ChildProcess[] = []; const sockets: Socket[] = []; const roomIds: string[] = []; const clients: Array<{ socket: Socket; cookie: string; ip: string }> = [];
+  const rematchRoomIds: string[] = [];
   let ports: number[] = []; let clean: () => Promise<void>; const agent = 'location-drill-test';
   const userIds: number[] = [];
   async function connectUser(ip: string, verified = true, hasEmail = true) {
@@ -46,10 +47,50 @@ describe('location multiplayer across two actual server processes', () => {
   afterAll(async () => {
     sockets.forEach(socket => socket.disconnect());
     for (const child of children) if (child.connected) { child.send('stop'); await new Promise<void>(resolve => { const timeout = setTimeout(() => { child.kill(); resolve(); }, 10000); child.once('exit', () => { clearTimeout(timeout); resolve(); }); }); }
-    for (const id of roomIds) { const room = await getLocationRoom(id).catch(() => null); if (room) { await redis()!.del(redisKey(`location:room:${id}`)); await redis()!.zRem(redisKey('location:rooms'), id); await redis()!.zRem(redisKey('location:outbox'), room.gameId); for (const p of room.players) await redis()!.del(redisKey(`location:room-owner:${p.identity.key}`)); } }
+    for (const id of [...roomIds, ...rematchRoomIds]) { const room = await getLocationRoom(id).catch(() => null); if (room) { await redis()!.del(redisKey(`location:room:${id}`)); await redis()!.zRem(redisKey('location:rooms'), id); await redis()!.zRem(redisKey('location:outbox'), room.gameId); for (const p of room.players) await redis()!.del(redisKey(`location:room-owner:${p.identity.key}`)); } }
     await clean();
     await db('users').whereIn('id', userIds).delete();
   }, 45000);
+  it('collects three rematch votes across instances, supports withdrawal, resets the game and preserves the old results', async () => {
+    const seats = await Promise.all([connect(ports[0], '192.0.2.231'), connect(ports[1], '192.0.2.232'), connect(ports[1], '192.0.2.233')]);
+    for (const seat of seats) await ok(seat.socket, 'room-kernel:hello', { protocols: { location: 2 } });
+    const created = await ok(seats[0].socket, 'location:room:create', { difficulty: 'normal', duration: 120 });
+    rematchRoomIds.push(created.id);
+    for (const seat of seats.slice(1)) await ok(seat.socket, 'location:room:join', { roomId: created.id });
+    for (const seat of seats) await ok(seat.socket, 'location:room:ready', { roomId: created.id, ready: true });
+    await ok(seats[0].socket, 'location:room:start', { roomId: created.id });
+    await withKeyLock(`location:room:${created.id}`, async () => {
+      const room = await getLocationRoom(created.id);
+      room.status = 'finished'; room.round = 5; room.startsAt = room.endsAt = room.nextAt = null;
+      room.players.forEach(p => { p.guesses = Array(5).fill(null); });
+      await saveRoom(room);
+    });
+    const old = await getLocationRoom(created.id);
+    const vote = (index: number, wanted: boolean) => ok(seats[index].socket, 'location:room:rematch', { roomId: old.id, gameId: old.gameId, wanted });
+    const received = new Promise<any>(resolve => seats[1].socket.once('room-kernel:patch', resolve));
+    await vote(0, true);
+    const patch = await received;
+    expect(patch.sections.rematch.acceptedKeys).toHaveLength(1);
+    expect(patch.sections.rematch.requiredKeys).toHaveLength(3);
+    expect(JSON.stringify(patch.sections.rematch)).not.toContain('g:');
+    await vote(0, false);
+    expect((await getLocationRoom(old.id)).rematch?.acceptedKeys).toEqual([]);
+    await vote(0, true); await vote(1, true);
+    expect((await getLocationRoom(old.id)).status).toBe('finished');
+    const restarted = new Promise<any>(resolve => seats[0].socket.once('location:room', resolve));
+    await vote(2, true);
+    const nextView = await restarted, next = await getLocationRoom(old.id);
+    expect(nextView).toMatchObject({ protocol: 2, id: old.id, status: 'preparing', round: 1, myGuess: null });
+    expect(nextView.gameId).not.toBe(old.gameId);
+    expect(nextView.results.every((p: any) => p.rounds.length === 0)).toBe(true);
+    expect(next.players.every(p => p.ready && !p.retired && p.guesses.length === 0 && Object.keys(p.requests).length === 0)).toBe(true);
+    expect(next.duration).toBe(old.duration); expect(next.difficulty).toBe(old.difficulty);
+    expect(await emit(seats[0].socket, 'location:room:rematch', { roomId: old.id, gameId: old.gameId, wanted: true }))
+      .toMatchObject({ ok: false, code: 'REMATCH_NOT_AVAILABLE' });
+    await flushResult(old.gameId);
+    expect(await db('location_results').where({ game_id: old.gameId }).count('* as count').first()).toMatchObject({ count: 3 });
+    for (const seat of seats) await ok(seat.socket, 'location:room:leave', { roomId: old.id });
+  }, 25000);
   it('runs 20 eight-player rooms, survives one process loss, and persists exactly 160 tied results', async () => {
     const began = Date.now();
     for (let roomIndex = 0; roomIndex < 20; roomIndex++) {
@@ -63,7 +104,7 @@ describe('location multiplayer across two actual server processes', () => {
       await waitFor(async () => (await Promise.all(roomIds.map(getLocationRoom))).every(room => room.round === round && room.status === 'playing'), 25000);
       await Promise.all(roomIds.map(async (id, i) => {
         const room = await getLocationRoom(id); const q = room.questions[round - 1].question;
-        const input = { roomId: id, mapId: q.mapId, floorId: q.floorId, u: q.u, v: q.v, round, version: round, requestId: randomUUID() };
+        const input = { roomId: id, gameId: room.gameId, mapId: q.mapId, floorId: q.floorId, u: q.u, v: q.v, round, version: round, requestId: randomUUID() };
         await ok(clients[i * 8].socket, 'location:room:answer', input);
         const hidden = await ok(clients[i * 8 + 1].socket, 'location:room:state', { roomId: id });
         expect(hidden.myGuess).toBeNull(); expect(hidden.results.every((p: any) => p.rounds.length === round - 1)).toBe(true);

@@ -1,4 +1,5 @@
 import RoomCountdown from '../location/RoomCountdown';
+import RematchVote from '../components/RematchVote';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, ArrowLeft, Copy, Check, LogOut, House, Dices, DoorOpen, XCircle, Zap, RotateCcw } from 'lucide-react';
@@ -54,7 +55,7 @@ export default function LocationMulti() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [queued, setQueued] = useState(false);
-  const [pending, setPending] = useState<AnswerInput | null>(null);
+  const [pending, setPending] = useState<(AnswerInput & { gameId?: string }) | null>(null);
   const [selectedPlayer, setSelectedPlayer] = useState('');
   const [codeCopied, setCodeCopied] = useState(false);
   const [offset, setOffset] = useState(0);
@@ -86,6 +87,12 @@ export default function LocationMulti() {
     if (next.viewerUserId !== (identityRef.current ?? null)) return;
     const previous = roomRef.current;
     if (previous && previous.id === next.id && next.revision < previous.revision) return;
+    if (previous && previous.gameId !== next.gameId) {
+      privateRef.current.clear();
+      setPending(null);
+      setSelectedPlayer('');
+      try { sessionStorage.removeItem(pendingKey); } catch { /* optional */ }
+    }
     const waiting = privateRef.current.get(next.revision);
     if (waiting !== undefined) {
       next = { ...next, myGuess: waiting };
@@ -151,7 +158,7 @@ export default function LocationMulti() {
       try {
         id = sessionStorage.getItem(key);
         const saved = JSON.parse(sessionStorage.getItem(pendingKey) || 'null');
-        if (saved?.roomId === id) setPending(saved.input);
+        if (saved?.roomId === id && saved.input?.gameId) setPending(saved.input);
       } catch {
         /* optional */
       }
@@ -304,19 +311,20 @@ export default function LocationMulti() {
     });
   };
 
-  const send = (input: AnswerInput) => {
+  const send = (input: AnswerInput & { gameId?: string }) => {
     const current = generation.current;
     const id = room?.id;
     if (!id) return;
-    setPending(input);
+    const submitted = { ...input, gameId: input.gameId ?? room!.gameId };
+    setPending(submitted);
     try {
-      sessionStorage.setItem(pendingKey, JSON.stringify({ roomId: id, input }));
+      sessionStorage.setItem(pendingKey, JSON.stringify({ roomId: id, input: submitted }));
     } catch {
       /* optional */
     }
     return run(async () => {
       try {
-        const result = await roomAction<unknown>('location:room:answer', { roomId: id, ...input });
+        const result = await roomAction<unknown>('location:room:answer', { roomId: id, ...submitted });
         if (current === generation.current) acknowledge(result, id);
       } catch (e) {
         const errorCode = (e as { code?: string }).code;
@@ -395,12 +403,12 @@ export default function LocationMulti() {
   const leave = async () => {
     if (
       !room ||
-      !(await confirm({
+      (room.status !== 'finished' && !(await confirm({
         title: t('location.leaveRoom'),
         message: t('location.abandonPrompt'),
         confirmLabel: t('location.leaveRoom'),
         tone: 'warning',
-      }))
+      })))
     )
       return;
     await run(async () => {
@@ -675,7 +683,10 @@ export default function LocationMulti() {
           )}
           {room.status === 'finished' && (
             <div className="location-card-action">
-              <button className="btn" onClick={resetRoom}>
+              <RematchVote me={room.me} votes={room.rematch} busy={busy}
+                eligible={room.players.filter(p => !p.retired).map(p => p.key)}
+                onVote={wanted => void action('location:room:rematch', { gameId: room.gameId, wanted })} />
+              <button className="btn" disabled={busy} onClick={() => void leave()}>
                 <ArrowLeft size={16} aria-hidden="true" />
                 {t('location.backToLobby')}
               </button>

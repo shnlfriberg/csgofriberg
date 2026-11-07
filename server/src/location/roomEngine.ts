@@ -19,6 +19,8 @@ export const DISCONNECT_GRACE_MS = 30_000;
 export const MAX_ROOM_PLAYERS = 8;
 
 export type RoomSection =
+  | 'rematch'
+  | 'reset'
   | 'status'
   | 'round'
   | 'timers'

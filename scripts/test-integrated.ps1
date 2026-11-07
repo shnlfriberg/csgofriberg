@@ -1,4 +1,4 @@
-﻿param([ValidateSet('server', 'client', 'scraper', 'all')][string]$Suite = 'all', [string]$RedisUrl = '')
+﻿param([ValidateSet('server', 'client', 'scraper', 'all')][string]$Suite = 'all', [string]$RedisUrl = '', [string[]]$TestFiles = @())
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $env:PATH = (Join-Path $root '.tools/node-v26.10.0-win-x64') + ';' + $env:PATH
@@ -31,7 +31,7 @@ try {
             $scraperPython = Get-ScraperPython $root
             Push-Location (Join-Path $root 'external-scraper')
             try { & $scraperPython -m unittest discover -s tests -v } finally { Pop-Location }
-        } else { pnpm --filter $name test }
+        } else { pnpm --filter $name test @TestFiles }
         if ($LASTEXITCODE -ne 0) { throw ($name + ' tests failed') }
     }
 } finally { Pop-Location }

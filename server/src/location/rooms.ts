@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { voteRematch, rematchUnanimous } from '../rooms/rematch';
 import type { Server, Socket } from 'socket.io';
 import { z } from 'zod';
 import { db } from '../db/knex';
@@ -251,6 +252,7 @@ export async function mutateRoom<R>(
     advance(room, now, changes, frozen);
     if (!hasChanges(changes)) {
       await reschedule(room);
+      await scheduleRematch(room);
       return { room, result, changes, committed: false };
     }
     room.revision = previousRevision + 1;
@@ -260,6 +262,7 @@ export async function mutateRoom<R>(
     await persist(room, { release: [...changes.released], outbox: finishedNow });
     if (locationIo) emitRevision(locationIo, room, changes, previousRevision);
     armTimers(room, finishedNow);
+    await scheduleRematch(room);
     countKernel('location.commits');
     return { room, result, changes, committed: true };
   });
@@ -298,6 +301,44 @@ async function runOutbox(gameId: string): Promise<void> {
     // Failures are rescheduled through the SQL due time and the outbox sweep.
     await locationSchedules.remove(outboxMember(gameId));
   }
+}
+
+async function scheduleRematch(room: RoomState): Promise<void> {
+  const member = `rematch|${room.id}|0`;
+  if (room.status === 'finished' && room.rematch?.acceptedKeys.length)
+    await locationSchedules.add(member, Date.now() + 2_000);
+  else await locationSchedules.remove(member);
+}
+
+async function updateRematch(room: RoomState, changes: RoomChanges, now: number, actor?: string, wanted?: boolean): Promise<void> {
+  if (room.status !== 'finished') {
+    if (actor) throw new HttpError(409, 'REMATCH_NOT_AVAILABLE');
+    return;
+  }
+  const candidates = room.players.filter(p => !p.retired && !room.rematch?.leftKeys?.includes(p.identity.key));
+  const live = await onlineIdentities(candidates.map(p => identityScope(p.identity.key)));
+  const occupied = await Promise.all(candidates.map(p => resolveOccupancy(p.identity.key)));
+  const keys = candidates.filter((p, i) => live[i].has(p.identity.key) &&
+    (!occupied[i] || (occupied[i]?.game === 'location' && occupied[i]?.roomId === room.id))).map(p => p.identity.key);
+  if (actor && (!keys.includes(actor) || (wanted && keys.length < 2))) throw new HttpError(409, 'REMATCH_NOT_AVAILABLE');
+  const votes = voteRematch(room.rematch, keys, actor, wanted);
+  if (JSON.stringify(votes) !== JSON.stringify(room.rematch)) {
+    room.rematch = votes;
+    changes.sections.add('rematch');
+  }
+  if (!rematchUnanimous(votes)) return;
+  const selection = await randomSelection(room.difficulty);
+  await claimOccupancyOrThrow(roomRef(room.id), keys).catch(occupancyFailure);
+  // The old result was snapshotted to the outbox before this reset.
+  room.gameId = randomUUID();
+  room.players = candidates.filter(p => keys.includes(p.identity.key)).map(p => ({ ...newPlayer(p.identity, p.socketId), ready: true }));
+  if (!keys.includes(room.host)) room.host = keys[0];
+  room.rematch = undefined;
+  room.mapsHash = null;
+  room.nextAt = null;
+  room.createdAt = now;
+  startGame(room, selection, now, changes);
+  changes.sections.add('reset');
 }
 
 // ------------------------------------------------------------- compat API
@@ -632,6 +673,7 @@ export function setupLocationSocket(io: Server): () => Promise<void> {
         const { kind, roomId } = parseScheduleItem(item);
         try {
           if (kind === 'tick') await runTick(roomId);
+          else if (kind === 'rematch') await mutateRoom(roomId, (room, changes, now) => updateRematch(room, changes, now));
           else if (kind === 'outbox') await runOutbox(roomId);
           else await locationSchedules.remove(item);
         } catch (error) {
@@ -762,15 +804,21 @@ export function setupLocationSocket(io: Server): () => Promise<void> {
     });
     handle('location:room:ready', roomIdSchema.extend({ ready: z.boolean() }), (data) =>
       memberAction(data.roomId, (room, changes) => setReady(room, me.key, data.ready, changes)));
+    handle('location:room:rematch', roomIdSchema.extend({ gameId: z.string().uuid(), wanted: z.boolean() }), (data) =>
+      memberAction(data.roomId, async (room, changes, now) => {
+        if (room.status !== 'finished' || room.gameId !== data.gameId) throw new HttpError(409, 'REMATCH_NOT_AVAILABLE');
+        await updateRematch(room, changes, now, me.key, data.wanted);
+      }));
     handle('location:room:start', roomIdSchema, (data) =>
       memberAction(data.roomId, async (room, changes, now) => {
         if (room.host !== me.key) throw new HttpError(403, 'FORBIDDEN');
         assertStartable(room);
         startGame(room, await randomSelection(room.difficulty), now, changes);
       }));
-    handle('location:room:answer', roomIdSchema.merge(answerSchema), (data) =>
+    handle('location:room:answer', roomIdSchema.merge(answerSchema).extend({ gameId: z.string().uuid() }), (data) =>
       memberAction(data.roomId, (room, changes, now) => {
-        const { roomId: _id, ...input } = data;
+        if (data.gameId !== room.gameId) throw new HttpError(409, 'LOCATION_ROUND_LOCKED');
+        const { roomId: _id, gameId: _gameId, ...input } = data;
         answer(room, me.key, input, now, changes);
       }));
     handle('location:room:leave', roomIdSchema, async (data) => {
@@ -778,6 +826,17 @@ export function setupLocationSocket(io: Server): () => Promise<void> {
       if (!room) throw new HttpError(404, 'LOCATION_ROOM_NOT_FOUND');
       requirePlayer(room, me.key);
       // Leaving a finished room only unsubscribes; it never re-queues settlement.
+      if (room.status === 'finished') await mutateRoom(data.roomId, (locked, changes) => {
+        if (locked.status !== 'finished') throw new HttpError(409, 'REMATCH_NOT_AVAILABLE');
+        const votes = locked.rematch ?? { acceptedKeys: [], requiredKeys: locked.players.filter(p => !p.retired && p.connected).map(p => p.identity.key) };
+        locked.rematch = {
+          ...votes,
+          leftKeys: [...new Set([...(votes.leftKeys ?? []), me.key])],
+          acceptedKeys: votes.acceptedKeys.filter(key => key !== me.key),
+          requiredKeys: votes.requiredKeys.filter(key => key !== me.key),
+        };
+        changes.sections.add('rematch');
+      });
       if (!isTerminal(room)) await mutateRoom(data.roomId, (locked, changes) => leavePlayer(locked, me.key, changes));
       await releaseOccupancy(roomRef(data.roomId), [me.key]);
       await unsubscribeSocket(socket);

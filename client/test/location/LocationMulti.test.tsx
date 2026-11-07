@@ -31,6 +31,26 @@ beforeEach(() => {
 });
 
 describe('location random matchmaking email restriction', () => {
+  it('votes and withdraws over WS after settlement and shows the shared progress', async () => {
+    renderAtRoute(<LocationMulti />);
+    let view: RoomView = { id: 'VOTE1', gameId: '12345678-1234-4234-8234-123456789abc', me: 'p:a', host: 'p:a', viewerUserId: null,
+      difficulty: 'normal', duration: 120, status: 'finished', revision: 10, round: 5, maps: [], question: null,
+      serverNow: Date.now(), startsAt: null, endsAt: null, nextAt: null, myGuess: null, results: [],
+      players: ['a', 'b', 'c'].map(key => ({ key: `p:${key}`, name: key, ready: true, connected: true, retired: false, submitted: false, score: 0, rank: 1 })) };
+    roomAction.mockImplementation(async (event, payload) => {
+      if (event === 'location:room:rematch') {
+        view = { ...view, revision: view.revision + 1, rematch: { acceptedKeys: payload.wanted ? ['p:a'] : [], requiredKeys: ['p:a', 'p:b', 'p:c'] } };
+        return view;
+      }
+      return {};
+    });
+    act(() => handlers.get('location:room')?.(view));
+    fireEvent.click(screen.getByRole('button', { name: '再来一局' }));
+    await waitFor(() => expect(screen.getByText('1 / 3 人想要再来一局')).toBeInTheDocument());
+    expect(roomAction).toHaveBeenCalledWith('location:room:rematch', { roomId: 'VOTE1', gameId: view.gameId, wanted: true });
+    fireEvent.click(screen.getByRole('button', { name: '取消再来一局' }));
+    await waitFor(() => expect(screen.getByText('0 / 3 人想要再来一局')).toBeInTheDocument());
+  });
   it('accepts opaque seat keys and rejects packets from the previous account on full and delta updates', async () => {
     useAuth.setState({ user: verifiedUser });
     renderAtRoute(<LocationMulti />);

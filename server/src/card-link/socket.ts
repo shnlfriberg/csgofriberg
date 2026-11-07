@@ -1,11 +1,19 @@
-import { matchOwner } from "./claims";
+import { matchOwner, identityKeys } from "./claims";
 import { processBuilds } from "./buildJobs";
 import type { Server } from "socket.io";
 import { authenticateCookie, getGuestFromCookie } from "../middleware/auth";
 import { isGuestBanned } from "../services/guestAccounts";
 import { socketAllowedWithIp } from "../socket/connection";
 import { HttpError } from "../middleware/common";
-import { readView, readSnapshot, advanceById, needsAdvance, scheduledAt } from "./matches";
+import { readView, readSnapshot, advanceById, needsAdvance, scheduledAt, rematchMatch, createMatch, joinMatch, controlMatch, commandMatch } from "./matches";
+import { z } from 'zod';
+import { requestId, createMatchSchema, commandSchema, variantSchema } from './validation';
+import { queueMatch, cancelQueue, heartbeatQueue, QUEUE_LEASE_MS } from './matchmaking';
+import { activeReservation } from './reservations';
+import { cardDirectory } from './directory';
+import { sceneFlags } from './operations';
+import { RULES } from '@friberg/card-link-core';
+import { registerKernelEvent } from '../rooms/kernel/events';
 import { db } from '../db/knex';
 import { redis, redisKey } from '../redis';
 import { cardChannel, setCardPresenceReader } from './presence';
@@ -213,6 +221,9 @@ export function setupCardSocket(server: Server) {
             await notifyMatch(roomId);
             // Re-arm the exact deadline (a tick that changed nothing still holds its lease).
             await scheduleTick(roomId, ['finished', 'cancelled'].includes(after.status) ? null : scheduledAt(after));
+          } else if (kind === 'rematch') {
+            await rematchMatch(roomId, null);
+            await notifyMatch(roomId);
           } else if (kind === 'settle') {
             await settle(roomId).catch(() => undefined);
             await cardSchedules.remove(item);
@@ -241,6 +252,85 @@ export function setupCardSocket(server: Server) {
       .finally(() => pending.delete(p));
   };
   server.on("connection", (socket) => {
+    const owner = () => socket.data.identity as Owner;
+    const handle = (event: string, schema: z.ZodTypeAny, handler: (data: any) => Promise<unknown>) => registerKernelEvent(socket, {
+      event, schema,
+      ack: 'envelope', order: 'pending-then-validate', pendingField: 'pendingCardEvents', track,
+      before: async () => {
+        const me = socket.data.identity as Owner | undefined;
+        if (!me) throw new HttpError(401, 'IDENTITY_REQUIRED');
+        const limit = event === 'card-link:create' ? 6 : event === 'card-link:rematch' ? 8 : 60;
+        if (!(await socketAllowedWithIp(socket, event, me.key, limit, 180, 60))) throw new HttpError(429, 'RATE_LIMITED');
+        if (me.userId) {
+          if ((await authenticateCookie(socket.handshake.headers.cookie))?.id !== me.userId) throw new HttpError(401, 'AUTH_EXPIRED');
+        } else if (getGuestFromCookie(socket.handshake.headers.cookie)?.key !== me.key.slice(2) || await isGuestBanned(me.key.slice(2)))
+          throw new HttpError(403, 'USER_BANNED');
+      },
+      handler,
+      mapError: error => ({ ok: false,
+        code: error instanceof HttpError ? error.code : (error as { code?: string })?.code === 'VALIDATION_FAILED'
+          ? 'VALIDATION_FAILED' : error instanceof Error && error.message === 'REDIS_UNAVAILABLE' ? 'REDIS_UNAVAILABLE' : 'INTERNAL_ERROR',
+        ...(error instanceof HttpError ? error.details ?? {} : {}),
+      }),
+    });
+    const idSchema = z.object({ id: z.string().uuid() });
+    const multiplayer = async (id: string, subscribed = false) => {
+      const { m, rows } = await readSnapshot(id);
+      const me = await matchOwner(id, owner());
+      if (!rows.some(row => row.identity_key === me.key)) throw new HttpError(403, 'FORBIDDEN');
+      if (!['friend', 'ranked'].includes(m.scene)) throw new HttpError(409, 'CARD_ROOM_UNAVAILABLE');
+      if (subscribed && socket.data.cardMatchId !== id) throw new HttpError(409, 'CARD_ROOM_UNAVAILABLE');
+      return m;
+    };
+    handle('card-link:config', z.object({}).strict(), async () => {
+      const catalog = await db('card_catalog').where({ id: 1 }).first();
+      return { enabled: Boolean(catalog?.enabled && catalog.graph_version), scenes: sceneFlags(catalog ?? {}), rules: RULES };
+    });
+    handle('card-link:active', z.object({}).strict(), async () => {
+      const me = owner(), keys = await identityKeys(me);
+      const reserved = await activeReservation(db, keys);
+      const row = await db('card_queue').where({ identity_key: me.key }).first();
+      const queue = row && JSON.parse(row.payload);
+      const queued = Boolean(queue?.heartbeatAt && queue.heartbeatAt > Date.now() - QUEUE_LEASE_MS);
+      return { id: reserved?.match_id ?? null, queued, ticket: queued ? queue.ticket : null };
+    });
+    handle('card-link:create', createMatchSchema.refine(data => data.scene === 'friend').strict(), async data =>
+      createMatch(owner(), 'friend', data.variant, data.difficulty, data.duration, data.requestId));
+    handle('card-link:join', z.object({ code: z.string().regex(/^[A-F0-9]{8}$/) }).strict(), async data => {
+      const result = await joinMatch(data.code, owner());
+      await notifyMatch(result.id);
+      return result;
+    });
+    handle('card-link:state', idSchema.strict(), async data => {
+      await multiplayer(data.id);
+      return readView(data.id, owner());
+    });
+    handle('card-link:directory', idSchema.strict(), async data => {
+      const m = await multiplayer(data.id), graph = await loadGraph(m.questions[0].graphVersion);
+      return { version: graph.data.version, players: await cardDirectory(graph.data.players, m.variant) };
+    });
+    handle('card-link:command', idSchema.extend(commandSchema.shape).strict(), async data => {
+      await multiplayer(data.id, true);
+      const { id, ...input } = data;
+      const result = await commandMatch(id, owner(), input, { compact: true });
+      await notifyMatch(id);
+      return result;
+    });
+    handle('card-link:control', idSchema.extend({ action: z.enum(['ready', 'start', 'leave']), requestId }).strict(), async data => {
+      await multiplayer(data.id);
+      const result = await controlMatch(data.id, owner(), data.action, data.requestId);
+      await notifyMatch(data.id);
+      return result;
+    });
+    handle('card-link:rematch', idSchema.extend({ wanted: z.boolean(), requestId }).strict(), async data => {
+      await multiplayer(data.id, true);
+      const result = await rematchMatch(data.id, owner(), data.wanted, data.requestId);
+      await notifyMatch(data.id);
+      return result;
+    });
+    handle('card-link:queue:join', z.object({ variant: variantSchema }).strict(), data => queueMatch(owner(), data.variant));
+    handle('card-link:queue:heartbeat', z.object({ ticket: requestId }).strict(), data => heartbeatQueue(owner(), data.ticket));
+    handle('card-link:queue:cancel', z.object({ ticket: requestId.optional() }).strict(), data => cancelQueue(owner(), data.ticket));
     let watchRevision = 0;
     /** Leave the watched match: presence detaches; the kernel reports offline transitions. */
     const unwatch = async () => {

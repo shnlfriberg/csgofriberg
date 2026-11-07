@@ -1,5 +1,5 @@
 import { api, errMsg } from '../api/client';
-import { getSocket } from '../api/socket';
+export { roomAction } from '../api/roomKernel';
 import i18n from '../i18n';
 export { api };
 export function message(error: unknown): string {
@@ -8,24 +8,4 @@ export function message(error: unknown): string {
   return code && i18n.exists(`location.errors.${code}`)
     ? String(i18n.t(`location.errors.${code}`))
     : errMsg(error);
-}
-export async function roomAction<T>(
-  event: string,
-  payload: unknown
-): Promise<T> {
-  // Socket events are not PoW-gated; only HTTP API requests carry the PoW cookie.
-  return new Promise<T>((resolve, reject) =>
-    getSocket()
-      .timeout(10000)
-      .emit(
-        event,
-        payload,
-        (error: unknown, result: { ok: boolean; code?: string; data: T; occupied?: unknown }) => {
-          if (error) reject(error);
-          else if (!result?.ok)
-            reject({ code: result?.code || 'INTERNAL_ERROR', ...(result?.occupied ? { occupied: result.occupied } : {}) });
-          else resolve(result.data);
-        }
-      )
-  );
 }

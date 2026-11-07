@@ -8,6 +8,7 @@ import type {
   Variant,
 } from "@friberg/card-link-core";
 export interface View {
+  rematch?: { acceptedKeys: string[]; requiredKeys: string[]; nextId?: string };
   id: string;
   code: string | null;
   scene: Scene;

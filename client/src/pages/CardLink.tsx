@@ -20,7 +20,7 @@ import Page from "../components/Page";
 import CardLinkIcon from "../components/CardLinkIcon";
 import { api, errMsg } from "../api/client";
 import { getSocket } from "../api/socket";
-import { occupiedOf } from "../api/roomKernel";
+import { occupiedOf, roomAction } from "../api/roomKernel";
 import { useOccupiedRoomPrompt } from "../components/OccupiedRoomDialog";
 import { useConfirm } from "../components/ConfirmDialog";
 
@@ -36,13 +36,21 @@ export default function CardLink() {
   const { t } = useTranslation(),
     tr = (k: string) => t(`card.${k}`);
   const [params, setParams] = useSearchParams();
-  // 单人 (practice) matches open as ?solo=<id> and run on the shared
-  // single-player API; daily and multiplayer matches open as ?game=<id>.
+  const identity = useAuth(state => state.user?.id ?? null);
+  const roomStorageKey = `card-room:${identity ?? 'guest'}`;
+  const [multiSession, setMultiSession] = useState<{ identity: number | null; id: string | null }>(() => {
+    let saved: string | null = null;
+    try { saved = sessionStorage.getItem(roomStorageKey); } catch { /* optional */ }
+    return { identity, id: saved };
+  });
+  const multiId = multiSession.identity === identity ? multiSession.id : null;
+  // Multiplayer IDs stay in the identity-bound session; URL IDs are for solo/daily.
   const soloId = params.get("solo"),
-    id = params.get("game") ?? soloId;
+    dailyId = params.get('game'),
+    id = soloId ?? dailyId ?? multiId;
   const [dismissedResult, setDismissedResult] = useState<string | null>(null);
-  const { view, directory, error, connectionError, realtimeReady, retryConnection, busy, pending, send, reload, setError } =
-    useCardGame(id, Boolean(soloId));
+  const { view, directory, error, connectionError, realtimeReady, unavailable, retryConnection, busy, pending, send, reload, setError } =
+    useCardGame(id, Boolean(soloId), Boolean(dailyId));
   const [occupiedDialog, promptOccupied] = useOccupiedRoomPrompt();
   const confirm = useConfirm();
   const [variant, setVariant] = useState<Variant>("unlimited"),
@@ -55,12 +63,12 @@ export default function CardLink() {
       [],
     ),
     [resume, setResume] = useState<{ id: string; solo: boolean } | null>(null);
-  const identity = useAuth(state => state.user?.id ?? null);
   // Random matchmaking needs a signed-in account with a verified email (checked again by the server).
   const authReady = useAuth(state => state.initialized);
   const matchAllowed = useAuth(state => state.initialized && Boolean(state.user?.id && state.user.email && state.user.emailVerified));
   const [sceneAccess, setSceneAccess] = useState<Record<string, boolean>>({});
   const queueTicket = useRef<string | null>(null);
+  const autoRestore = useRef(true);
   const playersById = useMemo(() => new Map(directory.map(player => [player.id, player])), [directory]);
   // Pre-normalised names, filtered with a deferred query: typing and room
   // patches never re-scan and lowercase the whole directory on every render.
@@ -123,38 +131,66 @@ export default function CardLink() {
   };
   const viewRef = useRef(view);
   viewRef.current = view;
-  const enter = (next: string, solo = false) => {
+  const storeMulti = (next: string | null) => {
+    autoRestore.current = false;
+    setMultiSession({ identity, id: next });
+    try {
+      if (next) sessionStorage.setItem(roomStorageKey, next);
+      else sessionStorage.removeItem(roomStorageKey);
+    } catch { /* optional */ }
+  };
+  const enter = (next: string, scene: 'practice' | 'daily' | 'friend' = 'friend') => {
     cardDrag.end();
     setQuery('');
     setPosition(0);
     setDismissedResult(null);
     setQueued(false);
-    setParams(solo ? { solo: next } : { game: next });
+    storeMulti(scene === 'friend' ? next : null);
+    setParams(scene === 'practice' ? { solo: next } : scene === 'daily' ? { game: next } : { menu: 'friend' });
   };
+  // Consume an old multiplayer deep link once; subsequent room navigation has no game ID.
+  useEffect(() => {
+    if (dailyId && view?.id === dailyId && ['friend', 'ranked'].includes(view.scene)) enter(view.id);
+  }, [dailyId, view?.id, view?.scene]);
+  useEffect(() => {
+    if (view?.id === id && view.rematch?.nextId) enter(view.rematch.nextId);
+  }, [id, view?.id, view?.rematch?.nextId]);
+  useEffect(() => {
+    if (multiId && unavailable) storeMulti(null);
+  }, [multiId, unavailable]);
   useEffect(() => {
     let alive = true;
-    void api
-      .get("/card-link/config")
-      .then((r) => { if (alive) { setEnabled(r.data.enabled); setSceneAccess(r.data.scenes ?? {}); } })
+    void roomAction<{ enabled: boolean; scenes?: Record<string, boolean> }>('card-link:config', {})
+      .then((data) => { if (alive) { setEnabled(data.enabled); setSceneAccess(data.scenes ?? {}); } })
       .catch((e) => { if (alive) setError(errMsg(e)); });
     return () => { alive = false; };
   }, []);
-  useEffect(() => { setResume(null); setQueued(false); }, [identity]);
+  useEffect(() => {
+    setResume(null); setQueued(false);
+    autoRestore.current = true;
+    let saved: string | null = null;
+    try { saved = sessionStorage.getItem(roomStorageKey); } catch { /* optional */ }
+    setMultiSession({ identity, id: saved });
+  }, [identity]);
   useEffect(() => {
     if (id) return;
     let alive = true;
-    void api
-      .get("/card-link/active")
-      .then((r) => {
+    const restore = () => void roomAction<{ id: string | null; queued: boolean; ticket?: string }>('card-link:active', {})
+      .then((data) => {
         if (!alive) return;
         // A room reservation comes first; otherwise the server's current 单人
         // match (any device or tab). Keep a just-left daily match ID as well.
-        setResume(previous => r.data.id ? { id: r.data.id, solo: false } : previous);
-        queueTicket.current = r.data.ticket ?? null;
-        setQueued(r.data.queued);
+        setResume(previous => data.id ? { id: data.id, solo: false } : previous);
+        if (data.id && autoRestore.current && (!params.get('menu') || params.get('menu') === 'friend')) enter(data.id);
+        autoRestore.current = false;
+        queueTicket.current = data.ticket ?? null;
+        setQueued(data.queued);
       })
       .catch(() => undefined);
-    return () => { alive = false; };
+    const socket = getSocket();
+    socket.on('connect', restore);
+    restore();
+    return () => { alive = false; socket.off('connect', restore); };
   }, [id, identity]);
   useEffect(() => {
     setPosition(view?.current?.board.length ?? 0);
@@ -172,12 +208,12 @@ export default function CardLink() {
     socket.on('room-kernel:found', found);
     const poll = async () => {
       try {
-        const r = ticket
-          ? await api.post('/card-link/queue/heartbeat', { ticket })
-          : await api.get('/card-link/active');
+        const data = ticket
+          ? await roomAction<{ id?: string; queued?: boolean }>('card-link:queue:heartbeat', { ticket })
+          : await roomAction<{ id?: string; queued?: boolean }>('card-link:active', {});
         if (!alive) return;
-        if (r.data.id) { enter(r.data.id); return; }
-        if (!r.data.queued) { setQueued(false); return; }
+        if (data.id) { enter(data.id); return; }
+        if (!data.queued) { setQueued(false); return; }
       } catch (e) {
         if (alive) setError(errMsg(e));
       }
@@ -188,7 +224,7 @@ export default function CardLink() {
       alive = false;
       socket.off('room-kernel:found', found);
       clearTimeout(timer);
-      if (ticket) void api.delete('/card-link/queue', { data: { ticket } }).catch(() => undefined);
+      if (ticket) void roomAction('card-link:queue:cancel', { ticket }).catch(() => undefined);
     };
   }, [queued, id]);
   // Deadline recovery covers a missed Socket notification; never submits an action.
@@ -215,11 +251,18 @@ export default function CardLink() {
   /** Like classic games: create or resume the 单人 match for this difficulty and hand mode. */
   const startSolo = async (hand: Variant, difficulty: Difficulty, duration: number) => {
     const r = await api.post('/game/start', { variant: 'card-link', mode: difficulty, hand, duration });
-    enter(r.data.gameId, true);
+    enter(r.data.gameId, 'practice');
   };
   const start = (scene: "practice" | "daily" | "friend", difficulty: Difficulty, duration: number) =>
     run(async () => {
       if (scene === 'practice') return startSolo(variant, difficulty, duration);
+      if (scene === 'friend') {
+        const result = await roomAction<{ id: string }>('card-link:create', {
+          scene, variant, difficulty, duration, requestId: crypto.randomUUID(),
+        });
+        enter(result.id);
+        return;
+      }
       const r = await api.post("/card-link/matches", {
         scene,
         variant,
@@ -227,16 +270,18 @@ export default function CardLink() {
         duration,
         requestId: crypto.randomUUID(),
       });
-      enter(r.data.id);
+      enter(r.data.id, 'daily');
     }, scene === 'friend');
   const control = (action: string) =>
     run(async () => {
       if (soloId && action === 'leave') await api.post(`/game/${soloId}/exit`);
+      else if (multiId) await roomAction('card-link:control', { id: multiId, action, requestId: crypto.randomUUID() });
       else await api.post(`/card-link/matches/${id}/control`, {
         action,
         requestId: crypto.randomUUID(),
       });
       if (action === "leave") {
+        storeMulti(null);
         setParams({});
         setResume(null);
         return;
@@ -257,22 +302,37 @@ export default function CardLink() {
         scene: view.scene, variant: view.variant, difficulty: view.difficulty,
         duration: view.duration, requestId: crypto.randomUUID(),
       });
-      enter(response.data.id);
+      enter(response.data.id, 'daily');
     });
   };
+  const rematch = (wanted: boolean) => void run(async () => {
+    const result = await roomAction<{ nextId?: string }>('card-link:rematch', { id, wanted, requestId: crypto.randomUUID() });
+    if (result.nextId) enter(result.nextId);
+  }, true);
   const chain = view?.current && view.question ? [view.question.start, ...view.current.board, view.question.end] : [];
   const resultKey = view ? `${view.id}:${view.round}` : '';
   const resultReady = !!view?.current && ['roundOver', 'finished'].includes(view.status);
   const backToLobby = () => {
     if (!view) return;
+    if (view.status === 'finished' && ['friend', 'ranked'].includes(view.scene)) {
+      void run(async () => {
+        await roomAction('card-link:control', { id: view.id, action: 'leave', requestId: crypto.randomUUID() });
+        storeMulti(null);
+        setVariant(view.variant);
+        setResume(null);
+        setParams({ menu: 'friend' });
+      });
+      return;
+    }
     setVariant(view.variant);
+    storeMulti(null);
     setResume(['finished', 'cancelled'].includes(view.status) ? null : { id: view.id, solo: view.scene === 'practice' });
     // Ranked matches belong to the multiplayer page together with friend rooms.
     setParams({ menu: view.scene === 'ranked' ? 'friend' : view.scene });
   };
   const cancelQueue = () => void run(async () => {
-    const r = await api.delete("/card-link/queue", { data: { ticket: queueTicket.current ?? undefined } });
-    if (r.data.id) enter(r.data.id);
+    const data = await roomAction<{ id?: string }>('card-link:queue:cancel', { ticket: queueTicket.current ?? undefined });
+    if (data.id) enter(data.id);
     else setQueued(false);
   });
   const card = (
@@ -402,7 +462,7 @@ export default function CardLink() {
             {enabled === false && <p role="status" className="ent-notice">{tr("unavailable")}</p>}
             {resume && (
               <p className="ent-notice">
-                <button className="btn" onClick={() => enter(resume.id, resume.solo)}>
+                <button className="btn" onClick={() => enter(resume.id, resume.solo ? 'practice' : 'friend')}>
                   {tr("resume")}
                 </button>
               </p>
@@ -415,13 +475,13 @@ export default function CardLink() {
               queued={queued} matchAllowed={matchAllowed} authReady={authReady} sceneAccess={sceneAccess}
               start={start}
               join={code => void run(async () => {
-                const r = await api.post('/card-link/join', { code });
-                enter(r.data.id);
+                const result = await roomAction<{ id: string }>('card-link:join', { code });
+                enter(result.id);
               }, true)}
               queue={matchVariant => void run(async () => {
-                const r = await api.post('/card-link/queue', { variant: matchVariant });
-                queueTicket.current = r.data.ticket ?? null;
-                if (r.data.id) enter(r.data.id);
+                const result = await roomAction<{ id?: string; ticket?: string }>('card-link:queue:join', { variant: matchVariant });
+                queueTicket.current = result.ticket ?? null;
+                if (result.id) enter(result.id);
                 else setQueued(true);
               }, true)}
               cancelQueue={cancelQueue}
@@ -699,6 +759,7 @@ export default function CardLink() {
       {view && resultReady && dismissedResult !== resultKey && <RoundResult key={resultKey}
         view={view} directory={directory} close={() => setDismissedResult(resultKey)} back={backToLobby}
         restart={view.status === 'finished' && ['practice', 'daily'].includes(view.scene) ? restart : undefined}
+        rematch={view.status === 'finished' && ['friend', 'ranked'].includes(view.scene) ? rematch : undefined}
         busy={loading} error={error} />}
     </Page>
   );

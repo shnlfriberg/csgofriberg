@@ -7,11 +7,13 @@ import PlayerCardFace from './PlayerCardFace';
 import ConnectionSlot from './ConnectionSlot';
 import SolutionRoute from './SolutionRoute';
 import type { View } from './types';
+import RematchVote from '../components/RematchVote';
 
 /** Native modal gives keyboard focus containment and restores focus on close. */
-export default function RoundResult({ view, directory, close, back, restart, busy = false, error }: {
+export default function RoundResult({ view, directory, close, back, restart, rematch, busy = false, error }: {
   view: View; directory: CardPlayer[]; close: () => void; back: () => void;
   restart?: () => void; busy?: boolean; error?: string;
+  rematch?: (wanted: boolean) => void;
 }) {
   const { t } = useTranslation(), tr = (key: string) => t(`card.${key}`);
   const dialog = useRef<HTMLDialogElement>(null);
@@ -63,9 +65,11 @@ export default function RoundResult({ view, directory, close, back, restart, bus
     {view.scene === 'daily' && <p className="cl-result-hint">{tr('dailyFinishedNotice')}</p>}
     {view.status === 'roundOver' && <p className="cl-result-hint">{tr('nextRoundNotice')}</p>}
     <div className="btns">
+      {rematch && <RematchVote me={view.me} votes={view.rematch} busy={busy}
+        eligible={view.players.filter(p => !p.retired).map(p => p.id)} onVote={rematch} />}
       {restart && <button className="btn" disabled={busy} onClick={restart}>{tr('restart')}</button>}
       <button className="btn btn-ghost" onClick={close}>{tr('viewBoard')}</button>
-      {view.status === 'finished' && <button className="btn" onClick={back}>{tr('back')}</button>}
+      {view.status === 'finished' && <button className="btn" disabled={busy} onClick={back}>{tr('back')}</button>}
     </div>
     {error && <p className="cl-error" role="alert">{error}</p>}
   </dialog></ModalPortal>;

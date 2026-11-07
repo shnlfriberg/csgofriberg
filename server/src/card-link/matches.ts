@@ -1,4 +1,6 @@
 import { matchOwner, identityKeys } from "./claims";
+import { voteRematch, rematchUnanimous } from '../rooms/rematch';
+import { resolveOccupancy } from '../rooms/kernel/occupancy';
 import { randomBytes, randomInt, randomUUID } from "crypto";
 import type { Knex } from "knex";
 import {
@@ -24,7 +26,7 @@ import { requireScene } from './operations';
 import { measured, observe } from './metrics';
 import { performance } from 'node:perf_hooks';
 import { onlineCardPlayers, CARD_DISCONNECT_MS } from './presence';
-import { claimCardSeats, isMultiplayer, releaseCardSeatsAfterCommit, scheduleAfterCommit, wakeSettlement } from './kernel';
+import { cardSchedules, claimCardSeats, isMultiplayer, releaseCardSeatsAfterCommit, scheduleAfterCommit, wakeSettlement } from './kernel';
 import { onCommit } from './transaction';
 export type GraphLoaded = Awaited<ReturnType<typeof loadGraph>>;
 /**
@@ -721,6 +723,16 @@ export async function controlMatch(
       { action },
       async () => {
         const s: Seat = JSON.parse(row.payload);
+        if (action === 'leave' && m.status === 'finished' && isMultiplayer(m) && !m.rematch?.nextId) {
+          const votes = m.rematch ?? { acceptedKeys: [], requiredKeys: rows.filter(row => !seatOf(row).retired && seatOf(row).connected !== false).map(row => row.identity_key) };
+          m.rematch = { ...votes,
+            leftKeys: [...new Set([...(votes.leftKeys ?? []), owner.key])],
+            acceptedKeys: votes.acceptedKeys.filter(key => key !== owner.key),
+            requiredKeys: votes.requiredKeys.filter(key => key !== owner.key),
+          };
+          m.revision++;
+          await saveMatch(trx, m);
+        }
         if (action === "ready") {
           if (m.status !== "waiting" || s.retired || s.connected === false)
             throw new HttpError(409, "CARD_ROUND_LOCKED");
@@ -785,6 +797,63 @@ export async function controlMatch(
     );
   });
 }
+export async function rematchMatch(id: string, owner: Owner | null, wanted?: boolean, requestId?: string) {
+  if (owner) owner = await matchOwner(id, owner);
+  const snapshot = await readSnapshot(id);
+  const online = await onlineCardPlayers(snapshot.m, snapshot.rows);
+  // Resolve before the SQL transaction: another game's adapter may read SQL.
+  const occupied = new Map(await Promise.all(snapshot.rows.map(async row => [row.identity_key, await resolveOccupancy(row.identity_key)] as const)));
+  return transaction(async trx => {
+    // Same lock order as creation; publication cannot change the graph mid-create.
+    const catalog = await lockRow(trx, 'card_catalog', { id: 1 });
+    const raw = await lockRow(trx, 'card_matches', { id });
+    if (!raw) throw new HttpError(404, 'CARD_MATCH_NOT_FOUND');
+    const m: Match = JSON.parse(raw.payload);
+    const rows = await rowsFor(trx, id);
+    const self = owner && rows.find(row => row.identity_key === owner.key);
+    if (owner && !self) throw new HttpError(403, 'FORBIDDEN');
+    onCommit(trx, async () => {
+      const member = `rematch|${id}|0`;
+      if (m.status === 'finished' && m.rematch?.acceptedKeys.length && !m.rematch.nextId)
+        await cardSchedules.add(member, Date.now() + 2_000);
+      else await cardSchedules.remove(member);
+    });
+    const work = async () => {
+      if (!owner && (m.status !== 'finished' || !m.rematch?.acceptedKeys.length || m.rematch.nextId)) return { id };
+      if (m.status !== 'finished' || !isMultiplayer(m) || (self && seatOf(self).retired) || (owner && m.rematch?.leftKeys?.includes(owner.key)))
+        throw new HttpError(409, 'REMATCH_NOT_AVAILABLE');
+      if (m.rematch?.nextId) return { id, nextId: owner && m.rematch.acceptedKeys.includes(owner.key) ? m.rematch.nextId : undefined };
+      const candidates = rows.map(seatOf).filter(seat => !seat.retired &&
+        (online ? online.has(seat.owner.key) : seat.connected !== false) &&
+        (!occupied.get(seat.owner.key) || (occupied.get(seat.owner.key)?.game === 'card-link' && occupied.get(seat.owner.key)?.roomId === id)));
+      const keys = candidates.map(seat => seat.owner.key).filter(key => !m.rematch?.leftKeys?.includes(key));
+      if (owner && ((wanted && keys.length < 2) || !keys.includes(owner.key))) throw new HttpError(409, 'REMATCH_NOT_AVAILABLE');
+      const previous = JSON.stringify(m.rematch);
+      m.rematch = voteRematch(m.rematch, keys, owner?.key, wanted);
+      if (rematchUnanimous(m.rematch)) {
+        requireScene(catalog, 'friend');
+        const g = await loadGraph(catalog.graph_version, trx);
+        const owners = candidates.filter(seat => keys.includes(seat.owner.key)).map(seat => seat.owner);
+        owners.sort((a, b) => Number(b.key === m.host) - Number(a.key === m.host));
+        const next = await createMatchIn(trx, owners, 'friend', m.variant, m.difficulty, m.duration, g);
+        const seats = await rowsFor(trx, next.id);
+        for (const row of seats) await saveSeat(trx, row, { ...seatOf(row), ready: true });
+        next.status = 'preparing';
+        next.dueAt = Date.now() + 3000;
+        next.revision++;
+        await saveMatch(trx, next);
+        m.rematch.nextId = next.id;
+      }
+      if (JSON.stringify(m.rematch) !== previous) {
+        m.revision++;
+        await saveMatch(trx, m);
+      }
+      return { id, nextId: m.rematch.nextId };
+    };
+    return owner ? receipt(trx, `rematch:${id}:${owner.key}`, requestId!, { wanted }, work) : work();
+  });
+}
+
 export async function advanceById(id: string, repairKey?: string, options: { presence?: boolean } = {}) {
   const before = await getMatch(id),
     g = await loadGraph(before.questions[0].graphVersion);

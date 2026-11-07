@@ -60,5 +60,6 @@ export function errMsg(err: unknown): string {
     if (code.startsWith('POW_')) return translate('NETWORK_ERROR');
     return translate(code);
   }
+  if (err && typeof err === 'object' && 'code' in err && typeof err.code === 'string') return translate(err.code);
   return translate('INTERNAL_ERROR');
 }

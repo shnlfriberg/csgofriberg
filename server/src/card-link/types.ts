@@ -12,6 +12,7 @@ export interface Owner {
   name: string;
 }
 export interface Match {
+  rematch?: import('../rooms/rematch').RematchVotes;
   id: string;
   code: string | null;
   host: string;

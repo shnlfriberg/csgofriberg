@@ -85,6 +85,7 @@ export async function subscribeRemote(io: Server, socketId: string, room: RoomSt
 function v1Changes(_room: RoomState, changes: RoomChanges, view: RoomView, identity: string): Partial<RoomView> {
   const patch: Partial<RoomView> = { revision: view.revision, serverNow: view.serverNow };
   const s = changes.sections;
+  if (s.has('rematch')) patch.rematch = view.rematch;
   if (s.has('status')) patch.status = view.status;
   if (s.has('round')) patch.round = view.round;
   if (s.has('timers')) {
@@ -107,12 +108,21 @@ function v1Changes(_room: RoomState, changes: RoomChanges, view: RoomView, ident
  */
 export function emitRevision(io: Server, room: RoomState, changes: RoomChanges, previousRevision: number): void {
   if (!room.players.length) return;
+  if (changes.sections.has('reset')) {
+    for (const player of room.players) {
+      emitTo(io, seatChannel(room.id, player.identity.key), 'location:room', v2View(room, player.identity.key), 'location.v2.full');
+      if (room.v1Seats?.includes(player.identity.key))
+        emitTo(io, v1Channel(room.id, player.identity.key), 'location:room', roomView(room, player.identity.key), 'location.v1.full');
+    }
+    return;
+  }
   const now = Date.now();
   const common = roomView(room, room.players[0].identity.key, now);
   const publicKey = (identity: string) => publicPlayerKey(room.gameId, identity);
   const s = changes.sections;
 
   const sections: RoomPatchSectionsV2 = {};
+  if (s.has('rematch')) sections.rematch = common.rematch;
   if (s.has('status')) sections.status = room.status;
   if (s.has('round')) sections.round = room.round;
   if (s.has('timers')) {

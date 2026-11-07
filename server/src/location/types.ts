@@ -30,6 +30,7 @@ export interface RoomViewV2 extends Omit<RoomView, 'maps' | 'results'> {
 
 /** Public sections of one committed revision (never another seat's guess). */
 export interface RoomPatchSectionsV2 {
+  rematch?: RoomView['rematch'];
   status?: RoomView['status'];
   round?: number;
   startsAt?: number | null;

@@ -7,6 +7,7 @@ import type { View } from "../../src/card-link/types";
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   post: vi.fn(),
+  wsState: vi.fn(), wsCommand: vi.fn(),
   pow: vi.fn(), auth: vi.fn(),
   socket: { connected: false, on: vi.fn(), off: vi.fn(), emit: vi.fn(), timeout: vi.fn(), disconnect: vi.fn(), connect: vi.fn() },
 }));
@@ -28,7 +29,7 @@ const snapshot = (id: string, revision = 0) =>
   }) as unknown as View;
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.socket.connected = false;
+  mocks.socket.connected = true;
   mocks.socket.emit.mockReset();
   mocks.socket.timeout.mockReturnValue(mocks.socket);
   mocks.socket.disconnect.mockReturnValue(mocks.socket);
@@ -37,6 +38,15 @@ beforeEach(() => {
   mocks.auth.mockReset().mockResolvedValue(true);
   sessionStorage.clear();
   useAuth.setState({ user: null, initialized: true });
+  mocks.wsState.mockReset().mockImplementation(async id => snapshot(id));
+  mocks.wsCommand.mockReset().mockImplementation(async input => snapshot(input.id, 1));
+  mocks.socket.emit.mockImplementation((event, body, ack) => {
+    if (event === 'card-link:unwatch') return;
+    const task = event === 'card-link:directory' ? Promise.resolve({ players: [] })
+      : event === 'card-link:command' ? mocks.wsCommand(body) : mocks.wsState(body.id);
+    void task.then((data: unknown) => ack?.(null, { ok: true, data }), (error: { code?: string }) => error.code
+      ? ack?.(null, { ok: false, code: error.code }) : ack?.(error));
+  });
   mocks.get.mockImplementation(async (url: string) => ({
     data: url.endsWith("/directory")
       ? { players: [] }
@@ -102,42 +112,42 @@ describe("card command recovery", () => {
   it('clears a stale rejection when authoritative reload repairs the hand', async () => {
     const hook = renderHook(() => useCardGame('repair'));
     await waitFor(() => expect(hook.result.current.view?.id).toBe('repair'));
-    mocks.post.mockRejectedValue({ response: { status: 409 } });
-    mocks.get.mockResolvedValue({ data: { ...snapshot('repair', 1), current: { hand: [2], board: [], refreshes: 1, token: 0 } } });
+    mocks.wsCommand.mockRejectedValue({ code: 'CARD_VERSION_CONFLICT' });
+    mocks.wsState.mockResolvedValue({ ...snapshot('repair', 1), current: { hand: [2], board: [], refreshes: 1, token: 0 } });
     await act(() => hook.result.current.send({ type: 'play', playerId: 1, index: 0 }));
     expect(hook.result.current.error).toBe('');
     expect(hook.result.current.view?.current?.refreshes).toBe(1);
     expect(hook.result.current.pending).toBeNull();
   });
   it("retries a lost response using the exact persisted request rather than spending twice", async () => {
-    mocks.post
+    mocks.wsCommand
       .mockRejectedValueOnce(new Error("offline"))
-      .mockResolvedValueOnce({ data: snapshot("a", 1) });
+      .mockResolvedValueOnce(snapshot("a", 1));
     const first = renderHook(() => useCardGame("a"));
     await waitFor(() => expect(first.result.current.view?.id).toBe("a"));
     await act(() =>
       first.result.current.send({ type: "play", playerId: 1, index: 0 }),
     );
-    const input = mocks.post.mock.calls[0][1];
+    const input = mocks.wsCommand.mock.calls[0][0];
     expect(first.result.current.pending?.requestId).toBe(input.requestId);
     first.unmount();
     const restored = renderHook(() => useCardGame("a"));
     await waitFor(() => expect(restored.result.current.view?.id).toBe("a"));
     await act(() => restored.result.current.send());
-    expect(mocks.post.mock.calls[1][1]).toEqual(input);
+    expect(mocks.wsCommand.mock.calls[1][0]).toEqual(input);
     expect(restored.result.current.pending).toBeNull();
     expect(sessionStorage.getItem("card-pending:null:a")).toBeNull();
   });
   it("does not block a new game or apply an old response across a context change", async () => {
     let finishOld!: (value: unknown) => void;
-    mocks.post
+    mocks.wsCommand
       .mockImplementationOnce(
         () =>
           new Promise((resolve) => {
             finishOld = resolve;
           }),
       )
-      .mockResolvedValueOnce({ data: snapshot("b", 1) });
+      .mockResolvedValueOnce(snapshot("b", 1));
     const hook = renderHook(({ id }) => useCardGame(id), {
       initialProps: { id: "a" },
     });
@@ -155,15 +165,16 @@ describe("card command recovery", () => {
     await act(() =>
       hook.result.current.send({ type: "play", playerId: 1, index: 0 }),
     );
-    expect(mocks.post).toHaveBeenCalledTimes(2);
+    expect(mocks.wsCommand).toHaveBeenCalledTimes(2);
     await act(async () => {
-      finishOld({ data: snapshot("a", 99) });
+      finishOld(snapshot("a", 99));
       await oldRequest;
     });
     expect(hook.result.current.view).toEqual(snapshot("b", 1));
     expect(hook.result.current.busy).toBe(false);
   });
   it('plays a solo match through the shared game API and merges its seat patches', async () => {
+    mocks.socket.connected = false;
     mocks.get.mockImplementation(async (url: string) => ({
       data: url.endsWith('/directory') ? { players: [] } : url === '/game/a/state'
         ? { gameId: 'a', mode: 'normal', variant: 'card-link', hand: 'limited', revision: 0, phaseRevision: 1,
@@ -188,6 +199,7 @@ describe("card command recovery", () => {
     expect(mocks.get.mock.calls.filter(([url]) => url === '/game/a/state')).toHaveLength(reads);
   });
   it('reloads a solo match when a seat patch does not follow the revision on screen', async () => {
+    mocks.socket.connected = false;
     let revision = 0;
     mocks.get.mockImplementation(async (url: string) => ({
       data: url.endsWith('/directory') ? { players: [] } : { gameId: 'a', mode: 'normal', variant: 'card-link', hand: 'unlimited',
@@ -204,12 +216,24 @@ describe("card command recovery", () => {
     expect(hook.result.current.view?.revision).toBe(5);
     expect(hook.result.current.view?.current?.board).toEqual([]);
   });
-  it('keeps daily and multiplayer commands on the card endpoints', async () => {
-    const hook = renderHook(() => useCardGame('a'));
+  it('keeps daily commands on the card endpoints', async () => {
+    const hook = renderHook(() => useCardGame('a', false, true));
     await waitFor(() => expect(hook.result.current.view?.id).toBe('a'));
     mocks.post.mockResolvedValueOnce({ data: snapshot('a', 1) });
     await act(() => hook.result.current.send({ type: 'play', playerId: 1, index: 0 }));
     expect(mocks.post).toHaveBeenCalledWith('/card-link/matches/a/commands', expect.objectContaining({ revision: 0 }));
     expect(hook.result.current.view?.revision).toBe(1);
+  });
+  it('plays and resynchronizes multiplayer entirely over WS with no HTTP game reads or commands', async () => {
+    const hook = renderHook(() => useCardGame('a'));
+    await waitFor(() => expect(hook.result.current.realtimeReady).toBe(true));
+    mocks.wsCommand.mockResolvedValueOnce({ id: 'a', baseRevision: 0, phaseRevision: 1, revision: 1, publicRevision: 1,
+      players: [], current: { board: [1], hand: [] } });
+    await act(() => hook.result.current.send({ type: 'play', playerId: 1, index: 0 }));
+    expect(hook.result.current.view?.current?.board).toEqual([1]);
+    await act(() => hook.result.current.reload());
+    expect(mocks.get).not.toHaveBeenCalled();
+    expect(mocks.post).not.toHaveBeenCalled();
+    expect(mocks.socket.emit).toHaveBeenCalledWith('card-link:state', { id: 'a' }, expect.any(Function));
   });
 });

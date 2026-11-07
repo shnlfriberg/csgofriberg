@@ -1,5 +1,4 @@
 import type { Socket } from 'socket.io-client';
-import { api } from './client';
 import { getSocket } from './socket';
 
 /**
@@ -8,6 +7,16 @@ import { getSocket } from './socket';
  * `server/src/rooms/kernel/protocol.ts` (the client never imports server code).
  */
 export type GameId = 'classic' | 'location' | 'card-link';
+
+/** Envelope ACK used by entertainment multiplayer Socket commands. */
+export function roomAction<T>(event: string, payload: unknown): Promise<T> {
+  return new Promise<T>((resolve, reject) => getSocket().timeout(10000).emit(event, payload,
+    (error: unknown, result: { ok: boolean; code?: string; data: T; occupied?: unknown }) => {
+      if (error) reject(error);
+      else if (!result?.ok) reject({ code: result?.code || 'INTERNAL_ERROR', ...(result?.occupied ? { occupied: result.occupied } : {}) });
+      else resolve(result.data);
+    }));
+}
 
 export interface OccupancySummary {
   status: string;
@@ -79,7 +88,7 @@ export function occupiedPath(ref: OccupancyRef, userId?: number | null): string 
 /** Leave the occupied room through that game's own leave action. */
 export async function leaveOccupied(ref: OccupancyRef): Promise<void> {
   if (ref.game === 'card-link') {
-    await api.post(`/card-link/matches/${ref.roomId}/control`, { action: 'leave', requestId: crypto.randomUUID() });
+    await roomAction('card-link:control', { id: ref.roomId, action: 'leave', requestId: crypto.randomUUID() });
     return;
   }
   const socket = getSocket();

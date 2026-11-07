@@ -270,6 +270,7 @@ export interface RoomPlayer {
   requests: Record<string, string>;
 }
 export interface RoomState {
+  rematch?: { acceptedKeys: string[]; requiredKeys: string[]; leftKeys?: string[] };
   id: string;
   gameId: string;
   host: string;
@@ -293,6 +294,7 @@ export interface RoomState {
   revision: number;
 }
 export interface RoomView {
+  rematch?: { acceptedKeys: string[]; requiredKeys: string[] };
   id: string;
   gameId: string;
   me: string;
