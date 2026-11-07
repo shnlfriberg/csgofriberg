@@ -16,7 +16,6 @@
     "local:start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local.ps1 -Action start",
     "local:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local.ps1 -Action stop",
     "local:test": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/local.ps1 -Action test",
-    "upstream:check": "node scripts/check-upstream.mjs",
     "migrate": "pnpm --filter server migrate",
     "seed": "pnpm --filter server seed",
     "create-admin": "pnpm --filter server create-admin",

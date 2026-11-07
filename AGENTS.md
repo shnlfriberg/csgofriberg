@@ -42,6 +42,6 @@
 - 服务端新增持久表时同步 schema、readiness、维护清单及迁移测试；不要在两个生产应用实例启动时并发执行 DDL。
 - 使用 `scripts/test-integrated.ps1 -Suite server|client|scraper|all` 隔离数据库、图片与 Redis 前缀；不要直接继承实际 `.env` 运行集成测试。
 - `pnpm test` 只覆盖前后端，不包含爬虫。图寻多人变更应覆盖双进程故障演练。
-- `pnpm upstream:check` 检查固定上游基线。只能在审阅具体差异后更新本机哈希，不能为消除失败而批量重算。
+- 固定上游基线哈希检查（原 `pnpm upstream:check`、`scripts/check-upstream.mjs`、`integration/upstream-baseline.json`）已按用户要求于 2026-11-07 移除；同步上游时直接审阅具体差异，不再维护哈希清单。
 - 最新已记录验证为服务端 301 项、前端 241 项；爬虫历史为 124 项通过、1 项联网测试跳过。这些是历史验收，不能代替本次改动后的验证。
 - 完成任务时更新主手册相关事实、设计边界及验证记录；数量和地址应带采集时间，待办不能写成已完成功能。
