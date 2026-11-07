@@ -1,11 +1,3 @@
-> **开发接手入口（2026-10-23）**：先读 [项目设计与接手手册](docs/PROJECT_HANDOFF.md)，了解演进、架构、玩法、数据保护、运行验证和待办；智能体从根目录 [AGENTS.md](AGENTS.md) 开始。当前数量与配置见 [只读快照](integration/project-handoff-snapshot.json)。
-
-<div align="center">
-
-> **仓库边界（2026-11-06）**：本公开仓库维护游戏、图寻、卡牌连接及选手数据审核接口；爬虫程序独立维护在私有仓库 `shnlfriberg/external-scraper`，不随本仓库分发。已有权限的维护者可将私有仓库检出到 `external-scraper/`，并按其说明恢复可选联调脚本。本机双击 `启动本机测试.cmd`，访问 **http://localhost:5175/**；后台为 **http://localhost:5175/admin**。测试账号见本机 `.local-data/test-admin.json`，完整历史说明见 [整合说明](docs/integration.md)。
-
-> **开发基线核对（2026-10-20）**：公共游戏代码已核对至 [`shnlfriberg/csgofriberg@99f2e47`](https://github.com/shnlfriberg/csgofriberg/commit/99f2e471474cfefd38de13033608bdc816a24242)。普通玩法、多人、海龟汤和管理后台没有缺失的上游修复；保留图寻与爬虫开发内容。运行 `pnpm local:start`、`pnpm local:stop` 统一管理本机服务。固定上游哈希检查已于 2026-11-07 按维护者要求移除。详见 [逐项比对与统一结果](docs/upstream-unification.md)。
-
 # 弗一把 (csgofriberg)
 
 **CS:GO / CS2 Major 选手猜测游戏 —— 类 Wordle 玩法 + 实时多人对战**
