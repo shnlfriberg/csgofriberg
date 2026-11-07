@@ -163,4 +163,53 @@ describe("card command recovery", () => {
     expect(hook.result.current.view).toEqual(snapshot("b", 1));
     expect(hook.result.current.busy).toBe(false);
   });
+  it('plays a solo match through the shared game API and merges its seat patches', async () => {
+    mocks.get.mockImplementation(async (url: string) => ({
+      data: url.endsWith('/directory') ? { players: [] } : url === '/game/a/state'
+        ? { gameId: 'a', mode: 'normal', variant: 'card-link', hand: 'limited', revision: 0, phaseRevision: 1,
+          publicRevision: 0, players: [], current: { board: [], hand: [1] } }
+        : snapshot(url.split('/').pop()!),
+    }));
+    const hook = renderHook(() => useCardGame('a', true));
+    await waitFor(() => expect(hook.result.current.view?.id).toBe('a'));
+    expect(hook.result.current.view).toMatchObject({ difficulty: 'normal', variant: 'limited' });
+    expect(mocks.get).not.toHaveBeenCalledWith('/card-link/matches/a');
+    const reads = mocks.get.mock.calls.filter(([url]) => url === '/game/a/state').length;
+    mocks.post.mockResolvedValueOnce({ data: {
+      gameId: 'a', variant: 'card-link', baseRevision: 0, revision: 1, phaseRevision: 1, publicRevision: 1, dueAt: null,
+      players: [], current: { board: [1], hand: [] }, connections: [],
+    } });
+    await act(() => hook.result.current.send({ type: 'play', playerId: 1, index: 0 }));
+    expect(mocks.post).toHaveBeenCalledWith('/game/a/command',
+      expect.objectContaining({ revision: 0, phaseRevision: 1 }));
+    expect(hook.result.current.view?.revision).toBe(1);
+    expect(hook.result.current.view?.current?.board).toEqual([1]);
+    expect(hook.result.current.view?.variant).toBe('limited');
+    expect(mocks.get.mock.calls.filter(([url]) => url === '/game/a/state')).toHaveLength(reads);
+  });
+  it('reloads a solo match when a seat patch does not follow the revision on screen', async () => {
+    let revision = 0;
+    mocks.get.mockImplementation(async (url: string) => ({
+      data: url.endsWith('/directory') ? { players: [] } : { gameId: 'a', mode: 'normal', variant: 'card-link', hand: 'unlimited',
+        revision, phaseRevision: 1, publicRevision: revision, players: [], current: { board: [], hand: [1] } },
+    }));
+    const hook = renderHook(() => useCardGame('a', true));
+    await waitFor(() => expect(hook.result.current.view?.id).toBe('a'));
+    revision = 5;
+    mocks.post.mockResolvedValueOnce({ data: {
+      gameId: 'a', variant: 'card-link', baseRevision: 4, revision: 5, phaseRevision: 1, publicRevision: 5, dueAt: null,
+      players: [], current: { board: [1], hand: [] }, connections: [],
+    } });
+    await act(() => hook.result.current.send({ type: 'play', playerId: 1, index: 0 }));
+    expect(hook.result.current.view?.revision).toBe(5);
+    expect(hook.result.current.view?.current?.board).toEqual([]);
+  });
+  it('keeps daily and multiplayer commands on the card endpoints', async () => {
+    const hook = renderHook(() => useCardGame('a'));
+    await waitFor(() => expect(hook.result.current.view?.id).toBe('a'));
+    mocks.post.mockResolvedValueOnce({ data: snapshot('a', 1) });
+    await act(() => hook.result.current.send({ type: 'play', playerId: 1, index: 0 }));
+    expect(mocks.post).toHaveBeenCalledWith('/card-link/matches/a/commands', expect.objectContaining({ revision: 0 }));
+    expect(hook.result.current.view?.revision).toBe(1);
+  });
 });

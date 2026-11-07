@@ -59,7 +59,7 @@ describe('card page resume and clock isolation', () => {
     route('?menu=ranked');
     await waitFor(() => expect(socketMock.handlers.has('room-kernel:found')).toBe(true));
     act(() => socketMock.handlers.get('room-kernel:found')!({ game: 'card-link', roomId: 'pushed-room' }));
-    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('pushed-room'));
+    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('pushed-room', false));
   });
   it('shows ranked ready confirmation without a host start button and displays the offline grace countdown', async () => {
     vi.useFakeTimers();
@@ -91,14 +91,18 @@ describe('card page resume and clock isolation', () => {
         refreshes: 0, best: null, remaining: 0, token: 0, exhausted: false }, question: { start: 1, end: 2 } } as View;
     let finish!: (value: unknown) => void;
     mocks.post.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
-    route('?game=new-room');
+    route(scene === 'practice' ? '?solo=new-room' : '?game=new-room');
     const button = screen.getByRole('button', { name: '重新开始游戏' });
     fireEvent.click(button); fireEvent.click(button);
     expect(mocks.post).toHaveBeenCalledTimes(1);
-    expect(mocks.post).toHaveBeenCalledWith('/card-link/matches', expect.objectContaining({ scene, variant: 'limited', difficulty: 'hard', duration: scene === 'daily' ? 0 : 120 }));
+    // 单人 restarts like classic games on the shared game API; daily keeps its endpoint.
+    if (scene === 'practice') expect(mocks.post).toHaveBeenCalledWith('/game/start',
+      { variant: 'card-link', mode: 'hard', hand: 'limited', duration: 120 });
+    else expect(mocks.post).toHaveBeenCalledWith('/card-link/matches', expect.objectContaining({ scene, variant: 'limited', difficulty: 'hard', duration: 0 }));
     expect(button).toBeDisabled();
     game = { ...game, id: 'next-room', status: 'playing', current: { ...game.current!, locked: false, hand: [3], stoppedAt: undefined } };
-    await act(async () => { finish({ data: { id: 'next-room' } }); });
+    await act(async () => { finish({ data: scene === 'practice' ? { gameId: 'next-room' } : { id: 'next-room' } }); });
+    expect(mocks.game).toHaveBeenLastCalledWith('next-room', scene === 'practice');
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(document.querySelector('[data-cl-card="3"]')).toHaveAttribute('data-cl-draggable');
   });
@@ -167,6 +171,22 @@ describe('card page resume and clock isolation', () => {
     fireEvent.click(screen.getByRole('button', { name: '返回大厅' }));
     fireEvent.click(await screen.findByRole('button', { name: '恢复本局' }));
     expect(screen.getByRole('button', { name: '准备 / 取消准备' })).toBeInTheDocument();
+    expect(mocks.post).toHaveBeenCalledTimes(1);
+  });
+  it('starts 单人 through the shared game API and resumes it from the lobby', async () => {
+    game = { ...game, id: 'solo-room', scene: 'practice', status: 'playing', variant: 'unlimited', difficulty: 'normal', duration: 0,
+      current: { board: [], hand: [3], discarded: [], links: [false], locked: false, startedAt: 0, deadline: null,
+        refreshes: 0, best: null, remaining: 0, token: 0, exhausted: false }, question: { start: 1, end: 2 } } as unknown as View;
+    mocks.post.mockResolvedValue({ data: { gameId: 'solo-room' } });
+    route('?menu=practice');
+    const start = await screen.findByRole('button', { name: '开始' });
+    await waitFor(() => expect(start).toBeEnabled());
+    fireEvent.click(start);
+    await waitFor(() => expect(mocks.game).toHaveBeenLastCalledWith('solo-room', true));
+    expect(mocks.post).toHaveBeenCalledWith('/game/start', { variant: 'card-link', mode: 'normal', hand: 'unlimited', duration: 0 });
+    fireEvent.click(screen.getByRole('button', { name: '返回大厅' }));
+    fireEvent.click(await screen.findByRole('button', { name: '恢复本局' }));
+    expect(mocks.game).toHaveBeenLastCalledWith('solo-room', true);
     expect(mocks.post).toHaveBeenCalledTimes(1);
   });
   it('ticks the clock without rendering the whole page or polling the server', async () => {

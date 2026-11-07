@@ -16,7 +16,7 @@ import { db } from "../db/knex";
 import { HttpError } from "../middleware/common";
 import { activeGraph, loadGraph, selectQuestions } from "./graphs";
 import { transaction, lockRow, receipt } from "./transaction";
-import { matchView } from "./views";
+import { matchView, seatPatch } from "./views";
 import type { Match, Owner, Seat, SeatRow } from "./types";
 import { needsExpiryPolicy, nextShanghaiMidnight, singleDueAt, singleScene, SOLO_IDLE_MS } from './expiry';
 import { activeReservation, clearEndedReservations } from './reservations';
@@ -217,14 +217,46 @@ export async function createMatchIn(
   }
   return m;
 }
+/**
+ * Active 单人 (practice) matches seated by these identities, most recently
+ * active first. SQL stays authoritative: this is how any device or tab finds the
+ * practice match to resume, like classic single-player games. A retired seat or
+ * a passed deadline is not resumable (the scheduler settles it).
+ */
+export async function activePracticeMatches(
+  conn: Knex | Knex.Transaction,
+  keys: string[],
+  now = Date.now(),
+): Promise<Match[]> {
+  if (!keys.length) return [];
+  const rows = await conn('card_seats as s')
+    .join('card_matches as m', 'm.id', 's.match_id')
+    .whereIn('s.identity_key', keys)
+    .where({ 'm.scene': 'practice', 'm.status': 'playing' })
+    .where((query) => query.whereNull('m.due_at').orWhere('m.due_at', '>', now))
+    .select('m.payload', 's.payload as seat');
+  return rows
+    .map((row) => ({ m: JSON.parse(row.payload) as Match, seat: JSON.parse(row.seat) as Seat }))
+    .filter(({ seat }) => !seat.retired)
+    .sort((a, b) => (b.m.expiresAt ?? b.m.createdAt) - (a.m.expiresAt ?? a.m.createdAt))
+    .map(({ m }) => m);
+}
 export async function createMatch(
   owner: Owner,
   scene: "practice" | "daily" | "friend",
   variant: Variant,
   difficulty: Difficulty,
   duration: number,
-  requestId: string,
+  /**
+   * Idempotency key of this create. `null` is only accepted together with
+   * `resume`: the single-player API resumes the active game instead, which
+   * makes a repeated start idempotent without storing a receipt per click.
+   */
+  requestId: string | null,
+  options: { resume?: boolean } = {},
 ) {
+  if (requestId === null && !(options.resume && scene === 'practice'))
+    throw new HttpError(400, 'VALIDATION_FAILED');
   const catalog = await db("card_catalog").where({ id: 1 }).first();
   if (!catalog?.graph_version) throw new HttpError(503, "CARD_NOT_READY");
   let g = await loadGraph(catalog.graph_version);
@@ -236,12 +268,7 @@ export async function createMatch(
   }
   return transaction(async (trx) => {
     const currentCatalog = await lockRow(trx, "card_catalog", { id: 1 });
-    return receipt(
-      trx,
-      `create:${owner.key}`,
-      requestId,
-      { scene, variant, difficulty, duration },
-      async () => {
+    const create = async () => {
         const now = Date.now(), day = today(now);
         let dailyPractice = false;
         if (scene === "daily") {
@@ -269,6 +296,14 @@ export async function createMatch(
             if (resumed) return { id: String(resumed.id) };
           }
         }
+        if (options.resume && scene === 'practice') {
+          // Like classic single-player games: one active game per identity,
+          // difficulty and hand mode, so another tab, device or a repeated start
+          // continues it. The time limit applies only to a newly created game.
+          const resumed = (await activePracticeMatches(trx, await identityKeys(owner, trx), now))
+            .find((m) => m.variant === variant && m.difficulty === difficulty);
+          if (resumed) return { id: resumed.id };
+        }
         requireScene(currentCatalog, scene);
         // Publication and game creation share the catalog lock. A preload may
         // have raced publication; daily questions keep their already pinned graph.
@@ -288,8 +323,10 @@ export async function createMatch(
           { dailyPractice, now },
         );
         return { id: m.id };
-      },
-    );
+    };
+    return requestId === null
+      ? create()
+      : receipt(trx, `create:${owner.key}`, requestId, { scene, variant, difficulty, duration }, create);
   });
 }
 /** Consistent read-only snapshot (no row lock: reads never block commands). */
@@ -550,6 +587,7 @@ async function executeCommand(
     phaseRevision: number;
     command: Command;
   },
+  options: { compact?: boolean } = {},
 ) {
   owner = await matchOwner(id, owner);
   const before = await getMatch(id),
@@ -620,7 +658,12 @@ async function executeCommand(
           await saveMatch(trx, m);
         }
         await advance(trx, m, rows, g, now);
-        return matchView(m, rows, owner.key, g);
+        const view = matchView(m, rows, owner.key, g);
+        // The receipt keeps the first response shape; a retry from the other
+        // protocol gets that shape and clients accept both.
+        return options.compact && view.phaseRevision === input.phaseRevision
+          ? seatPatch(view, input.revision)
+          : view;
       },
     );
   });

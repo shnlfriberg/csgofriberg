@@ -22,29 +22,34 @@ import type { SingleGameOwner } from '../services/singleGame';
 import type { SoloContext, SoloVariantAdapter } from '../services/soloGames';
 import { soupMutationSchema, soupQuestionSchema } from '../services/turtleSoup';
 import { locationSoloAdapter } from '../location/soloGame';
+import { cardSoloAdapter } from '../card-link/soloGame';
 
 /**
- * Single-player games: classic, 海龟汤 and 图寻 单人.
+ * Single-player games: classic, 海龟汤, 图寻 单人 and 卡牌连接 单人.
  *
  * Every variant follows the classic contract: `POST /start` with `{ mode,
  * variant, ...options }` creates or resumes the identity's game for that mode
  * and variant (any device or tab), then `/:id/...` acts on it. Responses share
- * the `gameId` / `mode` / `variant` envelope; 图寻 guesses answer with only the
- * new round and start/state return the full game.
+ * the `gameId` / `mode` / `variant` envelope; accepted writes answer with only
+ * what changed (classic feedback, 海龟汤 event, 图寻 round, 卡牌 seat patch) and
+ * start/state return the full game.
  */
 const router = Router();
 router.use(optionalAuth);
 
 const soloAdapters: Partial<Record<string, SoloVariantAdapter>> = {
   location: locationSoloAdapter,
+  'card-link': cardSoloAdapter,
 };
 
 const gameIdParams = z.object({ id: z.string().uuid() });
 const startBody = z.object({
   mode: z.string().trim().regex(/^[a-z0-9][a-z0-9_-]{0,31}$/).default('beginner'),
   variant: soloGameVariantSchema.default('classic'),
-  // Variant options, validated by the variant (图寻 bans).
+  // Variant options, validated by the variant (图寻 bans, 卡牌 hand and time).
   bannedMapIds: z.unknown().optional(),
+  hand: z.unknown().optional(),
+  duration: z.unknown().optional(),
 });
 const guessBody = z.object({
   playerId: z.number().int().positive(),
@@ -180,7 +185,7 @@ router.post('/:id/guess',
   })
 );
 
-// Variant-specific moves (none of the current variants yet).
+// Variant-specific moves (卡牌: play, remove, reorder, swap, refresh, lock).
 router.post('/:id/command',
   rateLimit({ name: 'game-command', limit: 120, windowSeconds: 60, key: requestIdentity, failClosed: true }),
   validateParams(gameIdParams),

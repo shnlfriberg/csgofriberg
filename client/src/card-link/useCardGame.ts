@@ -6,13 +6,18 @@ import { api, errMsg } from "../api/client";
 import { getSocket } from "../api/socket";
 import { refreshAuthenticatedSession } from '../api/authSession';
 import type { Directory, View } from "./types";
+import { fromSoloPatch, fromSoloView, isSoloPatch, type SoloCardPatch, type SoloCardView } from './solo';
 type Pending = {
   requestId: string;
   revision: number;
   phaseRevision: number;
   command: Command;
 };
-export function useCardGame(id: string | null) {
+/**
+ * `solo` marks a 单人 (practice) match, played through the shared single-player
+ * API (`/api/game/:id/state|command`); other scenes use the card endpoints.
+ */
+export function useCardGame(id: string | null, solo = false) {
   const [view, setView] = useState<View | null>(null),
     [directory, setDirectory] = useState<Directory>([]),
     [error, setError] = useState(""),
@@ -43,9 +48,20 @@ export function useCardGame(id: string | null) {
   );
   const reload = useCallback(async () => {
     if (!id) return;
-    const response = await api.get<View>(`/card-link/matches/${id}`);
-    apply(response.data);
-  }, [id, apply]);
+    if (solo) apply(fromSoloView((await api.get<SoloCardView>(`/game/${id}/state`)).data));
+    else apply((await api.get<View>(`/card-link/matches/${id}`)).data);
+  }, [id, solo, apply]);
+  /** Merge a seat patch (Socket push or v2 command response); false if a reload is needed. */
+  const merge = useCallback(
+    (p: Patch): boolean => {
+      if (p.id !== active.current || activeContext.current !== contextToken) return true;
+      const result = acceptPatch(latest.current, p);
+      latest.current = result.view;
+      setView(result.view);
+      return !result.reload;
+    },
+    [contextToken],
+  );
   useEffect(() => {
     latest.current = null;
     setView(null);
@@ -124,10 +140,7 @@ export function useCardGame(id: string | null) {
     };
     const patch = (p: Patch) => {
       if (!alive || p.id !== id) return;
-      const result = acceptPatch(latest.current, p);
-      latest.current = result.view;
-      setView(result.view);
-      if (result.reload) void reload().catch(() => undefined);
+      if (!merge(p)) void reload().catch(() => undefined);
     };
     socket.on("connect", watch);
     socket.on('disconnect', disconnected);
@@ -145,7 +158,7 @@ export function useCardGame(id: string | null) {
       socket.off("card-link:state", state);
       socket.off("card-link:patch", patch);
     };
-  }, [id, identity, storageKey, reload, apply]);
+  }, [id, identity, storageKey, reload, apply, merge]);
   const send = async (command?: Command) => {
     if (!id || !view || inFlight.current === contextToken) return;
     const input =
@@ -174,11 +187,17 @@ export function useCardGame(id: string | null) {
       } catch {}
     };
     try {
-      const r = await api.post<View>(
-        `/card-link/matches/${id}/commands`,
-        input,
-      );
-      apply(r.data);
+      if (solo) {
+        // An unchanged phase answers with the seat patch only; a phase change
+        // (finished) or a replayed receipt sends the full view.
+        const r = await api.post<SoloCardView | SoloCardPatch>(`/game/${id}/command`, input);
+        if (isSoloPatch(r.data)) {
+          if (!merge(fromSoloPatch(r.data))) await reload().catch(() => undefined);
+        } else apply(fromSoloView(r.data));
+      } else {
+        const r = await api.post<View>(`/card-link/matches/${id}/commands`, input);
+        apply(r.data);
+      }
       clear();
     } catch (e) {
       if (activeContext.current !== contextToken) return;

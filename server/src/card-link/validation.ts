@@ -1,8 +1,9 @@
 import { z } from "zod";
 export const variantSchema = z.enum(["unlimited", "limited"]);
 export const requestId = z.string().regex(/^[\w-]{8,64}$/);
+// 单人 (practice) starts through the shared single-player API (/api/game).
 export const createMatchSchema = z.object({
-  scene: z.enum(["practice", "daily", "friend"]),
+  scene: z.enum(["daily", "friend"]),
   variant: variantSchema,
   difficulty: z.enum(["easy", "normal", "hard"]).default("normal"),
   duration: z.union([z.literal(0), z.literal(120), z.literal(180), z.literal(300)]).default(180),

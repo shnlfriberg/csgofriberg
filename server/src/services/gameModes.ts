@@ -135,6 +135,12 @@ export const SOLO_GAME_VARIANT_DEFINITIONS = {
     target: 'location',
     difficultyScoped: true,
   },
+  'card-link': {
+    key: 'card-link',
+    engine: 'card-chain',
+    target: 'player-chain',
+    difficultyScoped: true,
+  },
 } as const;
 
 export type SoloGameVariant = keyof typeof SOLO_GAME_VARIANT_DEFINITIONS;

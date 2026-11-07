@@ -137,3 +137,25 @@ export function matchView(
   return seatMatchView(m, rows, key, graph, publicMatchView(m, rows, graph));
 }
 export type MatchView = ReturnType<typeof matchView>;
+
+/**
+ * Compact command response (game protocol v2): only the sections one seat's
+ * command can change, on top of `baseRevision` (the seat revision the command
+ * was checked against). Same shape as the `card-link:patch` push, so clients
+ * merge both the same way. Used only while the match phase is unchanged; a
+ * phase change (round over, finished) still returns the full view.
+ */
+export function seatPatch(view: MatchView, baseRevision: number) {
+  return {
+    id: view.id,
+    phaseRevision: view.phaseRevision,
+    publicRevision: view.publicRevision,
+    baseRevision,
+    revision: view.revision,
+    dueAt: view.dueAt,
+    expiresAt: view.expiresAt,
+    players: view.players,
+    current: view.current,
+    connections: view.connections,
+  };
+}

@@ -38,6 +38,8 @@ import type { Owner } from '../../src/card-link/types';
 import { shortestPath } from "@friberg/card-link-core";
 import { randomUUID } from "crypto";
 import { configureScenes } from '../../src/card-link/operations';
+import { cardSoloAdapter } from '../../src/card-link/soloGame';
+import type { SoloContext } from '../../src/services/soloGames';
 import { updatePlayer, importPlayers, playerImportSchema } from '../../src/services/playerMutations';
 const guest = { key: "g:card-fixture", userId: null, name: "Guest" },
   other = { key: "g:card-fixture-2", userId: null, name: "Guest 2" };
@@ -384,6 +386,52 @@ describe("card link durable application", () => {
     expect(v.current!.token).toBe(1);
     expect(await commandMatch(id, guest, input)).toEqual(v);
     expect((await readView(id, guest)).current!.token).toBe(1);
+  });
+  it('starts or resumes 单人 on the shared game API like classic games and answers moves with seat patches', async () => {
+    const owner = { key: `g:card-solo-${randomUUID()}`, userId: null, guestKey: 'unused', name: 'Solo' };
+    const ctx: SoloContext = { owner, header: () => undefined };
+    const first = await cardSoloAdapter.start(ctx, 'easy', { hand: 'limited', duration: 0 }) as any;
+    expect(first).toMatchObject({ variant: 'card-link', mode: 'easy', hand: 'limited', scene: 'practice', status: 'playing', duration: 0 });
+    expect(first.id).toBeUndefined();
+    expect(first.difficulty).toBeUndefined();
+    // Same identity, difficulty and hand mode: resumed (another tab or device);
+    // the time limit only applies to a new game.
+    const again = await cardSoloAdapter.start(ctx, 'easy', { hand: 'limited', duration: 120 }) as any;
+    expect(again.gameId).toBe(first.gameId);
+    expect(again.duration).toBe(0);
+    const unlimited = await cardSoloAdapter.start(ctx, 'easy', {}) as any;
+    expect(unlimited.gameId).not.toBe(first.gameId);
+    expect(unlimited).toMatchObject({ hand: 'unlimited', duration: 0 });
+    // The card endpoint itself keeps creating a new practice match per request.
+    const direct = await createMatch(owner, 'practice', 'limited', 'easy', 0, randomUUID());
+    expect(direct.id).not.toBe(first.gameId);
+    await expect(createMatch(owner, 'friend', 'limited', 'easy', 120, null)).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    await expect(cardSoloAdapter.start(ctx, 'beginner', {})).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    expect(await cardSoloAdapter.owns(first.gameId, owner)).toBe(true);
+    expect(await cardSoloAdapter.owns(first.gameId, { ...owner, key: 'g:card-solo-stranger' })).toBe(false);
+
+    const graph = await loadGraph(first.graphVersion);
+    const path = shortestPath(graph.index, first.question.start, first.question.end,
+      new Set([first.question.start, first.question.end, ...first.current.hand]))!;
+    const input = { requestId: randomUUID(), revision: first.revision, phaseRevision: first.phaseRevision,
+      command: { type: 'play' as const, playerId: path[1], index: 0 } };
+    const patch = await cardSoloAdapter.command!(ctx, first.gameId, input) as any;
+    expect(patch).toMatchObject({ gameId: first.gameId, variant: 'card-link', baseRevision: first.revision,
+      revision: first.revision + 1, phaseRevision: first.phaseRevision });
+    expect(patch.current.board).toEqual([path[1]]);
+    expect(patch.scene).toBeUndefined();
+    expect(patch.solution).toBeUndefined();
+    expect(await cardSoloAdapter.command!(ctx, first.gameId, input)).toEqual(patch);
+    await expect(cardSoloAdapter.command!(ctx, first.gameId, { ...input, requestId: 'bad' })).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
+    expect((await cardSoloAdapter.state(ctx, first.gameId) as any).current.board).toEqual([path[1]]);
+
+    const ended = await cardSoloAdapter.giveup!(ctx, first.gameId, {}) as any;
+    expect(ended).toMatchObject({ gameId: first.gameId, status: 'finished' });
+    expect(ended.solution).not.toBeNull();
+    const next = await cardSoloAdapter.start(ctx, 'easy', { hand: 'limited' }) as any;
+    expect(next.gameId).not.toBe(first.gameId);
+    await cardSoloAdapter.exit(ctx, next.gameId);
+    expect((await cardSoloAdapter.state(ctx, next.gameId) as any).status).toBe('finished');
   });
   it('ranks one actual best attempt per account across retries and guest claims without a pre-deduplication limit', async () => {
     const day = '2040-01-01';
