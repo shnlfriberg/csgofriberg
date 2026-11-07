@@ -4,12 +4,10 @@ import { emitTo } from '../rooms/kernel/broadcast';
 import { publicPlayerKey } from './publicIdentity';
 import { roomView } from './roomView';
 import type { RoomChanges } from './roomEngine';
-import type { CompactRoundResult, RoomPatchSectionsV2, RoomState, RoomView, RoomViewV2, RoundResult } from './types';
+import { compactRoundResult } from '@friberg/location-core';
+import type { RoomPatchSectionsV2, RoomState, RoomView, RoomViewV2 } from './types';
 
-export function compactRoundResult(result: RoundResult): CompactRoundResult {
-  const { map: _map, guessedMap: _guessedMap, ...rest } = result;
-  return rest;
-}
+export { compactRoundResult };
 
 /**
  * Delivery for 图寻 rooms on the room kernel.

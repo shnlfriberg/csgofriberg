@@ -33,6 +33,23 @@ async function loadOwnedGame(id: string, identityKey: string): Promise<SingleGam
   return game;
 }
 
+/**
+ * Whether `id` is a game of this identity in the shared single-game store
+ * (active, or a 海龟汤 terminal receipt). Used to route `/api/game/:id` calls
+ * before trying the entertainment adapters.
+ */
+export async function ownsSingleGame(id: string, identityKey: string): Promise<boolean> {
+  const client = redis();
+  if (!client) return false;
+  const raw = await client.get(redisKey(`single:game:${id}`)) ?? await client.get(redisKey(`soup:completed:${id}`));
+  if (!raw) return false;
+  try {
+    return (JSON.parse(raw) as SingleGameState).identityKey === identityKey;
+  } catch {
+    return false;
+  }
+}
+
 export async function startSingleGame(owner: SingleGameOwner, mode: SingleGameMode, variant: SingleGameVariant) {
   const handler = getSingleGameHandler(variant);
   if (!isDifficultyAvailable(mode)) throw new HttpError(400, 'DIFFICULTY_UNAVAILABLE');

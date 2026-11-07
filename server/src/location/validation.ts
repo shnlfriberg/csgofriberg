@@ -2,10 +2,11 @@ import { z } from 'zod';
 export const difficultySchema = z.enum(['easy', 'normal', 'hard']);
 const name = z.string().trim().min(1).max(100);
 const id = z.string().regex(/^[a-zA-Z0-9_-]{1,64}$/);
+export const bannedMapIdsSchema = z.array(id).max(2).refine(ids => new Set(ids).size === ids.length).default([]);
 export const startGameSchema = z.object({
   mode: z.enum(['random', 'daily']),
   difficulty: difficultySchema,
-  bannedMapIds: z.array(id).max(2).refine(ids => new Set(ids).size === ids.length).default([]),
+  bannedMapIds: bannedMapIdsSchema,
 }).refine(input => input.mode === 'random' || input.bannedMapIds.length === 0);
 const unit = z.number().finite().min(0).max(1);
 const asset = z

@@ -5,6 +5,8 @@ import { useAuth } from '../store/auth';
 import { api, message } from './api';
 import type { AnswerInput, Difficulty, GameView, Guess } from './types';
 import type { DailyLeaderboardEntry } from './DailyLeaderboard';
+import type { LocationSoloView } from '@friberg/location-core';
+import { MapsUnknownError, receiveAnswer, receiveGame, soloRequest, type SoloResponse } from './soloProtocol';
 
 function stored(key: string): string | null {
   try {
@@ -21,6 +23,41 @@ function store(key: string, value: string | null) {
     /* The game can still run without browser storage. */
   }
 }
+type ViewResponse = { data: GameView | LocationSoloView };
+/** A full view in protocol v2; resent once with maps if they were unknown. */
+async function viewRequest(gameId: string | null, request: (config: ReturnType<typeof soloRequest>) => Promise<ViewResponse>): Promise<GameView> {
+  try {
+    return receiveGame((await request(soloRequest(gameId))).data);
+  } catch (error) {
+    if (!(error instanceof MapsUnknownError)) throw error;
+    return receiveGame((await request(soloRequest(gameId, true))).data);
+  }
+}
+/**
+ * 单人 runs on the shared single-player API like classic games: `POST
+ * /game/start` creates or resumes the identity's game for the difficulty (any
+ * device or tab) and the game is played through `/game/:id/...`. Daily keeps
+ * its own endpoints and full views.
+ */
+const endpoints = {
+  random: {
+    start: (difficulty: Difficulty, bannedMapIds: string[] = []) => viewRequest(null, (config) => api.post('/game/start', {
+      variant: 'location',
+      mode: difficulty,
+      ...(bannedMapIds.length ? { bannedMapIds } : {}),
+    }, config)),
+    read: (id: string) => viewRequest(id, (config) => api.get(`/game/${id}/state`, config)),
+    answer: (id: string, input: AnswerInput) => api.post<SoloResponse>(`/game/${id}/guess`, input, soloRequest(id)),
+    abandon: (id: string) => api.post(`/game/${id}/exit`),
+  },
+  daily: {
+    start: async (difficulty: Difficulty) => (await api.post<GameView>('/location/games', { mode: 'daily', difficulty })).data,
+    read: async (id: string) => (await api.get<GameView>(`/location/games/${id}`)).data,
+    answer: (id: string, input: AnswerInput) => api.post<SoloResponse>(`/location/games/${id}/answers`, input),
+    abandon: (id: string) => api.post(`/location/games/${id}/abandon`),
+  },
+};
+const gone = (error: unknown) => [404, 410].includes((error as { response?: { status?: number } })?.response?.status ?? 0);
 
 export function useLocationGame(mode: 'random' | 'daily') {
   const { t } = useTranslation();
@@ -32,6 +69,8 @@ export function useLocationGame(mode: 'random' | 'daily') {
   const [review, setReview] = useState<number | null>(null);
   const operation = useRef(false);
   const [busy, setBusy] = useState(false);
+  // The first read of the current game: the page shows loading, not the lobby.
+  const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState('');
   const [date, setDate] = useState('');
   const [pending, setPending] = useState<AnswerInput | null>(null);
@@ -41,7 +80,13 @@ export function useLocationGame(mode: 'random' | 'daily') {
     difficulties: Array<{ difficulty: Difficulty; status: string }>;
   } | null>(null);
   const [board, setBoard] = useState<DailyLeaderboardEntry[]>([]);
-  const key = `tuxun:v2:${user?.id || 'guest'}:${mode}:${difficulty}:${date}`;
+  const apiFor = endpoints[mode];
+  // 单人: the server resumes the game on start, so this tab only remembers the
+  // game it showed (to show it, finished or not, again after a refresh). Daily
+  // keeps one entry per difficulty and day.
+  const key = mode === 'random'
+    ? `tuxun:v3:${user?.id || 'guest'}:random`
+    : `tuxun:v2:${user?.id || 'guest'}:${mode}:${difficulty}:${date}`;
   const keyRef = useRef(key);
   keyRef.current = key;
   useEffect(() => {
@@ -88,31 +133,47 @@ export function useLocationGame(mode: 'random' | 'daily') {
     setReview(null);
     setError('');
     setBusy(false);
+    setRestoring(false);
     operation.current = false;
     if (!initialized) return;
+    const alive = () => current === generation.current;
+    // A saved answer is only retried on the exact version it was made for.
+    const restorePending = (view: GameView) => {
+      const saved = stored(`${key}:pending`);
+      if (!saved) return;
+      try {
+        const input = JSON.parse(saved) as AnswerInput;
+        if (view.status === 'playing' && input.version === view.version && input.round === view.round) {
+          setPending(input);
+          return;
+        }
+      } catch {
+        /* Malformed entries are dropped below. */
+      }
+      store(`${key}:pending`, null);
+    };
     const id = stored(key);
     if (id) {
       setBusy(true);
-      void api
-        .get<GameView>(`/location/games/${id}`)
-        .then((response) => {
-          if (current !== generation.current) return;
-          setGame(response.data);
-          if (mode === 'random') setBannedMapIds(response.data.bannedMapIds ?? []);
-          const saved = stored(`${key}:pending`);
-          if (saved)
-            try {
-              setPending(JSON.parse(saved));
-            } catch {
-              store(`${key}:pending`, null);
-            }
+      setRestoring(true);
+      void apiFor.read(id)
+        .then((view) => {
+          if (!alive()) return;
+          accept(view);
+          restorePending(view);
         })
         .catch((e) => {
-          if (current !== generation.current) return;
+          if (!alive()) return;
           store(key, null);
-          setError(message(e));
+          // An expired 单人 game simply opens the lobby: starting resumes or
+          // creates the current game on the server.
+          if (!(mode === 'random' && gone(e))) setError(message(e));
         })
-        .finally(() => current === generation.current && setBusy(false));
+        .finally(() => {
+          if (!alive()) return;
+          setBusy(false);
+          setRestoring(false);
+        });
     }
     return () => {
       generation.current++;
@@ -140,7 +201,11 @@ export function useLocationGame(mode: 'random' | 'daily') {
   const accept = (view: GameView) => {
     if (key !== keyRef.current) return;
     setGame(view);
-    if (mode === 'random') setBannedMapIds(view.bannedMapIds ?? []);
+    if (mode === 'random') {
+      // A game resumed from another device brings its settings back to the lobby.
+      setBannedMapIds(view.bannedMapIds ?? []);
+      setDifficulty(view.difficulty);
+    }
     store(key, view.id);
   };
   const run = async (action: () => Promise<void>) => {
@@ -162,12 +227,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
   };
   const start = () =>
     run(async () => {
-      const response = await api.post<GameView>('/location/games', {
-        mode,
-        difficulty,
-        ...(mode === 'random' && bannedMapIds.length ? { bannedMapIds } : {}),
-      });
-      accept(response.data);
+      accept(await apiFor.start(difficulty, bannedMapIds));
       setReview(null);
     });
   const send = async (input: AnswerInput) => {
@@ -177,26 +237,24 @@ export function useLocationGame(mode: 'random' | 'daily') {
     store(`${key}:pending`, JSON.stringify(input));
     await run(async () => {
       try {
-        const response = await api.post<GameView>(
-          `/location/games/${game.id}/answers`,
-          input
-        );
+        const response = await apiFor.answer(game.id, input);
         if (current !== generation.current) return;
-        accept(response.data);
+        // A delta that does not follow this version means the game moved on in
+        // another tab or device: read the authoritative game instead.
+        const next = receiveAnswer(game, response.data) ?? (await apiFor.read(game.id));
+        if (current !== generation.current) return;
+        accept(next);
         setPending(null);
         store(`${key}:pending`, null);
-        if (mode === 'random' && response.data.status !== 'finished')
-          setReview(response.data.results.length - 1);
+        if (mode === 'random' && next.status !== 'finished')
+          setReview(next.results.length - 1);
       } catch (e) {
         if (current !== generation.current) return;
         const status = (e as any)?.response?.status;
         if (status && status < 500) {
           setPending(null);
           store(`${key}:pending`, null);
-          if (status === 409)
-            accept(
-              (await api.get<GameView>(`/location/games/${game.id}`)).data
-            );
+          if (status === 409) accept(await apiFor.read(game.id));
         }
         throw e;
       }
@@ -222,7 +280,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
     )
       return;
     await run(async () => {
-      await api.post(`/location/games/${game.id}/abandon`);
+      await apiFor.abandon(game.id);
       setGame(null);
       setPending(null);
       setReview(null);
@@ -234,13 +292,9 @@ export function useLocationGame(mode: 'random' | 'daily') {
     if (mode !== 'random' || game?.status !== 'finished') return;
     return run(async () => {
       const current = generation.current;
-      const response = await api.post<GameView>('/location/games', {
-        mode: game.mode,
-        difficulty: game.difficulty,
-        ...(game.bannedMapIds?.length ? { bannedMapIds: game.bannedMapIds } : {}),
-      });
+      const view = await endpoints.random.start(game.difficulty, game.bannedMapIds ?? []);
       if (current !== generation.current) return;
-      accept(response.data);
+      accept(view);
       setReview(null);
       setPending(null);
       store(`${key}:pending`, null);
@@ -257,9 +311,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
       }))
     ) {
       await run(async () =>
-        accept(
-          (await api.post<GameView>(`/location/games/${game.id}/submit`)).data
-        )
+        accept((await api.post<GameView>(`/location/games/${game.id}/submit`)).data)
       );
     }
   };
@@ -267,9 +319,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
   // new one (an error in the lobby used to create a game by accident).
   const synchronize = () =>
     game
-      ? run(async () =>
-          accept((await api.get<GameView>(`/location/games/${game.id}`)).data)
-        )
+      ? run(async () => accept(await apiFor.read(game.id)))
       : Promise.resolve(setError(''));
   return {
     difficulty,
@@ -280,6 +330,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
     review,
     setReview,
     busy,
+    restoring,
     error,
     date,
     pending,

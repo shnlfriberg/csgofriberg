@@ -15,18 +15,19 @@ import { startLocationDailyScheduler } from '../../src/location/dailyScheduler';
 import { MIX } from '../../src/location/rules';
 import type { Difficulty, Identity } from '../../src/location/types';
 import { seedLocationFixtures } from './database';
+import gameRoutes from '../../src/routes/game';
 
 describe('location HTTP lifecycle', () => {
   let server: http.Server; let base = ''; let clean: () => Promise<void>;
   const identity: Identity = { key: `g:location-test-http-${randomUUID()}`, userId: null, name: 'Guest' };
   const cookie = jwt.sign({ key: identity.key.slice(2), typ: 'guest' }, config.jwtSecret, { expiresIn: '1h' });
-  async function req(path: string, body?: unknown, other = false) {
-    const response = await fetch(`${base}/api/location${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { Cookie: `csgofriberg_guest=${other ? jwt.sign({ key: 'location-test-other', typ: 'guest' }, config.jwtSecret) : cookie}`, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  async function req(path: string, body?: unknown, other = false, prefix = '/api/location') {
+    const response = await fetch(`${base}${prefix}${path}`, { method: body === undefined ? 'GET' : 'POST', headers: { Cookie: `csgofriberg_guest=${other ? jwt.sign({ key: 'location-test-other', typ: 'guest' }, config.jwtSecret) : cookie}`, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
     return { status: response.status, data: await response.json() };
   }
   beforeAll(async () => {
     await initDb(); await initRedis(); clean = await seedLocationFixtures();
-    const app = express(); app.use(express.json()); app.use('/api/location', locationRoutes); app.use(errorHandler);
+    const app = express(); app.use(express.json()); app.use('/api/location', locationRoutes); app.use('/api/game', gameRoutes); app.use(errorHandler);
     server = app.listen(0); await new Promise<void>(resolve => server.once('listening', resolve)); base = `http://127.0.0.1:${(server.address() as any).port}`;
   });
   afterAll(async () => { await new Promise<void>(resolve => server.close(() => resolve())); await clean(); });
@@ -41,17 +42,21 @@ describe('location HTTP lifecycle', () => {
     const daily = await ensureDaily(); const items = Object.values(daily.decks).flat(); expect(new Set(items.map(q => q.question.capturePointId)).size).toBe(15);
     for (const difficulty of ['easy', 'normal', 'hard'] as Difficulty[]) {
       expect(Object.fromEntries(['easy', 'medium', 'hard'].map(t => [t, daily.decks[difficulty].filter(q => q.question.tier === t).length]))).toEqual(MIX[difficulty]);
-      const created = await req('/games', { mode: 'random', difficulty }); expect(created.status).toBe(200);
-      const stored = (await loadGame(created.data.id, identity))!;
+      // 单人 runs on the shared single-player API.
+      const created = await req('/start', { variant: 'location', mode: difficulty }, false, '/api/game'); expect(created.status).toBe(200);
+      const stored = (await loadGame(created.data.gameId, identity))!;
       expect(stored.questions.every(q => !items.some(d => d.question.capturePointId === q.question.capturePointId))).toBe(true);
-      const resume = await req('/games', { mode: 'random', difficulty }); expect(resume.data.id).toBe(stored.id);
+      const resume = await req('/start', { variant: 'location', mode: difficulty }, false, '/api/game'); expect(resume.data.gameId).toBe(stored.id);
       const input = { mapId: 'test_location', floorId: 'upper', u: .4, v: .5, round: 1, version: 0, requestId: randomUUID() };
-      const answered = await req(`/games/${stored.id}/answers`, input); expect(answered.data.answered).toBe(1);
-      expect((await req(`/games/${stored.id}/answers`, input)).data).toEqual(answered.data);
-      expect((await req(`/games/${stored.id}/answers`, { ...input, u: .6 })).status).toBe(409);
-      expect((await req(`/games/${stored.id}/answers`, { ...input, requestId: randomUUID() })).data.code).toBe('LOCATION_STALE_STATE');
-      expect((await req(`/games/${stored.id}`, undefined, true)).status).toBe(404);
+      const answered = await req(`/${stored.id}/guess`, input, false, '/api/game');
+      expect(answered.data).toMatchObject({ base: 0, version: 1, answered: 1 });
+      expect((await req(`/${stored.id}/guess`, input, false, '/api/game')).data).toMatchObject({ gameId: stored.id, version: 1, answered: 1 });
+      expect((await req(`/${stored.id}/guess`, { ...input, u: .6 }, false, '/api/game')).status).toBe(409);
+      expect((await req(`/${stored.id}/guess`, { ...input, requestId: randomUUID() }, false, '/api/game')).data.code).toBe('LOCATION_STALE_STATE');
+      expect((await req(`/${stored.id}/state`, undefined, true, '/api/game')).status).toBe(404);
     }
+    // The 图寻 endpoint itself only starts daily games now.
+    expect((await req('/games', { mode: 'random', difficulty: 'normal' })).status).toBe(400);
   });
   it('resumes daily progress, abandons without consuming submission, and hides every result until final submit', async () => {
     let game = (await req('/games', { mode: 'daily', difficulty: 'normal' })).data;

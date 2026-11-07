@@ -28,6 +28,7 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
     review,
     setReview,
     busy,
+    restoring,
     error,
     pending,
     daily,
@@ -103,7 +104,10 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
           </button>
         </div>
       )}
-      {!game && (
+      {!game && restoring && (
+        <p className="muted location-restoring" role="status">{t('common.loading')}</p>
+      )}
+      {!game && !restoring && (
         <>
           <section className="location-lobby">
             <p className="muted single-lobby-subtitle">{t(`location.${mode}Description`)}</p>

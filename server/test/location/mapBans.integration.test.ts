@@ -13,6 +13,7 @@ import { loadGame } from '../../src/location/store';
 import { ensureDaily } from '../../src/location/games';
 import { MIX } from '../../src/location/rules';
 import { seedLocationFixtures } from './database';
+import gameRoutes from '../../src/routes/game';
 import { testMap, testPool } from './fixtures';
 
 describe('solo map bans', () => {
@@ -38,7 +39,8 @@ describe('solo map bans', () => {
         await db('location_questions').insert({ id, image_hash: q.imageHash, payload: JSON.stringify(q) });
       }
     }
-    const app = express(); app.use(express.json()); app.use(locationRoutes); app.use(errorHandler);
+    const app = express(); app.use(express.json()); app.use('/game', gameRoutes);
+    app.use(locationRoutes); app.use(errorHandler);
     server = app.listen(0); await new Promise<void>(resolve => server.once('listening', resolve));
     base = `http://127.0.0.1:${(server.address() as any).port}`;
   });
@@ -49,40 +51,44 @@ describe('solo map bans', () => {
   });
   it('rejects more than two, duplicate, unknown and daily bans', async () => {
     for (const bannedMapIds of [[...bans, 'test_ban_allowed'], [bans[0], bans[0]], ['missing_map']])
-      expect((await req('/games', { mode: 'random', difficulty: 'normal', bannedMapIds })).status).toBe(400);
+      expect((await req('/game/start', { variant: 'location', mode: 'normal', bannedMapIds })).status).toBe(400);
     expect((await req('/games', { mode: 'daily', difficulty: 'normal', bannedMapIds: bans })).status).toBe(400);
     const daily = await req('/games', { mode: 'daily', difficulty: 'normal' });
     expect(daily.status).toBe(200); expect(daily.data.bannedMapIds).toBeUndefined();
     expect((await loadGame(daily.data.id, owner))!.questions.every(q => q.map.id === 'test_location')).toBe(true);
   });
-  it('filters all five rounds, resumes by normalized bans and preserves bans through replay and restart', async () => {
-    let game = (await req('/games', { mode: 'random', difficulty: 'hard', bannedMapIds: bans })).data;
-    const stored = (await loadGame(game.id, owner))!;
+  it('filters all five rounds, resumes per difficulty like classic games and preserves bans through replay and restart', async () => {
+    let game = (await req('/game/start', { variant: 'location', mode: 'hard', bannedMapIds: bans })).data;
+    const id = game.gameId as string;
+    const stored = (await loadGame(id, owner))!;
     expect(stored.questions).toHaveLength(5);
     expect(stored.questions.every(q => q.map.id === 'test_ban_allowed')).toBe(true);
     expect(Object.fromEntries(['easy', 'medium', 'hard'].map(t => [t, stored.questions.filter(q => q.question.tier === t).length]))).toEqual(MIX.hard);
     expect(game.maps.map((m: any) => m.id)).toEqual(expect.arrayContaining(bans));
-    expect((await req('/games', { mode: 'random', difficulty: 'hard', bannedMapIds: [...bans].reverse() })).data.id).toBe(game.id);
-    const noBans = (await req('/games', { mode: 'random', difficulty: 'hard' })).data;
-    expect(noBans.id).not.toBe(game.id);
-    const invalid = await req(`/games/${game.id}/answers`, { mapId: bans[0], floorId: 'upper', u: .5, v: .5, round: 1, version: 0, requestId: randomUUID() });
+    expect(game.bannedMapIds).toEqual([...bans].sort());
+    // One active game per identity and difficulty: other ban lists resume it.
+    expect((await req('/game/start', { variant: 'location', mode: 'hard', bannedMapIds: [...bans].reverse() })).data.gameId).toBe(id);
+    const noBans = (await req('/game/start', { variant: 'location', mode: 'hard' })).data;
+    expect(noBans.gameId).toBe(id); expect(noBans.bannedMapIds).toEqual([...bans].sort());
+    const invalid = await req(`/game/${id}/guess`, { mapId: bans[0], floorId: 'upper', u: .5, v: .5, round: 1, version: 0, requestId: randomUUID() });
     expect(invalid.data.code).toBe('LOCATION_MAP_BANNED');
-    expect((await req(`/games/${game.id}`)).data.answered).toBe(0);
+    expect((await req(`/game/${id}/state`)).data.answered).toBe(0);
     for (let i = 0; i < 5; i++) {
       const q = stored.questions[i].question;
-      const response = await req(`/games/${game.id}/answers`, { mapId: q.mapId, floorId: q.floorId, u: q.u, v: q.v, round: i + 1, version: i, requestId: randomUUID() });
+      const response = await req(`/game/${id}/guess`, { mapId: q.mapId, floorId: q.floorId, u: q.u, v: q.v, round: i + 1, version: i, requestId: randomUUID() });
       expect(response.status).toBe(200); game = response.data;
     }
     expect(game.status).toBe('finished');
-    expect((await req(`/games/${game.id}/replay`)).data.game.bannedMapIds).toEqual([...bans].sort());
-    const next = (await req('/games', { mode: 'random', difficulty: 'hard', bannedMapIds: bans })).data;
-    expect(next.id).not.toBe(game.id); expect(next.bannedMapIds).toEqual([...bans].sort());
-    await req(`/games/${next.id}/abandon`, {});
-    expect((await req('/games', { mode: 'random', difficulty: 'hard' })).data.id).toBe(noBans.id);
+    expect((await req(`/games/${id}/replay`)).data.game.bannedMapIds).toEqual([...bans].sort());
+    const next = (await req('/game/start', { variant: 'location', mode: 'hard', bannedMapIds: bans })).data;
+    expect(next.gameId).not.toBe(id); expect(next.bannedMapIds).toEqual([...bans].sort());
+    await req(`/game/${next.gameId}/exit`, {});
+    const fresh = (await req('/game/start', { variant: 'location', mode: 'hard' })).data;
+    expect(fresh.gameId).not.toBe(next.gameId); expect(fresh.bannedMapIds).toEqual([]);
   });
   it('reports insufficient remaining questions without falling back to banned maps', async () => {
     await db('location_questions').where('id', 'like', 'test_location_ban_test_ban_allowed_%').delete();
-    const response = await req('/games', { mode: 'random', difficulty: 'easy', bannedMapIds: bans });
+    const response = await req('/game/start', { variant: 'location', mode: 'easy', bannedMapIds: bans });
     expect(response.status).toBe(409); expect(response.data.code).toBe('LOCATION_BAN_POOL_INSUFFICIENT');
   });
 });

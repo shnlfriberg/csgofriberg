@@ -14,6 +14,7 @@ import {
   loadGame,
   readState,
   saveGame,
+  soloGameKey,
 } from './store';
 import type {
   DailyAssignment,
@@ -159,6 +160,39 @@ async function completedGame(id: string, owner: Identity, input?: AnswerInput): 
     throw new HttpError(409, 'LOCATION_REQUEST_CONFLICT');
   return record.game;
 }
+async function resumable(id: string | null, owner: Identity): Promise<GameState | null> {
+  const game = id ? await loadGame(id, owner) : null;
+  if (!game || game.mode !== 'random' || game.status !== 'playing' || game.expiresAt <= Date.now()) return null;
+  return (await completedGame(game.id, owner)) ? null : game;
+}
+/**
+ * Start or resume a 单人 (random) game the way classic single-player games do:
+ * one active game per identity and difficulty, so a repeated start, another
+ * tab or another device continues it. `bannedMapIds` only applies to a newly
+ * created game. Reading never extends the idle expiry.
+ */
+export async function startSoloGame(
+  owner: Identity,
+  difficulty: Difficulty,
+  bannedMapIds: string[] = []
+): Promise<GameView> {
+  const validated = startGameSchema.parse({ mode: 'random', difficulty, bannedMapIds });
+  return withKeyLock(`location:solo-start:${owner.key}:${difficulty}`, async () => {
+    const existing = await resumable(await readState<string>(soloGameKey(owner.key, difficulty)), owner) ??
+      // A game started before the pointer existed (no bans) is resumed as well.
+      await resumable(await readState<string>(activeGameKey({ owner, mode: 'random', difficulty })), owner);
+    if (existing) return gameView(existing);
+    return gameView(await createGame(owner, 'random', difficulty, [...validated.bannedMapIds].sort()));
+  });
+}
+/** Whether `id` is a 单人 game of this identity (live or already recorded). */
+export async function ownsSoloGame(id: string, owner: Identity): Promise<boolean> {
+  // 单人 games live in Redis until they expire; recorded ones also in SQL.
+  const live = await readState<GameState>(`game:${id}`);
+  if (live) return live.owner.key === owner.key && live.mode === 'random';
+  const row = await db('location_results').where({ game_id: id, identity_key: owner.key }).first('mode');
+  return row?.mode === 'random';
+}
 export async function readGame(id: string, owner: Identity): Promise<GameView> {
   return await completedGame(id, owner) ?? gameView(await requiredGame(id, owner));
 }
@@ -200,33 +234,43 @@ export async function startGame(
         )
           return gameView(previous);
       }
-      const assignment = mode === 'daily' ? await ensureDaily() : null;
-      const selection = assignment
-        ? { questions: assignment.decks[difficulty], maps: assignment.maps }
-        : await randomSelection(difficulty, bannedMapIds);
-      const game: GameState = {
-        id: randomUUID(),
-        owner,
-        mode,
-        ...(mode === 'random' ? { bannedMapIds } : {}),
-        difficulty,
-        date: mode === 'daily' ? window.date : null,
-        status: 'playing',
-        questions: selection.questions,
-        maps: selection.maps,
-        guesses: [],
-        requests: {},
-        version: 0,
-        scoringVersion: 1,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-        expiresAt:
-          mode === 'daily' ? window.nextRefreshAt : Date.now() + 1800_000,
-      };
-      await saveGame(game);
-      return gameView(game);
+      return gameView(await createGame(owner, mode, difficulty, bannedMapIds, window));
     }
   );
+}
+/** Create and save a new game (callers hold the matching start lock). */
+async function createGame(
+  owner: Identity,
+  mode: 'random' | 'daily',
+  difficulty: Difficulty,
+  bannedMapIds: string[],
+  window = dayWindow()
+): Promise<GameState> {
+  const assignment = mode === 'daily' ? await ensureDaily() : null;
+  const selection = assignment
+    ? { questions: assignment.decks[difficulty], maps: assignment.maps }
+    : await randomSelection(difficulty, bannedMapIds);
+  const game: GameState = {
+    id: randomUUID(),
+    owner,
+    mode,
+    ...(mode === 'random' ? { bannedMapIds } : {}),
+    difficulty,
+    date: mode === 'daily' ? window.date : null,
+    status: 'playing',
+    questions: selection.questions,
+    maps: selection.maps,
+    guesses: [],
+    requests: {},
+    version: 0,
+    scoringVersion: 1,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+    expiresAt:
+      mode === 'daily' ? window.nextRefreshAt : Date.now() + 1800_000,
+  };
+  await saveGame(game);
+  return game;
 }
 export async function recordResult(
   gameId: string,
@@ -278,16 +322,29 @@ export async function answerGame(
   owner: Identity,
   input: AnswerInput
 ): Promise<GameView> {
+  return (await answerGameWithBase(id, owner, input)).view;
+}
+/**
+ * Answer and report which version the answer was applied on. `base` is null for
+ * an idempotent replay or an already recorded game: those return the current
+ * view only, never a delta.
+ */
+export async function answerGameWithBase(
+  id: string,
+  owner: Identity,
+  input: AnswerInput
+): Promise<{ view: GameView; base: number | null }> {
   return withKeyLock(`location:game:${id}`, async () => {
     const completed = await completedGame(id, owner, input);
-    if (completed) return completed;
+    if (completed) return { view: completed, base: null };
     const game = await requiredGame(id, owner);
     const fingerprint = JSON.stringify(input);
     if (game.requests[input.requestId]) {
       if (game.requests[input.requestId] !== fingerprint)
         throw new HttpError(409, 'LOCATION_REQUEST_CONFLICT');
-      return gameView(game);
+      return { view: gameView(game), base: null };
     }
+    const base = game.version;
     if (game.version !== input.version)
       throw new HttpError(409, 'LOCATION_STALE_STATE');
     if (game.status !== 'playing' || input.round !== game.guesses.length + 1)
@@ -319,7 +376,7 @@ export async function answerGame(
         { answerRequests: game.requests }
       );
     await saveGame(game);
-    return gameView(game);
+    return { view: gameView(game), base };
   });
 }
 export async function abandonGame(id: string, owner: Identity): Promise<void> {

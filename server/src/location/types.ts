@@ -1,5 +1,5 @@
 export type * from '@friberg/location-core';
-import type { MapDefinition, RoomState as CoreRoomState, RoomView, RoundResult } from '@friberg/location-core';
+import type { CompactRoundResult, MapDefinition, RoomState as CoreRoomState, RoomView } from '@friberg/location-core';
 
 /** Server room state: the shared core shape plus room-kernel bookkeeping. */
 export interface RoomState extends CoreRoomState {
@@ -14,8 +14,6 @@ export interface RoomState extends CoreRoomState {
  * RoomView it omits the map catalogue after the first view and replaces the two
  * MapDefinitions embedded in every round result by ids.
  */
-export type CompactRoundResult = Omit<RoundResult, 'map' | 'guessedMap'>;
-
 export interface CompactRoomResult {
   key: string;
   name: string;

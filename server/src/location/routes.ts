@@ -18,10 +18,13 @@ import {
 } from './games';
 import { dayWindow, DIFFICULTIES } from './rules';
 import { maps } from './store';
-import { answerSchema, difficultySchema, startGameSchema } from './validation';
+import { answerSchema, difficultySchema } from './validation';
 import { requestOwner } from './identity';
 export { requestOwner } from './identity';
 import { config } from '../config';
+
+/** 图寻 daily. 单人 (random) runs on /api/game. */
+const dailyStartSchema = z.object({ mode: z.literal('daily'), difficulty: difficultySchema }).strict();
 import { locationStatistics, locationStatsQuery, locationReplays, locationReplaysQuery } from './statistics';
 
 const router = Router();
@@ -47,11 +50,10 @@ router.post(
     windowSeconds: 60,
     key: requestIdentity,
   }),
-  validateBody(startGameSchema),
+  // 单人 (random) starts through the shared single-player API (/api/game).
+  validateBody(dailyStartSchema),
   asyncHandler(async (req, res) =>
-    res.json(
-      await startGame(requestOwner(req), req.body.mode, req.body.difficulty, req.body.bannedMapIds)
-    )
+    res.json(await startGame(requestOwner(req), 'daily', req.body.difficulty))
   )
 );
 router.get(

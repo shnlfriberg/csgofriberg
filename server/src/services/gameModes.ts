@@ -120,3 +120,28 @@ export function getSingleGameVariantDefinition(value: unknown): SingleGameVarian
 export function listSingleGameVariants() {
   return singleGameVariantKeys.map((key) => SINGLE_GAME_VARIANT_DEFINITIONS[key]);
 }
+
+/**
+ * Every single-player game served by `/api/game`. The player-target variants
+ * above use the shared single-game store; the entertainment variants keep their
+ * own authoritative storage behind an adapter (see services/soloGames.ts) but
+ * share the same start/resume contract and routes.
+ */
+export const SOLO_GAME_VARIANT_DEFINITIONS = {
+  ...SINGLE_GAME_VARIANT_DEFINITIONS,
+  location: {
+    key: 'location',
+    engine: 'location-guess',
+    target: 'location',
+    difficultyScoped: true,
+  },
+} as const;
+
+export type SoloGameVariant = keyof typeof SOLO_GAME_VARIANT_DEFINITIONS;
+
+const soloGameVariantKeys = Object.keys(SOLO_GAME_VARIANT_DEFINITIONS) as [SoloGameVariant, ...SoloGameVariant[]];
+export const soloGameVariantSchema = z.enum(soloGameVariantKeys);
+
+export function listSoloGameVariants() {
+  return soloGameVariantKeys.map((key) => SOLO_GAME_VARIANT_DEFINITIONS[key]);
+}

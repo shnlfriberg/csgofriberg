@@ -1,4 +1,7 @@
+import { hydrateRoundResult, type CompactRoundResult } from '@friberg/location-core';
 import type { Guess, MapDefinition, RoomView, RoundResult } from './types';
+
+export { hydrateRoundResult, type CompactRoundResult };
 
 /**
  * 图寻 multiplayer protocol v2 (room kernel) — client side.
@@ -9,8 +12,6 @@ import type { Guess, MapDefinition, RoomView, RoundResult } from './types';
  * from the room's catalogue snapshot, so rehydration is lossless.
  */
 export const LOCATION_ROOM_PROTOCOL = 2;
-
-export type CompactRoundResult = Omit<RoundResult, 'map' | 'guessedMap'>;
 
 export interface RoomViewV2 extends Omit<RoomView, 'maps' | 'results'> {
   protocol: 2;
@@ -52,13 +53,6 @@ export interface RoomPrivatePatchV2 {
 
 export function isRoomViewV2(value: unknown): value is RoomViewV2 {
   return Boolean(value && typeof value === 'object' && (value as { protocol?: unknown }).protocol === 2);
-}
-
-export function hydrateRoundResult(result: CompactRoundResult, maps: readonly MapDefinition[]): RoundResult {
-  const map = maps.find((item) => item.id === result.answer.mapId);
-  if (!map) throw new Error(`LOCATION_ROOM_MAP_MISSING:${result.answer.mapId}`);
-  const guessedMap = result.guess ? maps.find((item) => item.id === result.guess!.mapId) ?? null : null;
-  return { ...result, map, guessedMap };
 }
 
 /** Rebuild the full RoomView from a v2 view and the maps the client holds. */

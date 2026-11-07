@@ -95,6 +95,16 @@ export function activeGameKey(game: Pick<GameState, 'owner' | 'mode' | 'difficul
   const bans = game.mode === 'random' ? [...(game.bannedMapIds ?? [])].sort() : [];
   return `active:${game.owner.key}:${game.mode}:${game.difficulty}${bans.length ? `:bans:${bans.join(',')}` : ''}`;
 }
+/**
+ * Active 单人 (random) game of an identity and difficulty, the same key shape as
+ * classic single-player games (identity + mode + variant). `/api/game/start`
+ * resumes it from any device or tab; map bans are an option of the game, not
+ * part of the key. Only a pointer: readers still check ownership, status,
+ * expiry and the authoritative SQL result.
+ */
+export function soloGameKey(ownerKey: string, difficulty: string): string {
+  return `solo:${ownerKey}:random:${difficulty}`;
+}
 export async function saveGame(game: GameState): Promise<void> {
   const client = stateClient();
   if (game.mode === 'daily')
@@ -122,6 +132,9 @@ export async function saveGame(game: GameState): Promise<void> {
       game.id,
       Math.max(60, Math.ceil((game.expiresAt - Date.now()) / 1000))
     );
+  // The most recently written playing game of a difficulty is the one to resume.
+  if (game.mode === 'random' && game.status === 'playing')
+    await writeState(soloGameKey(game.owner.key, game.difficulty), game.id, Math.max(60, Math.ceil((game.expiresAt - Date.now()) / 1000)));
 }
 export async function loadGame(
   id: string,
