@@ -4,7 +4,8 @@ import { db } from '../db/knex';
 import { HttpError } from '../middleware/common';
 import { withKeyLock } from './lock';
 import { startGameSchema } from './validation';
-import { encodeReplay, decodeReplay, decodeProgress } from './replayStorage';
+import { encodeReplay, decodeReplay, decodeProgress, type ReplayEncodeMemo } from './replayStorage';
+import type { Knex } from 'knex';
 import { assertGuess, dayWindow, sample, sampleDaily, score } from './rules';
 import {
   catalogSnapshot,
@@ -236,7 +237,8 @@ export async function recordResult(
   results: RoundResult[],
   game?: GameView,
   extra: Record<string, unknown> = {},
-  connection = db
+  connection: Knex = db,
+  memo?: ReplayEncodeMemo
 ): Promise<void> {
   const totalScore = results.reduce((sum, round) => sum + round.score, 0);
   await connection('location_results')
@@ -266,7 +268,7 @@ export async function recordResult(
         scoringVersion: 1,
         game,
         ...extra,
-      } as ReplayRecord, connection),
+      } as ReplayRecord, connection, memo),
     })
     .onConflict(['game_id', 'identity_key'])
     .ignore();

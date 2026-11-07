@@ -211,12 +211,26 @@ html[data-theme='blast'] .location-page { --location-accent-text: var(--primary)
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   padding: 10px 14px;
-  border: 1px solid #e67575;
-  background: #e6757512;
-  border-radius: 9px;
+  border: 1px solid var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-radius: var(--radius);
 }
+.location-alert[role='status'] {
+  border-color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 8%, transparent);
+}
+.location-room-cancelled {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  padding: 28px 20px;
+  text-align: center;
+}
+.location-room-cancelled h2 { margin: 0; }
+.location-start-blocked { margin: 0; font-size: 13px; }
 
 /* 禁图：折叠面板，展开后地图按钮自动排列。 */
 .location-map-options {

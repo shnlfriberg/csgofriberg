@@ -1,5 +1,4 @@
 import { observeMetric } from './metrics';
-import { flushDueResults } from './resultOutbox';
 import { flushAssetRemovals } from './assetTasks';
 import { archiveExpiredProgress } from './progressArchive';
 
@@ -17,9 +16,13 @@ export function startWorker(name: string, interval: number, action: () => Promis
   return async () => { clearInterval(timer); await running; };
 }
 
+/**
+ * Per-instance housekeeping that is not tied to room deadlines. Result
+ * settlement is no longer polled here every 500 ms: finished rooms wake the
+ * outbox through the room kernel, with a leased 30 s sweep for retries.
+ */
 export function startMaintenanceWorkers(): () => Promise<void> {
   const stops = [
-    startWorker('outbox', 500, flushDueResults),
     startWorker('asset-removals', 10000, flushAssetRemovals),
     startWorker('progress-archive', 60000, archiveExpiredProgress),
   ];

@@ -20,10 +20,10 @@ export async function roomAction<T>(
       .emit(
         event,
         payload,
-        (error: unknown, result: { ok: boolean; code?: string; data: T }) => {
+        (error: unknown, result: { ok: boolean; code?: string; data: T; occupied?: unknown }) => {
           if (error) reject(error);
           else if (!result?.ok)
-            reject({ code: result?.code || 'INTERNAL_ERROR' });
+            reject({ code: result?.code || 'INTERNAL_ERROR', ...(result?.occupied ? { occupied: result.occupied } : {}) });
           else resolve(result.data);
         }
       )

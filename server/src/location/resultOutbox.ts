@@ -7,6 +7,7 @@ import { recordResult } from './games';
 import { roomView } from './roomView';
 import { publicPlayerKey } from './publicIdentity';
 import { countMetric } from './metrics';
+import { createReplayEncodeMemo } from './replayStorage';
 import type { RoomState } from './types';
 
 export async function queueResult(room: RoomState): Promise<void> {
@@ -40,28 +41,34 @@ export async function flushResult(id: string): Promise<void> {
         return;
       }
       if (!durable) await db('location_result_outbox').insert({ game_id: id, payload: JSON.stringify(room), attempts: 0, due_at: Date.now() }).onConflict('game_id').ignore();
-      const common = roomView(room, room.players[0].identity.key);
-      for (const p of room.players) {
-        const view = common;
-        const key = publicPlayerKey(room.gameId, p.identity.key);
-        await recordResult(
-          room.gameId,
-          p.identity,
-          'multiplayer',
-          room.difficulty,
-          null,
-          view.results.find((result) => result.key === key)!.rounds,
-          undefined,
-          {
-            rank: view.players.find((item) => item.key === key)!.rank,
-            retired: p.retired,
-            myKey: key,
-            roomId: room.id,
-            participants: view.players,
-            roomResults: view.results,
-          }
-        );
-      }
+      const view = roomView(room, room.players[0].identity.key);
+      // One transaction and one encode memo for every seat: shared room results,
+      // participants and maps are packed and hashed once (stored bytes unchanged).
+      const memo = createReplayEncodeMemo();
+      await db.transaction(async (trx) => {
+        for (const p of room.players) {
+          const key = publicPlayerKey(room.gameId, p.identity.key);
+          await recordResult(
+            room.gameId,
+            p.identity,
+            'multiplayer',
+            room.difficulty,
+            null,
+            view.results.find((result) => result.key === key)!.rounds,
+            undefined,
+            {
+              rank: view.players.find((item) => item.key === key)!.rank,
+              retired: p.retired,
+              myKey: key,
+              roomId: room.id,
+              participants: view.players,
+              roomResults: view.results,
+            },
+            trx,
+            memo
+          );
+        }
+      });
       const client = redis();
       if (client) await client.zRem(redisKey('location:outbox'), id);
       await deleteState(`outbox:${id}`);

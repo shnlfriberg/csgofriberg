@@ -320,6 +320,14 @@ const words = {
   newQuestion: ['新增题目', 'New question', '新規問題'], importJson: ['批量导入 JSON 清单', 'Import JSON manifest', 'JSONを一括インポート'], mapConfig: ['地图、楼层与校准配置', 'Map, floors and calibration', '地図・階層・校正設定'], questionConfig: ['题目采集信息', 'Capture metadata', '撮影情報'], generateDaily: ['检查并补生成今日题单', 'Check and fill today’s decks', '今日の問題を確認・補完'],
   calibration: ['校准', 'Calibration', '校正'], valid: ['通过', 'Passed', '合格'], invalid: ['待完成', 'Incomplete', '未完了'], missingAssets: ['缺失图片', 'Missing images', '画像不足'], importResult: ['成功 {{ok}}，失败 {{failed}}', '{{ok}} imported, {{failed}} failed', '{{ok}}件成功、{{failed}}件失敗'],
   assetUploaded: ['图片已上传，请补齐采集信息和答案。', 'Image uploaded. Complete capture details and answer.', '画像をアップロードしました。撮影情報と正解を入力してください。'], saved: ['已保存', 'Saved', '保存しました'], officialGuest: ['访客可玩；登录后归并成绩并参与公开每日榜。', 'Guests can play. Sign in to claim results and enter daily rankings.', 'ゲストでもプレイ可能。ログインで結果を統合し、公開ランキングに参加できます。'],
+  secondsShort: ['{{count}} 秒', '{{count}}s', '{{count}}秒'],
+  copyRoomCode: ['复制房间码', 'Copy room code', 'ルームコードをコピー'], roomCodeCopied: ['房间码已复制', 'Room code copied', 'ルームコードをコピーしました'],
+  startNeedsPlayers: ['至少需要 2 名玩家才能开始。', 'At least 2 players are needed to start.', '開始には2人以上必要です。'],
+  startNeedsReady: ['等待所有在线玩家准备。', 'Waiting for every connected player to be ready.', '全員の準備完了を待っています。'],
+  cancelledHelp: ['房间已解散或所有玩家已离开，可以重新创建或加入房间。', 'The room closed or every player left. Create or join another room.', 'ルームが終了したか全員が退出しました。新しいルームを作成または参加してください。'],
+  backToLobby: ['返回多人大厅', 'Back to multiplayer lobby', 'マルチロビーに戻る'],
+  matchTimedOut: ['暂未匹配到同难度玩家，已取消匹配。', 'No opponent found yet. Search cancelled.', '相手が見つからないため検索を終了しました。'],
+  pendingAnswer: ['答案尚未确认送达，可重试提交同一答案。', 'Your answer was not confirmed. Retry sending the same answer.', '回答の送信を確認できません。同じ回答を再送できます。'],
 } as const;
 const errors = {
   LOCATION_SUBMISSION_NOT_FOUND: ['投稿已不存在，可能已被审核，请刷新列表。', 'Submission no longer exists. It may have been reviewed; refresh the list.', '投稿は存在しません。審査済みの場合があります。更新してください。'],
