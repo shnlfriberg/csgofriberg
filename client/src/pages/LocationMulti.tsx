@@ -425,6 +425,20 @@ export default function LocationMulti() {
         : ''
     : '';
 
+  const finishedActions = room?.status === 'finished' ? (
+    <div className="location-rematch-actions">
+      {!me?.retired && <p className="muted">{t('location.rematchHelp')}</p>}
+      <RematchVote me={room.me} votes={room.rematch} busy={busy}
+        labels={{ start: t('location.restartMatch'), cancel: t('location.cancelRestart') }}
+        eligible={room.players.filter(p => !p.retired && p.connected).map(p => p.key)}
+        onVote={wanted => void action('location:room:rematch', { gameId: room.gameId, wanted })} />
+      <button className="btn btn-ghost" disabled={busy} onClick={() => void leave()}>
+        <ArrowLeft size={16} aria-hidden="true" />
+        {t('location.backToLobby')}
+      </button>
+    </div>
+  ) : null;
+
   const statusBar = room ? (
     <>
       <Users size={14} aria-hidden="true" />
@@ -636,12 +650,13 @@ export default function LocationMulti() {
                 <p id="location-start-blocked" className="muted location-start-blocked">{startBlocked}</p>
               )}
             </div>
-          ) : room.status === 'finished' && viewed ? (
-            <Results
+          ) : room.status === 'finished' ? (
+            viewed ? <Results
               results={viewed.rounds}
               score={room.players.find((p) => p.key === viewed.key)?.score || 0}
               playerName={viewed.key === room.me ? undefined : viewed.name}
-            />
+              actions={finishedActions}
+            /> : finishedActions
           ) : room.status === 'cancelled' ? (
             <section className="card location-room-cancelled" role="status">
               <h2>{t('location.cancelled')}</h2>
@@ -680,17 +695,6 @@ export default function LocationMulti() {
                 />
               </>
             )
-          )}
-          {room.status === 'finished' && (
-            <div className="location-card-action">
-              <RematchVote me={room.me} votes={room.rematch} busy={busy}
-                eligible={room.players.filter(p => !p.retired).map(p => p.key)}
-                onVote={wanted => void action('location:room:rematch', { gameId: room.gameId, wanted })} />
-              <button className="btn" disabled={busy} onClick={() => void leave()}>
-                <ArrowLeft size={16} aria-hidden="true" />
-                {t('location.backToLobby')}
-              </button>
-            </div>
           )}
         </>
       )}
