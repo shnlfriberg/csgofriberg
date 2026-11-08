@@ -1,5 +1,13 @@
 /* Poker proportions, a top-left corner mark and a clear handle at the center. */
 [data-cl-draggable] { touch-action: none; cursor: grab; }
+/* The browser resolves touch-action at pointerdown; arm dragging on the preceding tap. */
+.cl-card-hand:not([data-cl-touch-selected]),
+.cl-card-search:not([data-cl-touch-selected]) { touch-action: auto; }
+.cl-card[data-cl-touch-selected] { outline: 3px solid #70d5be; outline-offset: -4px; }
+.cl-touch-hint { display: none; }
+@media (any-pointer: coarse) {
+  .cl-touch-hint { display: block; margin: 8px 0 0; font-size: 13px; color: var(--muted, inherit); }
+}
 .cl-card.cl-dragging { opacity: .55; cursor: grabbing; }
 .cl-drop-target > .cl-slot, .cl-card.cl-drop-target { outline: 2px solid #70d5be; outline-offset: 2px; }
 .cl-card {
