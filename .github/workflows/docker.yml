@@ -7,18 +7,26 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing vX.Y.Z tag to rebuild (empty = selected branch)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
   packages: read
 
 concurrency:
-  group: docker-${{ github.ref }}
+  group: docker-${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
   cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
     services:
       redis:
         image: redis:7.4-alpine
@@ -31,6 +39,10 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
+      - name: Resolve checked out revision
+        run: echo "OCI_REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - uses: pnpm/action-setup@v5
         with:
           version: 11.13.1
@@ -54,15 +66,25 @@ jobs:
 
   docker:
     needs: test
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
     permissions:
       contents: read
       packages: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.release_tag && format('refs/tags/{0}', inputs.release_tag) || github.ref }}
+      - name: Resolve checked out revision
+        run: |
+          echo "OCI_REVISION=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "BUILD_SHORT_SHA=$(git rev-parse --short=12 HEAD)" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v5
         with:
           node-version: 26
+          # This job uses host Node only; pnpm runs inside the Docker builder.
+          package-manager-cache: false
       - id: build_info
         name: Validate release and generate build identity
         run: node scripts/build-info.cjs ci
@@ -76,8 +98,6 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v6
-        env:
-          DOCKER_METADATA_SHORT_SHA_LENGTH: 12
         with:
           images: ghcr.io/${{ github.repository }}
           flavor: latest=false
@@ -87,10 +107,10 @@ jobs:
             org.opencontainers.image.created=${{ steps.build_info.outputs.created }}
           tags: |
             type=raw,value=latest,enable=${{ steps.build_info.outputs.stable }}
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix=sha-
+            type=ref,event=branch,enable=${{ inputs.release_tag == '' }}
+            type=semver,pattern={{version}},value=${{ inputs.release_tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.release_tag || github.ref_name }}
+            type=raw,value=sha-${{ env.BUILD_SHORT_SHA }}
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -98,11 +118,11 @@ jobs:
           platforms: linux/amd64
           push: false
           load: true
-          tags: friberg-candidate:${{ github.sha }}
+          tags: friberg-candidate:${{ env.OCI_REVISION }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OCI_SOURCE=https://github.com/${{ github.repository }}
-            OCI_REVISION=${{ github.sha }}
+            OCI_REVISION=${{ env.OCI_REVISION }}
             OCI_VERSION=${{ steps.build_info.outputs.version }}
             OCI_CREATED=${{ steps.build_info.outputs.created }}
             RELEASE_TAG=${{ steps.build_info.outputs.release_tag }}
@@ -124,7 +144,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OCI_SOURCE=https://github.com/${{ github.repository }}
-            OCI_REVISION=${{ github.sha }}
+            OCI_REVISION=${{ env.OCI_REVISION }}
             OCI_VERSION=${{ steps.build_info.outputs.version }}
             OCI_CREATED=${{ steps.build_info.outputs.created }}
             RELEASE_TAG=${{ steps.build_info.outputs.release_tag }}

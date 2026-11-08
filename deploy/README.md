@@ -393,3 +393,8 @@ OCI labels 与前后端产物共享这些输入，容器启动时不需要 Git �
 `OCI_SOURCE` 默认为本仓库地址；资源更新广播仍独立使用 `RESOURCE_VERSION`。
 
 工作流使用 BuildKit 缓存，生成 provenance 并附带 SBOM。
+
+重建已有正式版本时，在 Actions 的 `CI and Docker → Run workflow` 中选择 `main`，
+将 `release_tag` 填为已有标签（如 `v0.3.9`）。工作流使用 main 上的最新编排，但测试与
+镜像构建均检出该标签，版本、完整提交号与 SHA 镜像标签均来自实际检出内容；不会更新
+Git 标签或 `main` 镜像标签。留空则构建所选分支。相同源码重建后的镜像 digest 可能不同。
