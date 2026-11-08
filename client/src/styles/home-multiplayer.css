@@ -1,4 +1,14 @@
 /* ===== 首页 ===== */
+.home-version-footer { margin-top: auto; padding: 24px 12px 8px; color: var(--text-sec); font-size: 0.8rem; text-align: center; }
+.home-version-footer p { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0 6px; margin: 0; line-height: 1.8; }
+.home-version-footer p > span { min-width: 0; overflow-wrap: anywhere; }
+.home-version-footer a { color: inherit; text-decoration: none; }
+.home-version-footer a:hover { color: var(--text); text-decoration: underline; }
+.home-version-footer a:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.build-commit { display: inline-flex; align-items: center; gap: 4px; overflow-wrap: anywhere; }
+.admin-build-details { margin: 14px 0; overflow-wrap: anywhere; }
+.admin-build-details summary { cursor: pointer; }
+.admin-build-details p { margin: 8px 0; }
 .personal-settings-anchor {
   position: relative;
   display: inline-flex;

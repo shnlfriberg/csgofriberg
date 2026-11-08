@@ -1,4 +1,5 @@
 .git
+server/src/generated/buildInfo.json
 .github
 .agents
 .codex

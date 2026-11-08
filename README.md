@@ -123,6 +123,32 @@ DB_URL=postgres://user:pass@localhost:5432/csgofriberg
 
 Docker Compose 部署、自动数据库迁移、管理员创建、更新和回滚方法见 [`deploy/README.md`](deploy/README.md)。
 
+### 应用版本
+
+整个网站与服务端共用根目录 `package.json` 的版本号，子包不单独发版。
+当前应用版本为 `0.3.9`，对应正式标签 `v0.3.9`。
+首页底部显示 `© shnlfriberg 年份 / Currently v版本 / GitHub 图标与 7 位提交号`，
+提交号链接到完整 GitHub 提交；正式版本号链接到对应 Release。开发构建带
+`-dev+g提交号`，本机未提交的代码改动另带 `.dirty`，不显示 alpha 标记。
+
+`pnpm build` 在开始时固定一份构建信息，前端、服务端与 Docker OCI 标签使用
+相同的版本号、完整 Git hash 和 UTC 构建时间。`GET /api/health` 的 `version`
+对象提供当前服务端的这些信息，响应禁止缓存；后台“资源版本”中的“应用构建信息”
+可按需查看当前页面与服务端的版本。资源更新广播继续使用独立的
+`RESOURCE_VERSION` 毫秒时间戳，不用应用版本号代替。
+
+日常推送 `main` 发布 `:main` 与 `:sha-<12 位提交号>` 镜像；正式发布时：
+
+1. 更新根目录 `package.json` 的 `version`（如 `1.0.1`）和 `CHANGELOG.md`，提交代码。
+2. 为该提交创建并推送同名 Git 标签 `v1.0.1`。标签必须与根目录版本完全一致。
+3. CI 测试通过后发布 `:1.0.1`、`:1.0`、`:latest` 与 SHA 标签；`latest` 仅随正式发布更新。
+4. 在 GitHub Release 中记录发布说明；版本、完整提交号和镜像 digest 可从 Actions 摘要获取。
+
+当前仅使用 `X.Y.Z` 正式版本标签；日常开发使用 `main`。生产可通过 `IMAGE`
+指定正式版本，准确复现镜像时使用 `ghcr.io/shnlfriberg/csgofriberg@sha256:摘要`。
+应用实例、迁移与题库工具使用同一个 `IMAGE`；应用版本不代表线上题库版本。
+版本元数据测试为 `pnpm test:version`。
+
 管理员按需外部作弊分析的 Bearer 鉴权与 JSON 展示契约见 [`docs/cheat-analysis-api.md`](docs/cheat-analysis-api.md)。
 
 ## 选手数据

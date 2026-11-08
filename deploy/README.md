@@ -277,7 +277,7 @@ docker compose stop app-1 app-2
 例如：
 
 ```text
-IMAGE=ghcr.io/shnlfriberg/csgofriberg:sha-0123456
+IMAGE=ghcr.io/shnlfriberg/csgofriberg:sha-0123456789ab
 ```
 
 回滚时把 `IMAGE` 改回上一个标签并执行：
@@ -367,9 +367,29 @@ UUID 暂存目录，不删除已发布图片。预算超出返回 429，应检�
 
 发布的标签包括：
 
-- `latest`：默认分支
-- 分支名
-- `v*` 发布对应的语义化版本标签
-- `sha-<短提交号>`：用于可确定性部署
+- `main`：默认分支最新通过 CI 的开发构建
+- `1.2.3`、`1.2`：Git 标签 `v1.2.3` 对应的正式版本与次版本系列
+- `latest`：最新正式发布，推送 main 不更新它
+- `sha-<12 位提交号>`：定位某次源码提交；同一提交重新构建时可能更新
+
+根目录 `package.json` 的版本必须与 `vX.Y.Z` 标签一致，否则 CI 拒绝发布。
+正式版本号链接到 GitHub Release，Release 说明由维护者随发布填写。
+Actions 摘要记录版本、完整 Git hash 与镜像 digest。生产环境需要准确复现
+镜像时，将 `.env` 中的 `IMAGE` 固定为：
+
+```dotenv
+IMAGE=ghcr.io/shnlfriberg/csgofriberg@sha256:实际镜像摘要
+```
+
+`migrate`、`app-1`、`app-2` 与题库导入工具共用该值。更新后分别检查两个
+应用实例的 `/api/health`，其中 `version` 对象包含 `version`、`gitCommit`、
+`builtAt`、`source`、`releaseTag` 和 `dirty`。首页显示当前浏览器加载的前端
+构建，后台“资源版本 → 应用构建信息”按需查询服务端，便于识别旧页面或混合部署。
+
+Docker 构建时必须传入 `OCI_REVISION`（完整 Git hash）、`OCI_VERSION` 和
+`OCI_CREATED`（UTC ISO 时间）。正式构建另传 `RELEASE_TAG=vX.Y.Z`；开发构建
+的 `OCI_VERSION` 为 `X.Y.Z-dev+g<7 位提交号>`。CI 自动生成并传入这些值，
+OCI labels 与前后端产物共享这些输入，容器启动时不需要 Git 或运行时版本配置。
+`OCI_SOURCE` 默认为本仓库地址；资源更新广播仍独立使用 `RESOURCE_VERSION`。
 
 工作流使用 BuildKit 缓存，生成 provenance 并附带 SBOM。

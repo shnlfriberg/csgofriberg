@@ -1,4 +1,5 @@
 node_modules/
+server/src/generated/buildInfo.json
 .tools/
 data/location-assets/
 dist/

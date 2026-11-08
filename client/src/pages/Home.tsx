@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 import LanguageSelect from '../components/LanguageSelect';
 import HomeSpecialThanks from '../components/HomeSpecialThanks';
 import HomeFriendLinks from '../components/HomeFriendLinks';
+import VersionFooter from '../components/VersionFooter';
 import PersonalSettings from '../components/PersonalSettings';
 import wanjiqiImage from '../assets/wjq.jpg';
 
@@ -262,6 +263,7 @@ export default function Home() {
             {t('home.github')}
           </a>
         </div>
+        <VersionFooter />
       </main>
     </div>
   );

@@ -1,6 +1,6 @@
 {
   "name": "csgofriberg",
-  "version": "1.0.0",
+  "version": "0.3.9",
   "packageManager": "pnpm@11.13.1",
   "engines": {
     "node": ">=26"
@@ -8,8 +8,11 @@
   "private": true,
   "description": "弗一把 - CS:GO/CS2 Major 选手猜测游戏",
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,green \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
-    "build": "pnpm build:pow && pnpm --filter client build && pnpm --filter server build",
+    "dev": "node scripts/build-info.cjs run dev:app",
+    "dev:app": "concurrently -n server,client -c blue,green \"pnpm --filter server dev\" \"pnpm --filter client dev\"",
+    "build": "node scripts/build-info.cjs run build:app",
+    "build:app": "pnpm build:pow && pnpm --filter client build && pnpm --filter server build",
+    "test:version": "node --test scripts/build-info.test.cjs",
     "start": "pnpm --filter server start",
     "test": "pnpm --filter server test && pnpm --filter client test",
     "test:client": "pnpm --filter client test",

@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "dev": "node ../scripts/build-info.cjs write-server && tsx watch src/index.ts",
+    "build": "node ../scripts/build-info.cjs write-server && tsc",
     "start": "node dist/index.js",
     "test": "vitest run --no-file-parallelism",
     "migrate": "tsx src/db/migrate.ts",
@@ -17,7 +17,7 @@
     "loadtest": "node scripts/loadtest.cjs",
     "benchmark:ws-compression": "node scripts/benchmark-websocket-compression.cjs",
     "prebuild": "pnpm --filter @friberg/location-core build && pnpm --filter @friberg/card-link-core build",
-    "pretest": "pnpm --filter @friberg/location-core build && pnpm --filter @friberg/card-link-core build",
+    "pretest": "node ../scripts/build-info.cjs write-server && pnpm --filter @friberg/location-core build && pnpm --filter @friberg/card-link-core build",
     "predev": "pnpm --filter @friberg/location-core build && pnpm --filter @friberg/card-link-core build",
     "card-link:build": "tsx src/card-link/build.ts"
   },

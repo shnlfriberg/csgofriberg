@@ -28,7 +28,6 @@ import {
   closeRedis,
   duplicateRedisClient,
   initRedis,
-  isRedisAvailable,
   isRedisTimeoutError,
 } from './redis';
 import { initPlayerCache } from './services/playerCache';
@@ -37,12 +36,13 @@ import { initMatchResultWorker } from './services/matchResultQueue';
 import powRoutes from './routes/pow';
 import { requirePow } from './middleware/pow';
 import { closePasswordWorkers } from './services/password';
-import { getRuntimeSnapshot, startRuntimeMonitor } from './services/runtimeMonitor';
+import { startRuntimeMonitor } from './services/runtimeMonitor';
 import { requireAdmin, requireAuth } from './middleware/auth';
 import { parseJsonOnce, rejectOversizedBody } from './middleware/jsonBody';
 import { rejectMissingClientAsset, setClientAssetCacheHeaders } from './middleware/clientAssets';
 import { injectUmamiScript } from './services/umami';
 import runtimeConfigRoutes from './routes/runtimeConfig';
+import healthRoutes from './routes/health';
 import dailyChallengeRoutes from './routes/dailyChallenge';
 import locationRoutes, { adminLocationRoutes } from './location/routes';
 import { assetDirectory } from './location/assets';
@@ -180,14 +180,7 @@ async function main() {
     }
     next();
   });
-  app.get('/api/health', (_req, res) =>
-    res.json({
-      ok: true,
-      redis: isRedisAvailable() ? 'up' : 'degraded',
-      features: { leaderboard: config.showLeaderboard },
-      runtime: getRuntimeSnapshot(),
-    })
-  );
+  app.use('/api/health', healthRoutes);
   app.use('/api', rateLimit({ name: 'api', limit: 600, windowSeconds: 60 }));
   app.use('/api/pow', rejectOversizedBody(16 * 1024), parseJsonOnce('16kb'));
   app.use('/api/pow', powRoutes);

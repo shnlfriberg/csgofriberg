@@ -4,10 +4,16 @@ FROM node:26-trixie-slim AS build
 
 ARG PNPM_VERSION=11.13.1
 ARG RESOURCE_VERSION=""
+ARG OCI_SOURCE="https://github.com/shnlfriberg/csgofriberg"
+ARG OCI_REVISION=""
+ARG OCI_VERSION=""
+ARG OCI_CREATED=""
+ARG RELEASE_TAG=""
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
 ENV RESOURCE_VERSION=$RESOURCE_VERSION
+ENV OCI_SOURCE=$OCI_SOURCE OCI_REVISION=$OCI_REVISION OCI_VERSION=$OCI_VERSION OCI_CREATED=$OCI_CREATED RELEASE_TAG=$RELEASE_TAG BUILD_REQUIRE_GIT=true
 WORKDIR /workspace
 
 RUN npm install --global "pnpm@${PNPM_VERSION}" \
@@ -40,15 +46,17 @@ RUN pnpm build \
 
 FROM gcr.io/distroless/nodejs26-debian13:nonroot AS runtime
 
-ARG OCI_SOURCE=""
+ARG OCI_SOURCE="https://github.com/shnlfriberg/csgofriberg"
 ARG OCI_REVISION=""
 ARG OCI_VERSION=""
+ARG OCI_CREATED=""
 
 LABEL org.opencontainers.image.title="csgofriberg" \
       org.opencontainers.image.description="PostgreSQL-only csgofriberg game server and web client" \
       org.opencontainers.image.source=$OCI_SOURCE \
       org.opencontainers.image.revision=$OCI_REVISION \
-      org.opencontainers.image.version=$OCI_VERSION
+      org.opencontainers.image.version=$OCI_VERSION \
+      org.opencontainers.image.created=$OCI_CREATED
 
 ENV NODE_ENV=production \
     DB_CLIENT=pg \

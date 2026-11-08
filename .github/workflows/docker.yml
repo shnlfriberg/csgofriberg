@@ -40,6 +40,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit
+      - run: pnpm test:version
       - run: pnpm test
         env:
           DB_CLIENT: sqlite
@@ -59,6 +60,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+      - id: build_info
+        name: Validate release and generate build identity
+        run: node scripts/build-info.cjs ci
       - uses: docker/setup-buildx-action@v4
       - name: Log in to GHCR
         if: github.event_name != 'pull_request'
@@ -69,18 +76,21 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - id: meta
         uses: docker/metadata-action@v6
+        env:
+          DOCKER_METADATA_SHORT_SHA_LENGTH: 12
         with:
           images: ghcr.io/${{ github.repository }}
+          flavor: latest=false
+          labels: |
+            org.opencontainers.image.version=${{ steps.build_info.outputs.version }}
+            org.opencontainers.image.revision=${{ steps.build_info.outputs.revision }}
+            org.opencontainers.image.created=${{ steps.build_info.outputs.created }}
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ steps.build_info.outputs.stable }}
             type=ref,event=branch
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=sha-
-      - id: resource_version
-        name: Generate resource version
-        shell: bash
-        run: echo "value=$(date +%s%3N)" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v7
         with:
           context: .
@@ -93,13 +103,16 @@ jobs:
           build-args: |
             OCI_SOURCE=https://github.com/${{ github.repository }}
             OCI_REVISION=${{ github.sha }}
-            OCI_VERSION=${{ steps.meta.outputs.version }}
-            RESOURCE_VERSION=${{ steps.resource_version.outputs.value }}
+            OCI_VERSION=${{ steps.build_info.outputs.version }}
+            OCI_CREATED=${{ steps.build_info.outputs.created }}
+            RELEASE_TAG=${{ steps.build_info.outputs.release_tag }}
+            RESOURCE_VERSION=${{ steps.build_info.outputs.resource_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
           sbom: false
       - name: Publish verified build inputs with attestations
+        id: publish
         if: github.event_name != 'pull_request'
         uses: docker/build-push-action@v7
         with:
@@ -112,9 +125,21 @@ jobs:
           build-args: |
             OCI_SOURCE=https://github.com/${{ github.repository }}
             OCI_REVISION=${{ github.sha }}
-            OCI_VERSION=${{ steps.meta.outputs.version }}
-            RESOURCE_VERSION=${{ steps.resource_version.outputs.value }}
+            OCI_VERSION=${{ steps.build_info.outputs.version }}
+            OCI_CREATED=${{ steps.build_info.outputs.created }}
+            RELEASE_TAG=${{ steps.build_info.outputs.release_tag }}
+            RESOURCE_VERSION=${{ steps.build_info.outputs.resource_version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: mode=max
           sbom: true
+      - name: Record published version
+        if: github.event_name != 'pull_request'
+        env:
+          VERSION: ${{ steps.build_info.outputs.version }}
+          REVISION: ${{ steps.build_info.outputs.revision }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+        run: |
+          echo "Version: $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "Git: $REVISION" >> "$GITHUB_STEP_SUMMARY"
+          echo "Image: ghcr.io/${GITHUB_REPOSITORY}@$DIGEST" >> "$GITHUB_STEP_SUMMARY"

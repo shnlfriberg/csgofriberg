@@ -2,6 +2,9 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+
+const { getBuildInfo } = createRequire(import.meta.url)('../scripts/build-info.cjs');
 
 const localEnv = loadEnv('development', fileURLToPath(new URL('../', import.meta.url)), 'VITE_');
 const apiTarget = process.env.VITE_API_PROXY_TARGET || localEnv.VITE_API_PROXY_TARGET || 'http://localhost:3000';
@@ -15,6 +18,7 @@ const resourceVersion = configuredVersion || String(Date.now());
 process.env.VITE_RESOURCE_VERSION = resourceVersion;
 
 export default defineConfig({
+  define: { __BUILD_INFO__: JSON.stringify(getBuildInfo()) },
   plugins: [
     react(),
     {

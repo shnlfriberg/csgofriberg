@@ -61,6 +61,11 @@ try {
     Push-Location (Join-Path $workspaceRoot 'packages/card-link-core')
     try { & $nodeCommand.Source build.cjs; if ($LASTEXITCODE -ne 0) { throw '共享卡牌模块构建失败。' } } finally { Pop-Location }
     $mutex = Enter-LocalServiceLock
+    # Freeze one build identity for both the source server and Vite build/HMR.
+    $env:BUILD_INFO_JSON = $null
+    $buildInfoJson = & $nodeCommand.Source (Join-Path $workspaceRoot 'scripts/build-info.cjs') json
+    if ($LASTEXITCODE -ne 0) { throw '生成应用版本信息失败。' }
+    $env:BUILD_INFO_JSON = $buildInfoJson
     [void](New-Item -ItemType Directory -Path $localData -Force)
     $records = @(Read-LocalServiceState | Where-Object { Test-LocalProcessRecord $_ })
     if (!($records | Where-Object { $_.name -eq 'redis' })) {
