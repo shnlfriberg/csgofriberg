@@ -349,6 +349,7 @@ export default function CardLink() {
         data-cl-area={kind}
         draggable={false}
         data-cl-draggable={usable && kind !== 'fixed' ? '' : undefined}
+        data-cl-touch-selected={usable && cardDrag.touchSelected?.id === pid && cardDrag.touchSelected.kind === kind ? '' : undefined}
         data-cl-drop-index={kind === 'fixed' ? (pid === view?.question?.start ? 0 : view?.current?.board.length) : undefined}
         onDragStart={e => e.preventDefault()}
         onPointerDown={e => { if (kind !== 'fixed') cardDrag.start(e, { id: pid, kind }); }}
@@ -686,6 +687,7 @@ export default function CardLink() {
                 )}
                 {view.variant === 'limited' && view.current.refreshes > 0 && !view.current.exhausted &&
                   <p role="status" className="cl-recovery-notice">{t('card.autoRecoveryNotice', { count: view.current.refreshes })}</p>}
+                {usable && <p className="cl-touch-hint">{tr("touchHandHint")}</p>}
                 {view.variant === "limited" ? (
                   <>
                     <div className="cl-hand">
