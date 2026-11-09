@@ -1,6 +1,6 @@
 {
   "name": "csgofriberg",
-  "version": "0.3.9",
+  "version": "0.3.10",
   "packageManager": "pnpm@11.13.1",
   "engines": {
     "node": ">=26"
