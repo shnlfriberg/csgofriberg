@@ -75,6 +75,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
   const [date, setDate] = useState('');
   const [pending, setPending] = useState<AnswerInput | null>(null);
   const generation = useRef(0);
+  const refreshDaily = useRef<() => Promise<void>>(async () => {});
   const [daily, setDaily] = useState<{
     available: boolean;
     difficulties: Array<{ difficulty: Difficulty; status: string }>;
@@ -89,12 +90,14 @@ export function useLocationGame(mode: 'random' | 'daily') {
     : `tuxun:v2:${user?.id || 'guest'}:${mode}:${difficulty}:${date}`;
   const keyRef = useRef(key);
   keyRef.current = key;
+  const matchesSelection = (view: GameView) => mode !== 'daily' ||
+    (view.mode === 'daily' && view.difficulty === difficulty && view.date === date);
   useEffect(() => {
     if (mode !== 'daily' || !initialized) return;
     let alive = true;
     let midnight: ReturnType<typeof setTimeout>;
     const refresh = () =>
-      void api
+      api
         .get('/location/daily')
         .then((response) => {
           if (!alive) return;
@@ -109,7 +112,8 @@ export function useLocationGame(mode: 'random' | 'daily') {
             )
           );
         })
-        .catch((e) => alive && setError(message(e)));
+        .catch((e) => { if (alive) setError(message(e)); });
+    refreshDaily.current = refresh;
     // Returning to the tab re-reads the daily state at most once a minute
     // (the midnight timer already handles the rollover).
     let lastRefresh = Date.now();
@@ -122,6 +126,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
     document.addEventListener('visibilitychange', visible);
     return () => {
       alive = false;
+      refreshDaily.current = async () => {};
       clearTimeout(midnight);
       document.removeEventListener('visibilitychange', visible);
     };
@@ -135,7 +140,8 @@ export function useLocationGame(mode: 'random' | 'daily') {
     setBusy(false);
     setRestoring(false);
     operation.current = false;
-    if (!initialized) return;
+    // Never restore or write an undated daily slot while /daily is still loading.
+    if (!initialized || (mode === 'daily' && !date)) return;
     const alive = () => current === generation.current;
     // A saved answer is only retried on the exact version it was made for.
     const restorePending = (view: GameView) => {
@@ -159,6 +165,12 @@ export function useLocationGame(mode: 'random' | 'daily') {
       void apiFor.read(id)
         .then((view) => {
           if (!alive()) return;
+          if (!matchesSelection(view)) {
+            // Discard only the stale local pointer, never the recorded game/result.
+            store(key, null);
+            store(`${key}:pending`, null);
+            return;
+          }
           accept(view);
           restorePending(view);
         })
@@ -181,7 +193,7 @@ export function useLocationGame(mode: 'random' | 'daily') {
   }, [initialized, key, mode]);
   useEffect(() => {
     let alive = true;
-    if (mode !== 'daily' || !initialized || game?.status !== 'finished') {
+    if (mode !== 'daily' || !initialized || game?.status !== 'finished' || !matchesSelection(game)) {
       setBoard([]);
       return () => {
         alive = false;
@@ -197,9 +209,9 @@ export function useLocationGame(mode: 'random' | 'daily') {
     return () => {
       alive = false;
     };
-  }, [mode, initialized, difficulty, game?.status, game?.date, date, user?.id]);
+  }, [mode, initialized, difficulty, game?.id, game?.difficulty, game?.status, game?.date, date, user?.id]);
   const accept = (view: GameView) => {
-    if (key !== keyRef.current) return;
+    if (key !== keyRef.current || !matchesSelection(view)) return;
     setGame(view);
     if (mode === 'random') {
       // A game resumed from another device brings its settings back to the lobby.
@@ -225,11 +237,16 @@ export function useLocationGame(mode: 'random' | 'daily') {
       }
     }
   };
-  const start = () =>
-    run(async () => {
-      accept(await apiFor.start(difficulty, bannedMapIds));
+  const start = () => {
+    if (mode === 'daily' && !date) return;
+    return run(async () => {
+      const current = generation.current;
+      const next = await apiFor.start(difficulty, bannedMapIds);
+      if (current !== generation.current) return;
+      accept(next);
       setReview(null);
     });
+  };
   const send = async (input: AnswerInput) => {
     if (!game) return;
     const current = generation.current;
@@ -320,7 +337,9 @@ export function useLocationGame(mode: 'random' | 'daily') {
   const synchronize = () =>
     game
       ? run(async () => accept(await apiFor.read(game.id)))
-      : Promise.resolve(setError(''));
+      : mode === 'daily' && !date
+        ? run(() => refreshDaily.current())
+        : Promise.resolve(setError(''));
   return {
     difficulty,
     setDifficulty,

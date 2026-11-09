@@ -31,6 +31,7 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
     restoring,
     error,
     pending,
+    date,
     daily,
     board,
     initialized,
@@ -100,9 +101,17 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
             className="btn btn-ghost btn-sm"
             onClick={() => void synchronize()}
           >
-            {t(game ? 'location.retry' : 'common.close')}
+            {t(game || (mode === 'daily' && !date) ? 'location.retry' : 'common.close')}
           </button>
         </div>
+      )}
+      {mode === 'daily' && (
+        <DifficultySelect
+          value={difficulty}
+          onChange={setDifficulty}
+          variant="pills"
+          disabled={!initialized || (busy && !restoring) || Boolean(pending)}
+        />
       )}
       {!game && restoring && (
         <p className="muted location-restoring" role="status">{t('common.loading')}</p>
@@ -111,11 +120,11 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
         <>
           <section className="location-lobby">
             <p className="muted single-lobby-subtitle">{t(`location.${mode}Description`)}</p>
-            <DifficultySelect
+            {mode === 'random' && <DifficultySelect
               value={difficulty}
               onChange={setDifficulty}
               disabled={busy}
-            />
+            />}
             {mode === 'daily' && (
               <p className="location-rules-note">{t('location.dailyNotice')}</p>
             )}
@@ -126,7 +135,7 @@ export default function LocationGame({ mode }: { mode: 'random' | 'daily' }) {
                 disabled={
                   busy ||
                   !initialized ||
-                  (mode === 'daily' && daily?.available === false)
+                  (mode === 'daily' && (!date || daily?.available === false))
                 }
                 onClick={() => void start()}
               >
