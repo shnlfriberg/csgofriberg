@@ -1,4 +1,7 @@
 const words = {
+  restartMatch: ['重新开始', 'Play again', 'もう一度プレイ'],
+  cancelRestart: ['取消重新开始', 'Cancel play again', '再プレイを取り消す'],
+  rematchHelp: ['至少两名在线玩家全部同意后，自动在原房间开始新一场，沿用当前难度和时限。', 'Once all online players agree (at least two), a new game starts in this room with the same difficulty and time limit.', 'オンラインの全員（2人以上）が同意すると、同じ部屋・難易度・制限時間で新しい対戦が始まります。'],
   banMaps: ['禁用地图（Ban 图）', 'Ban maps', 'マップBAN'],
   banHelp: ['最多禁用两张地图，也可以不选。禁用地图不会出题，作答时会标红且无法选择；仅本局单人模式生效，再玩一局沿用此设置。', 'Ban up to two maps, or leave all available. Banned maps will not appear as answers and cannot be selected. Solo only; Play Again keeps these settings.', '最大2マップを除外できます。除外したマップは出題されず、赤色で選択不可になります。ソロのみ有効で、再プレイ時も引き継ぎます。'],
   banned: ['已禁用', 'Banned', 'BAN済み'],

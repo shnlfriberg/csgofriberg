@@ -719,9 +719,19 @@
 .location-summary-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
+.location-rematch-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 20rem);
+}
+.location-rematch-actions p { margin: 0; font-size: 13px; }
+.location-rematch-actions .rematch-vote { display: grid; gap: 8px; }
+.location-summary-actions .location-rematch-actions .btn { flex: none; }
 .location-summary + .location-round-review {
   --loc-review: max(260px, calc(var(--visual-viewport-height, 100dvh) - 420px));
   padding-top: 12px;
